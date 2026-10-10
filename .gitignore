@@ -16,3 +16,4 @@ ecosystem.config.cjs
 # local env (KHÔNG commit secret)
 .env
 .env.*
+.env*
