@@ -3,6 +3,8 @@ account.json
 cookie.json
 qr.png
 data/
+plugins/*/temp/
+plugins/**/temp/
 bots/
 
 # PM2 (không dùng nữa)
