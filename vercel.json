@@ -1,6 +1,7 @@
 {
   "version": 2,
   "buildCommand": null,
+  "installCommand": "echo 'skip: api functions khong dung dependencies'",
   "outputDirectory": "public",
   "cleanUrls": true,
   "functions": {
