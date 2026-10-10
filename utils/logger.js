@@ -1,0 +1,103 @@
+const chalk = require('chalk');
+const { DateTime } = require("luxon");
+const axios = require("axios");
+
+// ===== Ngưỡng log: chỉ in debug khi config.logging_level = "debug" =====
+function isDebug() {
+  return global.config?.logging_level === "debug" || process.env.DEBUG === "1";
+}
+
+const SECRET_PATTERNS = [
+  /([?&](?:st|e|sig|sign|token|key|apiKey|api_key|secret|password|client_secret|access_token|imei)=)[^&\s"']*/gi,
+  /(Bearer\s+)[A-Za-z0-9._-]+/gi,
+  /\b(AIza[0-9A-Za-z_-]{20,})/g
+];
+
+function redact(data) {
+  if (typeof data !== "string") return data;
+  let output = data;
+  for (const pattern of SECRET_PATTERNS) {
+    output = output.replace(pattern, "$1***");
+  }
+  return output;
+}
+
+// Vùng in có thể thay thế (dùng cho QR code) — xoá nội dung cũ bằng ANSI
+// thay vì console.clear() nên màn hình không bị giật khi npm run dev
+let replaceableLines = 0;
+
+function clearReplaceable() {
+  if (replaceableLines <= 0) return;
+  process.stdout.write(`\x1b[${replaceableLines}F`);
+  process.stdout.write("\x1b[0J");
+  replaceableLines = 0;
+}
+
+function printReplaceable(lines) {
+  clearReplaceable();
+  const text = Array.isArray(lines) ? lines.join("\n") : String(lines);
+  replaceableLines = text.split("\n").length;
+  console.log(text);
+}
+
+async function printBanner() {
+  let newVersion = null;
+  try {
+    newVersion = (await axios.get("https://raw.githubusercontent.com/DEVTRAN07/JOHNTRAN/refs/heads/main/package.json", { timeout: 10000 })).data.version;
+  } catch {
+    // repo không truy cập được thì bỏ qua kiểm tra cập nhật, không được crash bot
+  }
+  const projectVersion = require("../package.json").version;
+
+  // KHÔNG console.clear() ở đây — tránh màn hình giật khi nodemon restart
+  const banner = chalk.cyanBright(`
+     ██╗ ██████╗ ██╗  ██╗███╗   ██╗    ████████╗██████╗  █████╗ ███╗   ██╗
+     ██║██╔═══██╗██║  ██║████╗  ██║    ╚══██╔══╝██╔══██╗██╔══██╗████╗  ██║
+     ██║██║   ██║███████║██╔██╗ ██║       ██║   ██████╔╝███████║██╔██╗ ██║
+██   ██║██║   ██║██╔══██║██║╚██╗██║       ██║   ██╔══██╗██╔══██║██║╚██╗██║
+╚█████╔╝╚██████╔╝██║  ██║██║ ╚████║       ██║   ██║  ██║██║  ██║██║ ╚████║
+ ╚════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝`);
+
+  console.log(banner);
+  console.log(chalk.gray("═══════════════════════════════════════════════════════════════════"));
+  console.log("» " + chalk.green("Version: ") + chalk.white(projectVersion));
+  console.log("» " + chalk.green("Author : ") + chalk.white("John Tran"));
+  console.log("» " + chalk.green("Github : ") + chalk.underline("https://github.com/DEVTRAN07/JOHNTRAN"));
+  console.log(chalk.gray("═══════════════════════════════════════════════════════════════════\n"));
+  if (newVersion && projectVersion != newVersion) log("New version: " + newVersion + "\n", "warn");
+}
+
+function getTimestamp() {
+  const now = DateTime.now().setZone('Asia/Ho_Chi_Minh');
+  return `[${now.toFormat("HH:mm:ss")}]`;
+}
+
+function log(data, option) {
+    const time = getTimestamp();
+    const safeData = redact(String(data));
+    switch (option) {
+        case "warn":
+            console.log(chalk.bold.hex("#FFD700")(time + ' » ') + safeData);
+            break;
+        case "error":
+            console.log(chalk.bold.hex("#FF0000")(time + ' » ') + safeData);
+            break;
+        case "info":
+            console.log(chalk.bold.hex("#00BFFF")(time + ' » ') + safeData);
+            break;
+        case "debug":
+            if (isDebug()) console.log(chalk.bold.hex("#888888")(time + ' » [DEBUG] ') + safeData);
+            break;
+        default:
+            console.log(chalk.bold.hex("#00BFFF")(time + ' » ') + safeData);
+    }
+}
+
+module.exports = {
+    log,
+    logDebug: (data) => log(data, "debug"),
+    redact,
+    printBanner,
+    printReplaceable,
+    clearReplaceable
+};

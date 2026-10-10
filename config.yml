@@ -1,0 +1,115 @@
+account_file: "account.json" # file chứa thông tin login
+
+# cấu hình login bằng qrcode
+login_qrcode: true # tự động chuyển sang qrcode login khi cookie không thể login
+qrcode_path: "qr.png" # ảnh qrcode
+save_cookie: true # tư động lưu lại cookie sau khi đăng nhập bắng qrcode xong
+
+# cấu hình bot
+prefix: "/"
+name_bot: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"
+# sử dụng lệnh /id để lấy id
+# chú ý: mỗi acc chạy bot get info sẽ ra 1 id khác nhau nên nếu đổi acc chạy bot phải đổi id (do zalỏ lưu data ở local)
+admin_bot:
+  - "418669971689260834"
+  - ""
+support_bot:
+  - "418669971689260834"
+  - ""
+allow_private_command: true # có cho bot nhận lệnh từ tin nhắn riêng hay không
+
+hot_reload: true # tự nạp lại plugin khi file thay đổi (không cần restart)
+
+# ===== THIẾT BỊ ĐĂNG NHẬP =====
+# userAgent quyết định thiết bị hiển thị trên Zalo (imei được sinh TỪ userAgent này).
+# Để trống = tự đo theo OS đang chạy bot (mac/windows/linux).
+# Đổi user_agent là PHẢI xoá account.json + cookie.json rồi quét QR lại!
+device:
+  user_agent: "" # ví dụ macOS: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0
+
+# ===== TTL TIN NHẮN (ms) =====
+# Zalo chỉ tự xóa tin nhắn khi ttl >= 60000 (1 phút) — giá trị nhỏ hơn bị bỏ qua
+ttl:
+  message: 60000 # tin nhắn thường
+  error: 60000 # thông báo lỗi
+  media: 60000 # tin nhắn có ảnh/video/voice
+  card: 120000 # thẻ canvas đẹp
+
+# ===== WEB PANEL QUẢN LÝ BOT =====
+panel:
+  enabled: false # bật panel quản lý bot + bot con
+  host: "0.0.0.0"
+  port: 3000
+  token: "" # để trống = không cần đăng nhập (chỉ dùng khi mở public)
+
+# cấu hình của zalo-client
+zalo_client_config:
+  selfListen: false
+  logging: "info"
+
+# ===== BẢO MẬT & RIÊNG TƯ (ᴶᴼᴴᴺ ᵀᴿᴬᴺ) =====
+# Bot chỉ gửi dữ liệu (từ khóa, prompt, link) tới các host trong danh sách dưới đây.
+# Mọi request ra host lạ sẽ bị CHẶN và ghi log cảnh báo.
+privacy:
+  allow_all_hosts: false # true = tắt bộ lọc (không khuyến nghị)
+  allowed_hosts: # host/suffix được phép (vd: zingmp3.vn khớp cả zingmp3.vn lẫn api.zingmp3.vn)
+    - zingmp3.vn
+    - zmdcdn.me
+    - graph.nhaccuatui.com
+    - nct.vn
+    - soundcloud.com
+    - sndcdn.com
+    - api-v2.soundcloud.com
+    - api.spotify.com
+    - accounts.spotify.com
+    - open.spotify.com
+    - scdn.co
+    - generativelanguage.googleapis.com
+    - translate.google.com
+    - imgur.com
+    - i.imgur.com
+    - postimg.cc
+    - i.postimg.cc
+    - pinimg.com
+    - i.pinimg.com
+    - drive.google.com
+    - whois.inet.vn
+    - dpaste.com
+    - graph.facebook.com
+    - facebook.com
+    - tiktokcdn.com
+    - tiktokcdn-us.com
+    - fbcdn.net
+    - googleusercontent.com
+    - zalo.ai
+    - zadn.vn
+    - zdn.vn
+
+# ===== DỊCH VỤ NGOÀI (chỉ chạy khi admin tự cấu hình endpoint) =====
+# Để trống = tính năng tắt hoàn toàn, bot KHÔNG gửi dữ liệu đi đâu cả.
+services:
+  media_downloader_url: "" # endpoint tải media (autodown)
+  media_generator_url: "" # endpoint video ngẫu nhiên (girltt)
+  image_generator_url: "" # endpoint tạo ảnh/qr (qrheart)
+  tiktok_api_url: "" # endpoint thông tin tiktok (itik)
+  facebook_api_url: "" # endpoint lấy uid facebook
+  facebook_access_token: "" # token Graph API facebook của bạn (fbin4)
+
+# ===== AI =====
+# Key Gemini của bạn (lấy tại https://aistudio.google.com/apikey).
+# Có thể set bằng biến môi trường: JT_GEMINI_KEYS=key1,key2
+ai:
+  gemini_keys: []
+  gemini_model: "gemini-2.5-flash"
+  max_prompt_length: 340 # giới hạn ký tự prompt gửi đi
+  max_history: 8 # số tin nhắn AI nhớ trong hội thoại với mỗi user
+  tts_enabled: false # bật lệnh /noi đọc giọng nói (gửi text tới Google TTS)
+
+# ===== NHẠC =====    
+music:
+  max_results: 5 # số kết quả hiển thị mỗi lần tìm
+  cache_ttl: 300000 # thời gian nhớ danh sách chọn bài (ms)
+  soundcloud_client_id: "" # để trống = bot tự lấy client_id từ asset chính chủ SoundCloud
+  spotify_client_id: "" # tạo app tại https://developer.spotify.com/dashboard
+  spotify_client_secret: "" # có 2 field này mới tìm kiếm được spotify theo từ khóa
+

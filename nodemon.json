@@ -1,0 +1,24 @@
+{
+  "watch": [
+    "JohnTran.js",
+    "index.js",
+    "core",
+    "plugins",
+    "utils",
+    "panel",
+    "config.yml"
+  ],
+  "ignore": [
+    "data/*",
+    "bots/*",
+    "plugins/*/temp/*",
+    "*.log",
+    "qr.png",
+    "account.json",
+    "cookie.json",
+    "node_modules/*"
+  ],
+  "ext": "js,json,yml",
+  "delay": 800,
+  "legacyWatch": true
+}

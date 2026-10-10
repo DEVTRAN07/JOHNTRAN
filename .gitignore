@@ -1,0 +1,18 @@
+node_modules/
+account.json
+cookie.json
+qr.png
+data/
+bots/
+
+# PM2 (không dùng nữa)
+ecosystem.config.cjs
+
+# Deploy artifacts
+.vercel
+.DS_Store
+*.log
+
+# local env (KHÔNG commit secret)
+.env
+.env.*
