@@ -221,10 +221,10 @@ async function extractThumbnail(videoPath, thumbnailPath) {
 
 async function processVideo(videoPath, threadId, type) {
   try {
-    // lazy require: ffprobe-static có thể thoát process trên một số kiến trúc, chỉ load khi thật sự cần
-    const getVideoInfo = require('get-video-info');
-    const videoInfo = await getVideoInfo(videoPath);
-    const videoStream = videoInfo.streams.find((s) => s.codec_type === 'video');
+    // metadata bằng ffmpeg-static (ffprobe-static không chạy được trên macOS ARM64)
+    const { probeVideo } = require("../core/videoMeta");
+    const videoInfo = await probeVideo(videoPath);
+    const videoStream = { width: videoInfo.width, height: videoInfo.height };
 
     const metadata = {
       duration: convertDurationToFiveDigits(videoInfo.format.duration),
