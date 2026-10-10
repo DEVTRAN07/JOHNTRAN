@@ -24,4 +24,4 @@ ENV NODE_ENV=production
 ENV TZ=Asia/Ho_Chi_Minh
 EXPOSE 3000
 
-CMD ["node", "JohnTran.js"]
+CMD ["node", "index.js"]

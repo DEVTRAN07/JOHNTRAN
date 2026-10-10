@@ -9,7 +9,7 @@ services:
     plan: free
     region: singapore
     buildCommand: npm install
-    startCommand: node JohnTran.js
+    startCommand: node index.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

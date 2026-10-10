@@ -288,6 +288,19 @@ Bot Zalo là tiến trình **chạy liên tục**: giữ kết nối WebSocket t
 
 Nền tảng tương tự (Netlify Functions, Cloudflare Workers) cũng **không dùng được**.
 
+### 🟦 Còn Vercel thì làm được gì? (đã setup sẵn)
+
+Vercel vẫn **dùng được cho tầng giám sát** — repo đã có sẵn:
+
+| File | Vai trò |
+|---|---|
+| `public/index.html` | Trang status realtime: trạng thái edge + bot runtime |
+| `api/health.js` | JSON health của tầng giám sát (UptimeRobot ping được luôn) |
+| `api/status.js` | Proxy trạng thái bot runtime (set env `JT_STATUS_URL` = URL Render/Koyeb) |
+
+Deploy: vercel.com → Add New → Project → import repo → Deploy (không cần build).
+Sau đó set `JT_STATUS_URL` trỏ tới service bot trên Render để trang status hiện dữ liệu thật.
+
 ### ✅ Cách free chạy thật: Render + UptimeRobot (khuyến nghị)
 
 Render free **không sleep** nếu có request HTTP tới trong mỗi 15 phút — bot đã có sẵn health server (`/health`) cho việc này.

@@ -51,6 +51,14 @@ const configSystem = require("./core/config");
             env: { ...process.env, JT_PANEL_CHILD: "0" }
         });
 
+        // cloud platform (Render/Koyeb) gửi SIGTERM khi tắt service → forward xuống bot
+        const forward = (signal) => () => {
+            try { child.kill(signal); } catch { /* bỏ qua */ }
+            process.exit(0);
+        };
+        process.on("SIGTERM", forward("SIGTERM"));
+        process.on("SIGINT", forward("SIGINT"));
+
         child.on("close", (code) => {
             if (code === 2) {
                 logger.log(`Khởi động lại...`, "warn");
