@@ -9,6 +9,7 @@
     "api/status.js": { "maxDuration": 15 }
   },
   "rewrites": [
+    { "source": "/panel", "destination": "/panel.html" },
     { "source": "/api/health", "destination": "/api/health.js" },
     { "source": "/api/status", "destination": "/api/status.js" }
   ],

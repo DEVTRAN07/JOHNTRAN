@@ -257,6 +257,15 @@ function startPanel({ manager, config }) {
       const url = new URL(req.url, `http://${req.headers.host}`);
       const pathname = url.pathname;
 
+      // ===== CORS: cho phép dashboard tĩnh (Vercel) gọi API panel từ origin khác =====
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        return res.end();
+      }
+
       if (token && pathname.startsWith("/api")) {
         const header = req.headers.authorization || "";
         const provided = header.startsWith("Bearer ") ? header.slice(7) : url.searchParams.get("token");

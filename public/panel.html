@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Panel quản lý</title>
+<style>
+  :root {
+    --bg: #0b0e14; --bg2: #131a26; --card: #121826; --border: #1f2a3a;
+    --accent: #00d9ff; --accent2: #7c5cff; --text: #eef2f8; --sub: #8b98ad;
+    --green: #22c55e; --red: #f43f5e; --yellow: #f59e0b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .glow { position: fixed; border-radius: 50%; filter: blur(120px); opacity: .25; z-index: 0; }
+  .glow.a { width: 420px; height: 420px; background: var(--accent); top: -160px; right: -100px; }
+  .glow.b { width: 380px; height: 380px; background: var(--accent2); bottom: -150px; left: -110px; }
+  main { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 28px 24px 70px; }
+  .brand { font-size: 24px; font-weight: 800; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .tag { color: var(--sub); font-size: 13px; margin-top: 4px; }
+  .configbar { display: flex; gap: 10px; margin: 20px 0 8px; flex-wrap: wrap; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .configbar label { color: var(--sub); font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
+  input { font: inherit; background: var(--bg); color: var(--text); border-radius: 9px; border: 1px solid var(--border); padding: 9px 12px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  button { font: inherit; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 10px 18px; cursor: pointer; transition: .15s; font-weight: 600; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #06121a; border: none; }
+  button.danger:hover { border-color: var(--red); color: var(--red); }
+  .conn { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sub); }
+  .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.offline { background: var(--red); }
+  .dot.restarting { background: var(--yellow); animation: pulse 1s infinite; }
+  .dot.stopped { background: var(--red); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .hint { color: var(--sub); font-size: 12.5px; line-height: 1.7; background: rgba(244,63,94,.07); border: 1px solid rgba(244,63,94,.28); border-radius: 12px; padding: 12px 16px; margin-bottom: 18px; }
+  .hint.ok { background: rgba(34,197,94,.07); border-color: rgba(34,197,94,.28); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 13px; padding: 13px 17px; }
+  .metric b { display: block; font-size: 21px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .metric span { color: var(--sub); font-size: 11.5px; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .bot { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .bot h3 { font-size: 17px; display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .bot .sub { color: var(--sub); font-size: 13px; margin-bottom: 14px; }
+  .bot .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .bot .actions button { padding: 7px 12px; font-size: 13px; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border); color: var(--sub); }
+  .badge.on { color: var(--green); border-color: var(--green); }
+  .badge.off { color: var(--red); border-color: var(--red); }
+  .empty { color: var(--sub); text-align: center; padding: 50px 0; grid-column: 1/-1; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: none; align-items: center; justify-content: center; z-index: 10; padding: 20px; }
+  .modal.open { display: flex; }
+  .modal-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 760px; max-height: 84vh; display: flex; flex-direction: column; }
+  .modal-box header { border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-body { padding: 20px; overflow: auto; }
+  pre.logs { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; max-height: 50vh; overflow: auto; color: #c9d6e8; }
+  .qr-box { text-align: center; }
+  .qr-box img { max-width: 280px; border-radius: 12px; background: #fff; padding: 8px; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--accent); color: var(--text); padding: 12px 20px; border-radius: 12px; transform: translateY(80px); opacity: 0; transition: .25s; z-index: 20; }
+  .toast.show { transform: none; opacity: 1; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="glow a"></div><div class="glow b"></div>
+<main>
+  <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ • PANEL QUẢN LÝ</div>
+  <div class="tag">Điều khiển bot + bot con từ xa • UI tĩnh trên Vercel, API chạy trên host bot</div>
+
+  <div class="configbar">
+    <label>REMOTE PANEL URL<input id="remoteUrl" size="34" placeholder="https://host-bot-cua-ban:3000"></label>
+    <label>TOKEN<input id="token" size="20" placeholder="panel.token trong config.yml"></label>
+    <button class="primary" onclick="saveConfig()">Kết nối</button>
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connText">chưa kết nối</span></span>
+  </div>
+
+  <div class="hint" id="hintBox">
+    Panel này chỉ là <b>giao diện</b> — Zalo bot cần tiến trình chạy liên tục nên phần điều khiển (spawn/stop bot con, đọc log, xem QR) chạy trên host của bot.<br>
+    <b>Bật panel trên host bot</b> (Render/VPS): <code>panel.enabled: true</code>, đặt <code>panel.token</code> mạnh → điền URL + token vào ô trên → bấm Kết nối.
+  </div>
+
+  <div class="metrics" id="metricsBar"></div>
+
+  <div class="toolbar">
+    <input id="newBotName" placeholder="Tên bot con (vd: bot1)" maxlength="32">
+    <button class="primary" onclick="createBot()">+ Tạo bot con</button>
+    <button onclick="refresh()">Làm mới</button>
+    <span style="color:var(--sub);font-size:13px" id="bot-count"></span>
+  </div>
+
+  <div class="grid" id="botGrid"><div class="empty">Chưa kết nối tới host bot.</div></div>
+</main>
+
+<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box">
+    <header><strong id="modalTitle">Logs</strong><button onclick="closeModal()">Đóng</button></header>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
+let API = "", TOKEN = "", logTimer = null;
+const state = { bots: [] };
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+function saveConfig() {
+  API = $("remoteUrl").value.trim().replace(/\/+$/, "");
+  TOKEN = $("token").value.trim();
+  localStorage.setItem(LS_URL, API);
+  localStorage.setItem(LS_TOKEN, TOKEN);
+  toast("Đã lưu cấu hình — đang kết nối...");
+  refresh();
+}
+
+function loadConfig() {
+  const url = localStorage.getItem(LS_URL) || "";
+  const token = localStorage.getItem(LS_TOKEN) || "";
+  $("remoteUrl").value = url;
+  $("token").value = token;
+  API = url;
+  TOKEN = token;
+}
+
+async function api(pathname, options = {}) {
+  if (!API) throw new Error("Chưa cấu hình REMOTE PANEL URL");
+  const sep = pathname.includes("?") ? "&" : "?";
+  const res = await fetch(API + pathname + sep + "token=" + encodeURIComponent(TOKEN), {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Lỗi " + res.status);
+  return data;
+}
+
+function uptime(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h > 0 ? h + "h " + m + "m" : m + "m " + (s % 60) + "s";
+}
+
+function setConn(ok, text) {
+  $("connDot").className = "dot " + (ok ? "online" : "offline");
+  $("connText").textContent = text;
+}
+
+async function refresh() {
+  if (!API) { setConn(false, "chưa cấu hình"); return; }
+  try {
+    const data = await api("/api/bots");
+    state.bots = data.bots;
+    setConn(true, "đã kết nối • " + (data.master?.botCount ?? 0) + " bot");
+    $("hintBox").className = "hint ok";
+    render();
+    loadMetrics();
+  } catch (e) {
+    setConn(false, e.message);
+    $("botGrid").innerHTML = `<div class="empty">Không kết nối được: ${e.message}</div>`;
+  }
+}
+
+async function loadMetrics() {
+  try {
+    const m = await api("/api/metrics");
+    $("metricsBar").innerHTML = [
+      ["Lệnh hôm nay", m.today?.commands ?? 0],
+      ["Tải nhạc", m.today?.musicDownload ?? 0],
+      ["AI", m.today?.aiRequests ?? 0],
+      ["Lỗi", m.today?.errors ?? 0],
+      ["Cache hit", (m.cache?.musicSearch?.hitRate ?? 0) + "%"],
+      ["RAM", m.memoryMb + "MB"],
+      ["Node", m.node]
+    ].map(([label, value]) => `<div class="metric"><b>${value}</b><span>${label}</span></div>`).join("");
+  } catch { /* bỏ qua */ }
+}
+
+function render() {
+  $("bot-count").textContent = state.bots.length + " bot con";
+  const grid = $("botGrid");
+  if (!state.bots.length) {
+    grid.innerHTML = '<div class="empty">Chưa có bot con nào. Tạo bot đầu tiên ở trên!</div>';
+    return;
+  }
+  grid.innerHTML = state.bots.map(b => `
+    <div class="bot">
+      <h3><span class="dot ${b.status}"></span>${b.name}</h3>
+      <div class="sub">trạng thái <b>${b.status}</b> • pid ${b.pid || "–"} • uptime ${uptime(b.uptimeMs)} • restart ${b.restarts || 0}${b.flapping ? ' • <span style="color:var(--red)">CRASH LIÊN TỤC</span>' : ""} • <span class="badge ${b.autoRestart ? "on" : "off"}">auto-restart ${b.autoRestart ? "ON" : "OFF"}</span></div>
+      <div class="actions">
+        <button class="primary" onclick="botAction('${b.name}','start')">Chạy</button>
+        <button onclick="botAction('${b.name}','stop')">Dừng</button>
+        <button onclick="botAction('${b.name}','restart')">Khởi động lại</button>
+        <button onclick="showQr('${b.name}')">QR</button>
+        <button onclick="showLogs('${b.name}')">Logs</button>
+        <button class="danger" onclick="removeBot('${b.name}')">Xoá</button>
+      </div>
+    </div>`).join("");
+}
+
+async function botAction(name, action) {
+  try {
+    await api("/api/bots/" + name + "/" + action, { method: "POST" });
+    toast(`Đã gửi lệnh ${action} → ${name}`);
+    setTimeout(refresh, 600);
+  } catch (e) { toast(e.message); }
+}
+
+async function createBot() {
+  const name = $("newBotName").value.trim();
+  if (!name) return toast("Nhập tên bot");
+  try {
+    await api("/api/bots", { method: "POST", body: JSON.stringify({ name }) });
+    $("newBotName").value = "";
+    toast("Đã tạo bot " + name);
+    refresh();
+  } catch (e) { toast(e.message); }
+}
+
+async function removeBot(name) {
+  if (!confirm("Xoá bot " + name + " và toàn bộ dữ liệu?")) return;
+  try {
+    await api("/api/bots/" + name, { method: "DELETE" });
+    toast("Đã xoá " + name);
+    refresh();
+  } catch (e) { toast(e.message); }
+}
+
+async function showLogs(name) {
+  $("modalTitle").textContent = "Logs • " + name;
+  $("modalBody").innerHTML = '<pre class="logs" id="logBox">đang tải...</pre>';
+  $("modal").classList.add("open");
+  const load = async () => {
+    try {
+      const data = await api("/api/bots/" + name + "/logs");
+      const box = $("logBox");
+      if (box) box.textContent = data.logs.join("\n") || "(chưa có log)";
+    } catch { /* bỏ qua */ }
+  };
+  load();
+  clearInterval(logTimer);
+  logTimer = setInterval(load, 4000);
+}
+
+async function showQr(name) {
+  $("modalTitle").textContent = "QR đăng nhập • " + name;
+  $("modalBody").innerHTML = '<div class="qr-box"><small style="color:var(--sub)">Bot phải đang chạy và ở trạng thái chờ đăng nhập</small><br><br><img id="qrImg" alt="qr"></div>';
+  $("modal").classList.add("open");
+  const load = async () => {
+    const img = $("qrImg");
+    if (!img) return;
+    try {
+      const res = await fetch(API + "/api/bots/" + name + "/qr?ts=" + Date.now() + "&token=" + encodeURIComponent(TOKEN));
+      if (res.ok) img.src = URL.createObjectURL(await res.blob());
+    } catch { /* bỏ qua */ }
+  };
+  load();
+  clearInterval(logTimer);
+  logTimer = setInterval(load, 6000);
+}
+
+function closeModal() {
+  $("modal").classList.remove("open");
+  clearInterval(logTimer);
+}
+
+loadConfig();
+if (API) refresh();
+setInterval(() => { if (API && $("modal").className.indexOf("open") === -1) refresh(); }, 10000);
+</script>
+</body>
+</html>
