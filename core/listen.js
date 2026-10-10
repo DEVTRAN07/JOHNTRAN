@@ -35,6 +35,11 @@ function startListening(api) {
 
   // ===== Xử lý 1 tin nhắn (dùng chung cho realtime và backfill sau reconnect) =====
   const onMessage = async (event) => {
+    // allow_private_command: false → bỏ qua HOÀN TOÀN tin riêng (cả lệnh lẫn auto-reply)
+    if (event.type === ThreadType.User && global.config.allow_private_command === false) {
+      return;
+    }
+
     // Tin do chính bot gửi: bỏ qua cache (không cần undo) nhưng vẫn xử lý lệnh
     if (!event.isSelf) updateMessageCache(event);
 
@@ -91,17 +96,24 @@ function startListening(api) {
     }
   });
 
+  // Cho phép event chỉ trong nhóm khi tắt chat riêng
+  const allowPrivate = () => global.config.allow_private_command !== false;
+  const skipPrivate = (event) => event.type === ThreadType.User && !allowPrivate();
+
   listener.on("group_event", (event) => {
+    if (skipPrivate(event)) return;
     handleEvent("group_event", event, api, event.isSelf === true);
   });
 
   listener.on("reaction", (event) => {
-    if (!event.isSelf) handleEvent("reaction", event, api, event.isSelf === true);
+    if (skipPrivate(event) || event.isSelf) return;
+    handleEvent("reaction", event, api, event.isSelf === true);
   });
 
   listener.on("undo", (event) => {
     // Không xử lý undo của chính bot (tránh anti_undo tự đăng thông báo cho tin bot xoá)
-    if (!event.isSelf) handleEvent("undo", event, api, event.isSelf === true);
+    if (skipPrivate(event) || event.isSelf) return;
+    handleEvent("undo", event, api, event.isSelf === true);
   });
 
   // ===== Tự kết nối lại: Zalo đóng WS (rớt mạng, đăng nhập lại, trùng kết nối)

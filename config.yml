@@ -16,8 +16,8 @@ admin_bot:
 support_bot:
   - "418669971689260834"
   - ""
-allow_private_command: true # có cho bot nhận lệnh từ tin nhắn riêng hay không
-allow_self_command: true # true = bot chạy lệnh từ tin do CHÍNH acc bot gửi (test bot bằng acc đã chạy bot). Tắt nếu không muốn bot tự thực thi tin nhắn của chính nó
+allow_private_command: false # false = bot BỎ QUA toàn bộ tin nhắn riêng (chỉ hoạt động trong nhóm)
+allow_self_command: true # true = bot chạy lệnh từ tin do CHÍNH acc bot gửi (test bot bằng acc bot). Tắt nếu không muốn bot tự thực thi tin nhắn của chính nó
 
 hot_reload: true # tự nạp lại plugin khi file thay đổi (không cần restart)
 

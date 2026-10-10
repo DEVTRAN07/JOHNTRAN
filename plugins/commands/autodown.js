@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { Reactions } = require("zalo-client");
+const { Reactions, ThreadType } = require("zalo-client");
 const services = require("../../core/services");
 const { processVideo, processAudio } = require("../../utils/index");
 
@@ -16,11 +16,14 @@ module.exports.config = {
     cooldowns: 5
 };
 
-module.exports.handleEvent = async function ({ api, event, isSelf }) {
+module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     if (!event.data || !event.data.content) return;
 
     // Không tự tải link trong tin do chính bot gửi (tránh loop)
     if (isSelf) return;
+
+    // Chỉ hoạt động trong nhóm — không chat riêng
+    if (event.type !== ThreadType.Group) return;
 
     if ((event.data.msgType == "chat.recommended" && event.data.content.action == "recommened.link") || (event.data.msgType == "webchat" && String(event.data.content).match(/https?:\/\/[^\s]+/))) {
         var url = event.data.content.href || event.data.content;
@@ -41,6 +44,10 @@ module.exports.handleEvent = async function ({ api, event, isSelf }) {
     if (!matches) return;
 
     const { threadId, type } = event;
+
+    // Chỉ nhóm đã bật autodown mới tự tải (mặc định tắt)
+    const threadData = (await Threads.getData(threadId)).data || {};
+    if (!threadData.auto_down) return;
 
     try {
         await api.addReaction(Reactions.LIKE, {
@@ -267,22 +274,53 @@ module.exports.handleEvent = async function ({ api, event, isSelf }) {
     return api.sendMessage({ msg: "📭 Không thể tải xuống media" }, threadId, type);
 };
 
-module.exports.run = async function ({ api, event, args }) {
+module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadId, type } = event;
 
+    if (type === ThreadType.User) {
+        return api.sendMessage({ msg: "❌ Autodown chỉ hoạt động trong nhóm.", ttl: 60000 }, threadId, type);
+    }
+
+    const action = (args[0] || "help").toLowerCase();
+
+    // Bật/tắt tự tải media cho nhóm này
+    if (action === "on" || action === "off") {
+        const thread = await Threads.getData(threadId);
+        thread.data.auto_down = action === "on";
+        await Threads.setData(threadId, thread.data);
         return api.sendMessage({
-            msg: '🔍 AUTODOWN HELPER\n\n' +
-                'Tự động tải xuống media từ các link được chia sẻ trong nhóm.\n\n' +
-                '📌 Các nền tảng được hỗ trợ:\n' +
-                'Tiktok, Douyin, Capcut, Threads, Instagram, Facebook, Espn, Pinterest, IMDb, Imgur, Ifunny, Izlesene, Reddit, Youtube, Twitter/X, Vimeo, Snapchat, Bilibili, Dailymotion, Sharechat, Likee, Linkedin, Tumblr, Hipi, Telegram, Getstickerpack, Bitchute, Febspot, 9GAG, oke.ru, Rumble, Streamable, Ted, SohuTv, Xvideos, Xnxx, Xiaohongshu, Ixigua, Weibo, Miaopai, Meipai, Xiaoying, National Video, Yingke, Sina, VK (vkvideo), Soundcloud, Mixcloud, Spotify, Zingmp3, Bandcamp.\n\n' +
-                '💡 Cách sử dụng: Chỉ cần gửi link http:// hoặc https:// vào nhóm, bot sẽ tự động tải nếu nền tảng được hỗ trợ.\n\n' +
-                '🔰 Phản hồi bằng emoji:\n' +
-                '👍 - Đang xử lý\n' +
-                '❤️ - Tải thành công\n' +
-                '😢 - Lỗi khi tải\n' +
-                '😮 - Không tìm thấy media\n',
+            msg: "📥 AUTODOWN\n" +
+                `Trạng thái: ${action === "on" ? "ĐÃ BẬT ✅" : "ĐÃ TẮT ❌"}\n` +
+                (action === "on"
+                    ? "Gửi link hỗ trợ (Tiktok, Youtube, Facebook, Instagram...) vào nhóm là bot tự tải."
+                    : "Bot sẽ không tự tải link trong nhóm này nữa."),
             ttl: 60000
         }, threadId, type);
+    }
+
+    // Trạng thái hiện tại của nhóm
+    if (action === "status" || action === "stt") {
+        const thread = (await Threads.getData(threadId)).data || {};
+        return api.sendMessage({
+            msg: `📥 Autodown nhóm này: ${thread.auto_down ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autodown on / autodown off`,
+            ttl: 60000
+        }, threadId, type);
+    }
+
+    return api.sendMessage({
+        msg: '🔍 AUTODOWN HELPER\n\n' +
+            'Tự động tải xuống media từ các link được chia sẻ trong nhóm.\n\n' +
+            '📌 Các nền tảng được hỗ trợ:\n' +
+            'Tiktok, Douyin, Capcut, Threads, Instagram, Facebook, Espn, Pinterest, IMDb, Imgur, Ifunny, Izlesene, Reddit, Youtube, Twitter/X, Vimeo, Snapchat, Bilibili, Dailymotion, Sharechat, Likee, Linkedin, Tumblr, Hipi, Telegram, Getstickerpack, Bitchute, Febspot, 9GAG, oke.ru, Rumble, Streamable, Ted, SohuTv, Xvideos, Xnxx, Xiaohongshu, Ixigua, Weibo, Miaopai, Meipai, Xiaoying, National Video, Yingke, Sina, VK (vkvideo), Soundcloud, Mixcloud, Spotify, Zingmp3, Bandcamp.\n\n' +
+            '💡 Cách dùng: Chỉ cần gửi link http:// hoặc https:// vào nhóm, bot sẽ tự động tải nếu nền tảng được hỗ trợ.\n\n' +
+            '🔰 Phản hồi bằng emoji:\n' +
+            '👍 - Đang xử lý\n' +
+            '❤️ - Tải thành công\n' +
+            '😢 - Lỗi khi tải\n' +
+            '😮 - Không tìm thấy media\n\n' +
+            '⚙️ Admin bot: autodown on / autodown off / autodown status',
+        ttl: 60000
+    }, threadId, type);
 };
 async function downloadMedia(url, mediaType) {
     try {

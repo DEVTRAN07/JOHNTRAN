@@ -175,14 +175,6 @@ module.exports.run = async ({ api, event, args, Threads }) => {
 
   if (type === ThreadType.User) return api.sendMessage("❌ Lệnh chỉ có thể dùng trong nhóm", threadId, type);
 
-  async function setAutoSend(id, status) {
-    const thread = await Threads.getData(id);
-    const data = thread.data;
-    data.auto_send = status;
-    await Threads.setData(id, data);
-    return { id, status };
-  }
-
   async function toggleAutoSend(id) {
     const thread = await Threads.getData(id);
     const data = thread.data;
@@ -191,27 +183,10 @@ module.exports.run = async ({ api, event, args, Threads }) => {
     return { id, status: data.auto_send };
   }
 
+  // Không bật/tắt hàng loạt mọi nhóm — chỉ nhóm đang gọi lệnh mới điều khiển được
   if (args[0] === "all") {
-    const mode = args[1];
-    if (mode !== "on" && mode !== "off") {
-      return api.sendMessage(
-        `❌ Vui lòng dùng đúng cú pháp: autosend all [on|off]`,
-        threadId, type
-      );
-    }
-
-    const statusToSet = mode === "on";
-    const allGroups = await api.getAllGroups();
-    const allBoxIDs = Object.keys(allGroups.gridVerMap);
-    const results = [];
-
-    for (const boxId of allBoxIDs) {
-      const result = await setAutoSend(boxId, statusToSet);
-      results.push(result);
-    }
-
     return api.sendMessage(
-      `✅ Đã ${statusToSet ? "bật" : "tắt"} autosend cho ${results.length} nhóm.`,
+      "❌ Không thể bật hàng loạt. Autosend chỉ bật/tắt trong từng nhóm: gõ `autosend` trong nhóm muốn điều khiển.",
       threadId, type
     );
   }
