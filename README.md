@@ -346,26 +346,34 @@ Bot sẽ **tự ghi lại account.json/cookie.json từ biến môi trường** 
 | **PM2 trên VPS/Mac** | `npm i -g pm2 && pm2 start JohnTran.js` | Chạy ở nhà 24/7 |
 
 ---
-## 🎛️ Mở Panel quản lý
+## 🎛️ Panel quản lý (2 cách)
 
-```yaml
-# config.yml
-panel:
-  enabled: true
-  host: "0.0.0.0"
-  port: 3000
-  token: "doi-thanh-mat-khau"   # để trống = không cần đăng nhập
-```
+### Cách 1 — Panel điều khiển từ xa trên Vercel (đã deploy)
+
+**https://johntran-monitor.vercel.app/panel** — UI tĩnh, chỉ cần trỏ tới host bot:
+
+| Bước | Làm gì |
+|---|---|
+| 1 | Trên host chạy bot: set `panel.enabled: true` + `panel.token` mạnh trong config.yml |
+| 2 | Chạy panel API: `npm run panel` (chạy song song với bot) hoặc `npm start` (panel mode — bot chính thành bot con) |
+| 3 | Mở trang panel → điền **REMOTE PANEL URL** (vd `https://ten-service.onrender.com`) + **TOKEN** → bấm Kết nối |
+
+Cấu hình lưu trong localStorage của trình duyệt — lần sau mở lại là tự kết nối.
+> Nếu host bot là máy đang chạy bot local (Mac/PC): điền `http://localhost:3000` — dùng được trên cùng máy.
+
+### Cách 2 — Panel local trên host
 
 ```bash
-npm start        # hoặc: node index.js
+npm run panel      # hoặc: panel.enabled: true rồi npm start
 ```
 
-Mở trình duyệt: **http://localhost:3000** (trên VPS: **http://IP-VPS:3000** — nhớ mở port 3000 trong firewall / security-list của Oracle Cloud).
+Mở **http://localhost:3000** (VPS: **http://IP-VPS:3000** — nhớ mở port trong firewall / security-list).
 
-Panel có: tạo bot con, bắt đầu/dừng/khởi động lại, log realtime, xem QR đăng nhập từng bot, metrics bar (lệnh / nhạc / AI / lỗi / cache / RAM), cảnh báo crash loop.
+### Tính năng panel
+Tạo bot con • bắt đầu/dừng/khởi động lại • log realtime (4s) • xem QR đăng nhập từng bot • metrics bar (lệnh / nhạc / AI / lỗi / cache / RAM) • cảnh báo crash loop • auto-restart bot con.
 
-> Bot con khi chạy trên VPS riêng cũng có thể mở panel riêng với port khác nhau (`panel.port`).
+> Mỗi bot con có **account/cookie/database riêng** (`bots/<tên>/`) nên đăng nhập QR riêng — không đụng tới session bot chính.
+> Bảo mật: `panel.token` BẮT BUỘC khi mở panel ra internet (panel có quyền spawn tiến trình = điều khiển cả máy).
 
 ---
 
