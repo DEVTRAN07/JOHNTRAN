@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { ZaloClient, LoginQRCallbackEventType } = require("zalo-client");
+const Jimp = require("jimp");
 const logger = require("../utils/logger");
 const { getJsonData, displayQRCodeInConsole } = require("../utils/index");
 
@@ -37,10 +38,61 @@ function deviceLabel(userAgent) {
   return "Không rõ";
 }
 
+// Đọc width/height trực tiếp từ header ảnh (PNG/GIF/JPEG) — không cần decode toàn ảnh.
+// Trả về null nếu không parse được, lúc đó fallback sang Jimp.
+function readImageHeaderSize(buf) {
+  // PNG: IHDR ở byte 16 (width) và 20 (height), big-endian
+  if (buf.length >= 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  // GIF: logical screen descriptor, little-endian
+  if (buf.length >= 10 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+    return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+  }
+  // JPEG: quét các marker SOF0-SOF15 để lấy kích thước
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buf.length) {
+      if (buf[offset] !== 0xff) { offset += 1; continue; }
+      const marker = buf[offset + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
+      }
+      const segmentLength = buf.readUInt16BE(offset + 2);
+      offset += 2 + segmentLength;
+    }
+  }
+  return null;
+}
+
+// zalo-client bắt buộc imageMetadataGetter mới gửi được ảnh/local file (card canvas...)
+function createZaloClient() {
+  return new ZaloClient({
+    ...global.config.zalo_client_config,
+    imageMetadataGetter: async (filePath) => {
+      const fileHandle = await fs.promises.open(filePath, "r");
+      try {
+        const header = Buffer.alloc(64);
+        const { bytesRead } = await fileHandle.read(header, 0, 64, 0);
+        const size = (await fileHandle.stat()).size;
+        const headerSize = readImageHeaderSize(header.subarray(0, bytesRead));
+        if (headerSize) {
+          return { width: headerSize.width, height: headerSize.height, size };
+        }
+      } finally {
+        await fileHandle.close();
+      }
+      // Fallback cho webp/định dạng lạ: decode bằng jimp
+      const image = await Jimp.read(filePath);
+      return { width: image.bitmap.width, height: image.bitmap.height, size: fs.statSync(filePath).size };
+    }
+  });
+}
+
 async function loginWithQR() {
     try {
         const userAgent = resolveUserAgent();
-        const zalo = new ZaloClient(global.config.zalo_client_config);
+        const zalo = createZaloClient();
         const accountPath = resolveBotPath(global.config.account_file);
         fs.mkdirSync(path.dirname(accountPath), { recursive: true });
 
@@ -120,7 +172,7 @@ async function loginWithQR() {
 
 async function loginWithCookie() {
     try {
-        const zalo = new ZaloClient(global.config.zalo_client_config);
+        const zalo = createZaloClient();
         const accountPath = resolveBotPath(global.config.account_file);
         fs.mkdirSync(path.dirname(accountPath), { recursive: true });
 

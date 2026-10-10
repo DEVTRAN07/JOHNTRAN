@@ -24,9 +24,12 @@ module.exports.config = {
   dependencies: {}
 };
 
-module.exports.run = async function ({ api, event }) {
+module.exports.run = async function ({ api, event, isSelf }) {
   const { threadId, data, type } = event;
   if (!data) return;
+
+  // Không xử lý tin do chính bot gửi (tránh loop auto-reply)
+  if (isSelf) return;
 
   // Xử lý tin nhắn dạng text
   if (typeof data.content === "string" && data.content.trim().toLowerCase().startsWith(EVENT_COMMAND)) {

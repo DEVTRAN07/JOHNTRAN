@@ -17,6 +17,7 @@ support_bot:
   - "418669971689260834"
   - ""
 allow_private_command: true # có cho bot nhận lệnh từ tin nhắn riêng hay không
+allow_self_command: true # true = bot chạy lệnh từ tin do CHÍNH acc bot gửi (test bot bằng acc đã chạy bot). Tắt nếu không muốn bot tự thực thi tin nhắn của chính nó
 
 hot_reload: true # tự nạp lại plugin khi file thay đổi (không cần restart)
 
@@ -44,7 +45,7 @@ panel:
 
 # cấu hình của zalo-client
 zalo_client_config:
-  selfListen: false
+  selfListen: true # true = bot xử lý cả tin do CHÍNH acc bot gửi (test bot bằng acc đã chạy bot)
   logging: "info"
 
 # ===== BẢO MẬT & RIÊNG TƯ (ᴶᴼᴴᴺ ᵀᴿᴬᴺ) =====
@@ -66,6 +67,8 @@ privacy:
     - scdn.co
     - generativelanguage.googleapis.com
     - translate.google.com
+    - files.catbox.moe
+    - catbox.moe
     - imgur.com
     - i.imgur.com
     - postimg.cc

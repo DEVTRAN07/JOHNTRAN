@@ -11,8 +11,9 @@ module.exports.config = {
     dependencies: {}
 };
 
-module.exports.handleEvent = async function({ api, event, Threads, reply }) {
+module.exports.handleEvent = async function({ api, event, Threads, reply, isSelf }) {
     const { threadId, type } = event;
+    if (isSelf) return;
     try {
         const { prefix } = global.config;
         var threadSetting = (await Threads.getData(event.threadId)).data || {};

@@ -126,6 +126,8 @@ const DEFAULTS = {
       // AI (first-party Google)
       "generativelanguage.googleapis.com",
       "translate.google.com",
+      "files.catbox.moe",
+      "catbox.moe",
       // CDN/media cần cho các tính năng có sẵn
       "imgur.com",
       "i.imgur.com",

@@ -54,11 +54,14 @@ async function isAdmin(api, userId, threadId) {
 }
 
 
-module.exports.handleEvent = async function ({ event, api, Threads, eventType }) {
+module.exports.handleEvent = async function ({ event, api, Threads, eventType, isSelf }) {
   const { threadId, isGroup, data, type } = event;
   const typeUndo = isGroup ? 1 : 0;
   const userId = data.uidFrom;
   const name = data.dName || "Bạn";
+
+  // Không xử lý hành động của chính bot (tự xoá link/spam của bot, anti_undo tin bot)
+  if (isSelf) return;
 
   const threadData = (await Threads.getData(threadId)).data || {};
   const tempPath = path.join(__dirname, "temp");

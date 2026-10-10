@@ -13,11 +13,11 @@ module.exports.config = {
     }
 };
 
-module.exports.run = async function({ api, event }) {
+module.exports.run = async function({ api, event, isSelf }) {
     const { threadId, data, type } = event;
     const time = moment.tz("Asia/Ho_Chi_Minh").format("D/MM/YYYY HH:mm:ss");
 
-    const senderName = data.dName || "Không rõ";
+    const senderName = (isSelf ? "[BOT] " : "") + (data.dName || "Không rõ");
     let content;
 
     if (typeof data.content === "string") {

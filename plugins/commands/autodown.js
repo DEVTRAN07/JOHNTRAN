@@ -16,8 +16,11 @@ module.exports.config = {
     cooldowns: 5
 };
 
-module.exports.handleEvent = async function ({ api, event }) {
+module.exports.handleEvent = async function ({ api, event, isSelf }) {
     if (!event.data || !event.data.content) return;
+
+    // Không tự tải link trong tin do chính bot gửi (tránh loop)
+    if (isSelf) return;
 
     if ((event.data.msgType == "chat.recommended" && event.data.content.action == "recommened.link") || (event.data.msgType == "webchat" && String(event.data.content).match(/https?:\/\/[^\s]+/))) {
         var url = event.data.content.href || event.data.content;

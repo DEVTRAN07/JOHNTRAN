@@ -143,13 +143,26 @@ class Reply {
   }
 }
 
+// ZaloApi của zalo-client khai báo MỌI method bằng accessor get/set (lazy).
+// Gán trực tiếp (wrapped.sendMessage = fn) sẽ rơi vào SETTER của api gốc,
+// ghi đè method gốc bằng chính wrapper → wrapper gọi lại chính nó → đệ qu vô hạn.
+// Bắt buộc defineProperty để tạo OWN property trên wrapped.
+function defineWrapped(wrapped, name, fn) {
+  Object.defineProperty(wrapped, name, {
+    value: fn,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+
 function wrapApi(api, threadId, type, commandName, event = null) {
   if (!api) return api;
   const reply = new Reply(api, threadId, type, commandName, event);
 
   const wrapped = Object.create(api);
 
-  wrapped.sendMessage = async (message, tid, ty) => {
+  defineWrapped(wrapped, "sendMessage", async (message, tid, ty) => {
     const targetThreadId = threadId || tid;
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
@@ -167,35 +180,35 @@ function wrapApi(api, threadId, type, commandName, event = null) {
 
     content.ttl = normalizeTtl(content.ttl, content.attachments ? "media" : "message");
     return api.sendMessage(content, targetThreadId, targetType);
-  };
+  });
 
-  wrapped.sendVoice = async (payload, tid, ty) => {
+  defineWrapped(wrapped, "sendVoice", async (payload, tid, ty) => {
     const content = typeof payload === "string" ? { voiceUrl: payload } : { ...payload };
     content.ttl = normalizeTtl(content.ttl, "media");
     return api.sendVoice(content, threadId || tid, type || ty);
-  };
+  });
 
-  wrapped.sendVideo = async (payload, tid, ty) => {
+  defineWrapped(wrapped, "sendVideo", async (payload, tid, ty) => {
     const content = { ...payload };
     content.ttl = normalizeTtl(content.ttl, "media");
     return api.sendVideo(content, threadId || tid, type || ty);
-  };
+  });
 
   // ===== Cache tầng API Zalo: giảm gọi API, phản hồi nhanh hơn =====
-  wrapped.getGroupInfo = async (tid) => {
+  defineWrapped(wrapped, "getGroupInfo", async (tid) => {
     const key = String(tid);
     return cache.caches.groupInfo.remember(key, () => api.getGroupInfo(tid));
-  };
+  });
 
-  wrapped.getUserInfo = async (uid) => {
+  defineWrapped(wrapped, "getUserInfo", async (uid) => {
     const key = String(uid);
     return cache.caches.userInfo.remember(key, () => api.getUserInfo(uid));
-  };
+  });
 
-  wrapped.invalidateCache = async (kind, key) => {
+  defineWrapped(wrapped, "invalidateCache", async (kind, key) => {
     if (kind === "group") cache.caches.groupInfo.delete(String(key));
     if (kind === "user") cache.caches.userInfo.delete(String(key));
-  };
+  });
 
   Object.defineProperty(wrapped, "__reply", { value: reply, enumerable: false });
   return wrapped;

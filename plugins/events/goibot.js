@@ -7,7 +7,10 @@ module.exports.config = {
     dependencies: {}
 };
 
-module.exports.run = async ({ event, eventType, api, replyData }) => {
+module.exports.run = async ({ event, eventType, api, replyData, isSelf }) => {
+    // Không tự trả lời tin của chính bot (tránh loop)
+    if (isSelf) return;
+
     const { threadId, type, data} = event;
     const content = data.content;
     
