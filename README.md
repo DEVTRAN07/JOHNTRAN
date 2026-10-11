@@ -274,17 +274,26 @@ plugins/
 
 ---
 
-## 🖥️ Chạy 24/7 miễn phí (Northflank / Render) + Database Supabase
+## 🖥️ Chạy 24/7 miễn phí — KHÔNG CẦN THẺ (Render) + Database Supabase
 
 ### Kiến trúc
 
 | Thành phần | Chạy ở đâu | Vai trò |
 |---|---|---|
-| Bot + Panel API | **Northflank** (Docker, free — always-on) | WebSocket Zalo 24/7, lệnh, nhạc, quản lý bot con |
+| Bot + Panel API | **Render** (Docker, free — KHÔNG cần thẻ) | WebSocket Zalo, lệnh, nhạc, quản lý bot con |
+| Giữ thức | **UptimeRobot** (free) | Ping /health mỗi 5 phút → Render không ngủ |
 | Database | **Supabase** (Postgres free) | Lưu settings nhóm, user, metrics — container restart KHÔNG mất |
-| Panel UI | **GitHub Pages** | Giao diện điều khiển từ xa, gọi API trên host |
+| Panel UI | **GitHub Pages** | Giao diện điều khiển từ xa, gọi API trên Render |
 
-> ⚠️ Koyeb đã bị Mistral mua và **đóng free tier** với tài khoản mới (2026) nên không dùng được nữa. Northflank là phương án thay thế gần giống nhất: free tier **always-on, không ngủ**, gồm 2 service + 1 database.
+> **So sánh nền tảng free cho bot Zalo (2026)**
+>
+> | Nền tảng | Thẻ? | WebSocket? | Ngủ? | Kết luận |
+> |---|---|---|---|---|
+> | **Render** | ❌ Không | ✅ | Có (15 phút) → UptimeRobot giữ thức | ✅ **Dùng được — không cần thẻ** |
+> | Northflank | ⚠️ Verify thẻ | ✅ | Không (always-on) | ✅ Tốt hơn nhưng cần thẻ |
+> | SnapDeploy | ❌ Không | ❌ Chỉ ở gói trả phí | Có | ❌ Không chạy được bot |
+> | Koyeb | 💳 $29/tháng | ✅ | — | ❌ Đã đóng free tier (Mistral mua) |
+> | Vercel | — | ❌ | Serverless | ❌ Không giữ được WebSocket |
 
 ### Bước 1 — Supabase (5 phút)
 
@@ -304,15 +313,21 @@ plugins/
      node scripts/verify-supabase.js
    ```
 
-### Bước 2 — Deploy Northflank
+### Bước 2 — Deploy Render (không cần thẻ)
 
-1. Đăng ký [northflank.com](https://northflank.com) (free tier, không cần thẻ — hoặc verify thẻ nhưng không trừ tiền)
-2. **Create project** → Northflank Cloud → chọn region
-3. Repo phải để **Public** (GitHub → Settings → Danger Zone → Change visibility) rồi kết nối GitHub trong **Integrations**
-4. **Create service** → **Combined service** → nhập tên → chọn repo `DEVTRAN07/JOHNTRAN` + branch `main`
-5. Build options → **Dockerfile** (repo đã có sẵn)
-6. Networking → thêm **public port 8000** (HTTP)
-7. Environment variables (runtime) → thêm:
+1. Đăng ký [render.com](https://render.com) (bằng GitHub, **không cần thẻ**)
+2. **New +** → **Web Service** → chọn repo `DEVTRAN07/JOHNTRAN` (repo phải **Public**)
+3. Cấu hình:
+
+| Ô | Chọn gì |
+|---|---|
+| Name | `johntran-bot` |
+| Region | **Singapore** (gần Việt Nam nhất) |
+| Runtime | **Docker** (repo đã có sẵn Dockerfile) |
+| Instance Type | **Free** (512 MB) |
+| Health Check Path | `/health` |
+
+4. **Environment Variables** → thêm:
 
 | Biến | Giá trị |
 |---|---|
@@ -320,37 +335,40 @@ plugins/
 | `SUPABASE_SERVICE_KEY` | service_role key |
 | `JT_PANEL__ENABLED` | `1` (bật panel API) |
 | `JT_PANEL__TOKEN` | mật khẩu panel (bắt buộc khi public) |
-| `JT_ACCOUNT_JSON` | nội dung file `account.json` (sau khi login QR local) |
+| `JT_ACCOUNT_JSON` | nội dung file `account.json` |
 | `JT_COOKIE_JSON` | nội dung file `cookie.json` |
 | `JT_AI__GEMINI_KEYS` | key Gemini (tuỳ chọn) |
 
-8. **Create service** → đợi build xong → URL dạng `https://xxx.code.run` → mở `/health` phải thấy JSON
+5. **Create Web Service** → đợi build 5-10 phút → URL dạng `https://johntran-bot.onrender.com`
 
 > Login 1 lần ở máy: chạy `node JohnTran.js`, quét QR, thấy "Đã đăng nhập thành công" rồi lấy nội dung `account.json` + `cookie.json` điền vào env. Cookie hết hạn (vài tuần) thì làm lại.
 
-### Bước 3 — Panel trên GitHub Pages
+### Bước 3 — UptimeRobot giữ bot thức (QUAN TRỌNG)
+
+Render free **ngủ sau 15 phút** không có request → bot mất kết nối Zalo. Giữ thức bằng ping miễn phí:
+
+1. Đăng ký [uptimerobot.com](https://uptimerobot.com) (free, không cần thẻ)
+2. **+ New Monitor** → Type: **HTTP(s)**
+3. URL: `https://johntran-bot.onrender.com/health`
+4. Monitoring Interval: **5 minutes**
+5. **Create Monitor**
+
+Từ đó Render luôn có request mỗi 5 phút → bot không bao giờ ngủ → WebSocket Zalo giữ liên tục.
+
+> Lưu ý: mỗi lần Render build lại hoặc restart, bot cần ~1 phút để kết nối lại Zalo (listener tự reconnect).
+
+### Bước 4 — Panel trên GitHub Pages
 
 1. Repo → **Settings → Pages** → Source: `main` branch, thư mục `/docs` → Save
 2. Mở `https://<user>.github.io/JOHNTRAN/panel.html`
-3. Nhập **REMOTE PANEL URL** = URL Northflank + **TOKEN** = `JT_PANEL__TOKEN` → Bấm **Kết nối**
+3. Nhập **REMOTE PANEL URL** = URL Render + **TOKEN** = `JT_PANEL__TOKEN` → Bấm **Kết nối**
 
-Panel có: danh sách bot con (pid, uptime, restart, crash-loop) • chạy/dừng/khởi động lại/xoá • xem log realtime (tạm dừng/tiếp tục) • xem QR đăng nhập • bật/tắt auto-restart • metrics (lệnh, nhạc, AI, cache, RAM) • top lệnh • audit log admin • trang trạng thái tổng.
+Panel có: danh sách bot con (pid, uptime, restart, crash-loop) • chạy/dừng/khởi động lại/xoá • xem log realtime • xem QR đăng nhập • bật/tắt auto-restart • metrics • top lệnh • audit log admin.
 
-### ⚠️ Vì sao KHÔNG dùng SnapDeploy free cho bot này
+### Phương án nâng cấp (nếu cần ổn định tuyệt đối)
 
-SnapDeploy free (4 container, 100h/tháng, không cần thẻ) có 3 giới hạn chặn bot Zalo:
-
-| Giới hạn SnapDeploy free | Hệ quả với bot |
-|---|---|
-| **Không có WebSocket** (WebSocket chỉ ở Always-On $12/tháng) | Listener Zalo không kết nối được → không nhận tin |
-| **Ngủ sau 15 phút** không có truy cập, chỉ browser mới đánh thức (~60s) | Bot ngủ là mất kết nối Zalo; script/cron không đánh thức được |
-| **100 giờ/tháng** (24/7 cần ~730 giờ) | Chỉ chạy được ~4 ngày/tháng |
-
-→ SnapDeploy chỉ dùng được nữa mua **Always-On $12/tháng** (có WebSocket, không ngủ).
-
-### Phương án dự phòng: Render + UptimeRobot
-
-Render free (750h/tháng) **ngủ sau 15 phút** không có request. Nếu dùng Render: tạo Web Service (Docker) + UptimeRobot ping `https://xxx.onrender.com/health` mỗi 5 phút để giữ thức. Bot sẽ trễ ~1 phút mỗi lần thức dậy — Northflank không có vấn đề này.
+- **Northflank** free (cần verify thẻ): always-on, không ngủ — không cần UptimeRobot
+- **Oracle Cloud Always Free**: VPS ARM thật, không ai cắt được (cần thẻ, tự cài Node + chạy)
 
 ---
 
