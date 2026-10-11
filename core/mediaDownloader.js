@@ -78,6 +78,12 @@ function withCookies(args) {
 // Thử các player_client khác nhau để qua mặt bước "Sign in to confirm you're not a bot"
 const YT_PLAYER_CLIENTS = ["tv,ios,web_embedded", "mweb,web_safari,mweb_embedded", "android,web_creator,web"];
 
+function isYoutube(url) {
+  return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
+}
+
+// Lấy metadata (title, duration, thumbnail, formats) dạng JSON.
+// YouTube hay chặn bot → thử lần lượt các player_client khác nhau.
 async function getMediaInfo(url) {
   const base = withCookies(["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", url]);
   try {
@@ -92,17 +98,6 @@ async function getMediaInfo(url) {
     }
     throw error;
   }
-}
-
-function isYoutube(url) {
-  return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
-}
-
-
-// Lấy metadata (title, duration, thumbnail, formats) dạng JSON
-async function getMediaInfo(url) {
-  const stdout = await run(["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", url], 90000);
-  return JSON.parse(stdout);
 }
 
 function isAudioOnly(info) {

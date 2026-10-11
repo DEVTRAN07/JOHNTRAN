@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const { ThreadType } = require("zalo-client");
 
@@ -6,12 +7,12 @@ const autosendgif = require('../../assets/autosend.json');
 
 module.exports.config = {
   name: 'autosend',
-  version: '1.0.1',
+  version: '1.1.0',
   role: 1,
   author: 'ShinTHL09',
   description: 'Tự động gửi tin nhắn theo giờ đã cài và tự xóa sau 5 phút',
   category: "Tiện ích",
-  usage: 'autosend',
+  usage: 'autosend [on|off|status]',
   cooldowns: 2
 };
 
@@ -93,15 +94,22 @@ const setting = [
 ];
 
 const form = `➢𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧🏆
-➝ Bây Giờ Là: %time_now
-➝ Đây Là Tin Nhắn Tự Động
-━━━━━━━━━━━
-[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  %content`;
+ ➝ Bây Giờ Là: %time_now
+ ➝ Đây Là Tin Nhắn Tự Động
+ ━━━━━━━━━━━
+ [ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  %content`;
+
+const GIF_TIMEOUT = 20000; // tải ảnh tối đa 20s — không được chặn việc gửi tin
 
 module.exports.onLoad = async function ({ api, Threads }) {
-  const path = __dirname + '/temp/';
+  const tempPath = path.join(__dirname, 'temp');
+  if (!fs.existsSync(tempPath)) fs.mkdirSync(tempPath, { recursive: true });
 
-  if (!fs.existsSync(path)) fs.mkdirSync(path, { recursive: true });
+  // Dọn ảnh autosend cũ sót lại (nếu lần trước crash giữa lúc gửi)
+  try {
+    const stale = fs.readdirSync(tempPath).filter((f) => f.startsWith('autosend.'));
+    for (const file of stale) fs.unlinkSync(path.join(tempPath, file));
+  } catch { /* bỏ qua */ }
 
   setInterval(autosend, 1000);
 
@@ -139,50 +147,51 @@ module.exports.onLoad = async function ({ api, Threads }) {
       .replace(/%time_now/g, matched.timer)
       .replace(/%content/g, randomMessage);
 
-    const fileName = `autosend.gif`;
-    const filePath = path + fileName;
+    const filePath = path.join(tempPath, 'autosend.gif');
 
+    // Ảnh gif là phần TRANG TRÍ: tải không được thì vẫn phải gửi được tin nhắn
+    let hasGif = false;
     try {
       const imageUrl = autosendgif[Math.floor(Math.random() * autosendgif.length)];
-
       const res = await axios.get(imageUrl, {
-        responseType: "arraybuffer",
+        responseType: 'arraybuffer',
+        timeout: GIF_TIMEOUT,
         headers: {
           'User-Agent': 'Mozilla/5.0',
           'Referer': 'https://imgur.com/',
           'Accept': 'image/*,*/*;q=0.8'
         }
       });
-      fs.writeFileSync(filePath, res.data);
-
-    } catch (err) {
-      console.error("Lỗi tải hoặc lưu ảnh:", err.message);
-    }
-
-
-    const allGroups = await api.getAllGroups();
-    const allBoxIDs = Object.keys(allGroups.gridVerMap);
-
-    for (const Group of allBoxIDs) {
-      const Thread = await Threads.getData(Group);
-      if (Thread.data.auto_send) {
-        try {
-          await api.sendMessage({
-            msg: msg,
-            attachments: filePath,
-            ttl: 300000
-          }, Thread.threadId, ThreadType.Group);
-        } catch (err) {
-          console.log(`Không gửi được tới threadId ${Thread.threadId}`);
-          continue;
-        }
+      if (res.data && res.data.length > 0) {
+        fs.writeFileSync(filePath, res.data);
+        hasGif = true;
       }
+    } catch (err) {
+      console.error("Lỗi tải ảnh autosend (vẫn gửi tin nhắn):", err.message);
     }
 
     try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Lỗi khi xóa file:', err);
+      const allGroups = await api.getAllGroups();
+      const allBoxIDs = Object.keys(allGroups?.gridVerMap || {});
+
+      let sentCount = 0;
+      for (const Group of allBoxIDs) {
+        const Thread = await Threads.getData(Group);
+        if (!Thread?.data?.auto_send) continue;
+        try {
+          await api.sendMessage({
+            msg: msg,
+            ...(hasGif ? { attachments: filePath } : {}),
+            ttl: 300000
+          }, Thread.threadId, ThreadType.Group);
+          sentCount++;
+        } catch (err) {
+          console.log(`Không gửi được tới threadId ${Thread?.threadId}: ${err.message}`);
+        }
+      }
+      if (sentCount === 0) console.log("Autosend: không có nhóm nào bật tính năng này");
+    } finally {
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
     }
   }
 };
@@ -209,8 +218,9 @@ module.exports.run = async ({ api, event, args, Threads }) => {
     // on/off tường minh: luôn đặt đúng trạng thái (không toggle ngược)
     status = action === "on";
   } else if (action === "status" || action === "stt") {
+    const slots = setting.map((s) => s.timer.replace(/:00\s*(AM|PM)$/i, " $1")).join(", ");
     return api.sendMessage(
-      { msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autosend on / autosend off`, plain: true },
+      { msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autosend on / autosend off\n\n⏰ Các khung giờ gửi: ${slots}`, plain: true },
       threadId, type
     );
   } else {
@@ -227,5 +237,3 @@ module.exports.run = async ({ api, event, args, Threads }) => {
     threadId, type
   );
 };
-
-

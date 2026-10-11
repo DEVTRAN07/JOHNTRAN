@@ -77,29 +77,6 @@ function updateConfigArray(key, newArray) {
     fs.writeFileSync(configPath, updatedLines.join("\n"), "utf8");
 }
 
-function updateConfigValue(key, newValue) {
-    const configPath = path.join(__dirname, "..", "config.yml");
-    const lines = fs.readFileSync(configPath, "utf8").split("\n");
-
-    const updatedLines = lines.map((line) => {
-        const trimmedLine = line.trim();
-
-        if (trimmedLine.startsWith("#") || !trimmedLine.includes(":")) return line;
-
-        const [k, ...rest] = trimmedLine.split(":");
-        if (k.trim() === key) {
-            const indent = line.match(/^(\s*)/)[0];
-            const commentMatch = line.match(/(#.*)/);
-            const comment = commentMatch ? " " + commentMatch[1] : "";
-            return `${indent}${k.trim()}: ${newValue}${comment}`;
-        }
-
-        return line;
-    });
-
-    fs.writeFileSync(configPath, updatedLines.join("\n"), "utf8");
-}
-
 function reloadConfig() {
     try {
         const configSystem = require("../core/config");
@@ -195,8 +172,14 @@ function convertDurationToFiveDigits(durationStr) {
   return `${parseInt(sec)}${millisRaw}`;
 }
 
-async function uploadFile(videoPath, ID, Type) {
-    const result = await global.api.uploadAttachment(
+async function uploadFile(videoPath, ID, Type, api) {
+    // Ưu tiên api truyền vào (api của bot đang chạy lệnh) — global.api có thể
+    // chưa set (bot con / môi trường test) hoặc thuộc phiên khác.
+    const target = api || global.api;
+    if (!target || typeof target.uploadAttachment !== "function") {
+        throw new Error("Chưa sẵn sàng upload file (api chưa đăng nhập hoặc mất kết nối)");
+    }
+    const result = await target.uploadAttachment(
         videoPath,
         ID,
         Type
@@ -223,7 +206,7 @@ async function extractThumbnail(videoPath, thumbnailPath) {
   });
 }
 
-async function processVideo(videoPath, threadId, type) {
+async function processVideo(videoPath, threadId, type, api = null) {
   try {
     // metadata bằng ffmpeg-static (ffprobe-static không chạy được trên macOS ARM64)
     const { probeVideo } = require("../core/videoMeta");
@@ -241,8 +224,8 @@ async function processVideo(videoPath, threadId, type) {
 
     await extractThumbnail(videoPath, thumbnailPath);
 
-    const videoUrl = (await uploadFile(videoPath, threadId, type))[0].fileUrl;
-    const thumbnailUrl = (await uploadFile(thumbnailPath, threadId, type))[0].normalUrl;
+    const videoUrl = (await uploadFile(videoPath, threadId, type, api))[0].fileUrl;
+    const thumbnailUrl = (await uploadFile(thumbnailPath, threadId, type, api))[0].normalUrl;
 
     fs.unlinkSync(thumbnailPath);
     fs.unlinkSync(videoPath);
@@ -254,20 +237,35 @@ async function processVideo(videoPath, threadId, type) {
     };
   } catch (error) {
     console.error('Error processing video:', error.message);
+    // Dọn file tạm cả khi lỗi — tránh đầy ổ đĩa trên server 24/7
+    tryUnlink(videoPath);
     throw error;
   }
 }
 
 // PROCESS AUDIO
-async function processAudio(audioPath, threadId, type) {
+async function processAudio(audioPath, threadId, type, api = null) {
     const outputPath = audioPath.replace(/\.mp3$/, '.aac');
-    await convertMp3ToAac(audioPath, outputPath)
-    const audioUrl = (await uploadFile(outputPath, threadId, type))[0].fileUrl + ".aac";
+    try {
+        await convertMp3ToAac(audioPath, outputPath)
+        const audioUrl = (await uploadFile(outputPath, threadId, type, api))[0].fileUrl + ".aac";
 
-    fs.unlinkSync(audioPath);
-    fs.unlinkSync(outputPath);
+        fs.unlinkSync(audioPath);
+        fs.unlinkSync(outputPath);
 
-    return audioUrl;
+        return audioUrl;
+    } catch (error) {
+        tryUnlink(audioPath);
+        tryUnlink(outputPath);
+        throw error;
+    }
+}
+
+// Xoá file nếu tồn tại, nuốt lỗi (file có thể đã bị xoá hoặc không tồn tại)
+function tryUnlink(filePath) {
+    try {
+        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch { /* bỏ qua */ }
 }
     
 
@@ -363,7 +361,6 @@ async function displayQRCodeInConsole(base64Image, fallbackPath = null, options 
 }
 module.exports = {
     updateConfigArray,
-    updateConfigValue,
     reloadConfig,
     getJsonData,
     updateMessageCache,
@@ -372,7 +369,5 @@ module.exports = {
     convertTimestamp,
     processVideo,
     processAudio,
-    decodeQRFromBase64,
-    generateQRCodeInTerminal,
     displayQRCodeInConsole
 };

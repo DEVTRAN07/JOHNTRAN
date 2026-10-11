@@ -230,7 +230,6 @@ plugins/
 └── events/        # (đã bỏ — bot thuần lệnh, mọi hành vi qua lệnh /xxx)
 assets/
 ├── spam/          # ngôn từ spam cho /spam (mỗi dòng .txt = 1 câu)
-├── bg/ fonts/     # tài nguyên render thẻ canvas
 └── autosend.json girl.json vdgirl.json   # dữ liệu ảnh cho autosend/girl/vdgirl
 ```
 
