@@ -92,4 +92,4 @@ function reloadAll() {
   return count;
 }
 
-module.exports = { start, stop, reloadAll, registerCommand, registerEvent };
+module.exports = { start, stop };

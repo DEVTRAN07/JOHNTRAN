@@ -313,16 +313,8 @@ assets/
 3. Vào **Project Settings → API** → copy:
    - **Project URL** → biến môi trường `SUPABASE_URL`
    - **service_role key** → biến môi trường `SUPABASE_SERVICE_KEY` (giữ bí mật, không commit)
-4. (Tuỳ chọn) chuyển dữ liệu cũ từ máy lên Supabase:
-   ```bash
-   SUPABASE_URL=https://xxx.supabase.co SUPABASE_SERVICE_KEY=eyJ... \
-     node scripts/migrate-to-supabase.js
-   ```
-5. Kiểm tra kết nối:
-   ```bash
-   SUPABASE_URL=https://xxx.supabase.co SUPABASE_SERVICE_KEY=eyJ... \
-     node scripts/verify-supabase.js
-   ```
+
+> Không có key Supabase? Bot vẫn chạy bình thường bằng JSON store local (`data/store.json`) — Supabase chỉ để dữ liệu nhóm/người dùng **không mất** khi Render khởi động lại.
 
 ### Bước 2 — Deploy Render (không cần thẻ)
 
