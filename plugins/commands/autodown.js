@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const { Reactions, ThreadType } = require("zalo-client");
 const services = require("../../core/services");
+const ytdlp = require("../../core/mediaDownloader");
 const { processVideo, processAudio } = require("../../utils/index");
 
 module.exports.config = {
@@ -28,7 +29,6 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     if ((event.data.msgType == "chat.recommended" && event.data.content.action == "recommened.link") || (event.data.msgType == "webchat" && String(event.data.content).match(/https?:\/\/[^\s]+/))) {
         var url = event.data.content.href || event.data.content;
     }
-
     const patterns = [
         /tiktok\.com/, /douyin\.com/, /capcut\.com/, /threads\.net/, /instagram\.com/, /facebook\.com/, /espn\.com/,
         /pinterest\.com/, /imdb\.com/, /imgur\.com/, /ifunny\.co/, /izlesene\.com/, /reddit\.com/, /youtube\.com/,
@@ -57,12 +57,44 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
         });
     } catch {}
 
+    // ===== Cách 1: tải LOCAL bằng yt-dlp (link KHÔNG đi qua bên thứ 3) =====
+    if (await ytdlp.ytDlpAvailable()) {
+        try {
+            return await downloadLocal(url, api, event, threadId, type);
+        } catch (error) {
+            console.log(`[autodown] Tải local thất bại: ${error.message}`);
+            // Không còn endpoint cấu hình sẵn → báo lỗi luôn
+            if (!services.serviceUrl("media_downloader_url")) {
+                try {
+                    await api.addReaction(Reactions.NONE, {
+                        data: { msgId: event.data.msgId, cliMsgId: event.data.cliMsgId },
+                        threadId,
+                        type
+                    });
+                    await api.addReaction(Reactions.CRY, {
+                        data: { msgId: event.data.msgId, cliMsgId: event.data.cliMsgId },
+                        threadId,
+                        type
+                    });
+                } catch {}
+                return api.sendMessage({
+                    msg: `❌ Không tải được link này bằng yt-dlp.\n${error.message}\n\n💡 TikTok thường chặn bot — nếu cần, admin hãy cấu hình media_downloader_url trong config.yml.`,
+                    ttl: 60000
+                }, threadId, type);
+            }
+        }
+    }
+
+    // ===== Cách 2: API endpoint do admin cấu hình (vd cho TikTok) =====
     let apiData;
     try {
         const baseUrl = services.requireService("media_downloader_url");
         const down = await axios.get(`${baseUrl}/media-downloader/atd2?url=${encodeURIComponent(url)}`, { timeout: 60000 });
         apiData = down.data;
     } catch (error) {
+        if (error.notConfigured && await ytdlp.ytDlpAvailable()) {
+            // yt-dlp có sẵn nhưng chạy cách 1 đã thất bại → báo lỗi ở trên rồi
+        }
         if (error.notConfigured) {
             return api.sendMessage({ msg: `❌ ${error.message}`, ttl: 60000 }, threadId, type);
         }
@@ -278,7 +310,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadId, type } = event;
 
     if (type === ThreadType.User) {
-        return api.sendMessage({ msg: "❌ Autodown chỉ hoạt động trong nhóm.", ttl: 60000 }, threadId, type);
+        return api.sendMessage({ msg: "❌ Autodown chỉ hoạt động trong nhóm.", plain: true, ttl: 60000 }, threadId, type);
     }
 
     const action = (args[0] || "help").toLowerCase();
@@ -289,6 +321,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         thread.data.auto_down = action === "on";
         await Threads.setData(threadId, thread.data);
         return api.sendMessage({
+            plain: true,
             msg: "📥 AUTODOWN\n" +
                 `Trạng thái: ${action === "on" ? "ĐÃ BẬT ✅" : "ĐÃ TẮT ❌"}\n` +
                 (action === "on"
@@ -302,12 +335,14 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     if (action === "status" || action === "stt") {
         const thread = (await Threads.getData(threadId)).data || {};
         return api.sendMessage({
+            plain: true,
             msg: `📥 Autodown nhóm này: ${thread.auto_down ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autodown on / autodown off`,
             ttl: 60000
         }, threadId, type);
     }
 
     return api.sendMessage({
+        plain: true,
         msg: '🔍 AUTODOWN HELPER\n\n' +
             'Tự động tải xuống media từ các link được chia sẻ trong nhóm.\n\n' +
             '📌 Các nền tảng được hỗ trợ:\n' +
@@ -365,4 +400,56 @@ async function downloadMedia(url, mediaType) {
         console.error('Lỗi downloadMedia:', err);
         return null;
     }
+}
+// Tải media local bằng yt-dlp — link KHÔNG gửi đi bên thứ 3
+async function downloadLocal(url, api, event, threadId, type) {
+    const info = await ytdlp.getMediaInfo(url);
+    if (!info) throw new Error("Không lấy được thông tin media");
+
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    const messageBody = "🎦 AUTODOWN\n" + ytdlp.describe(info).join("\n");
+
+    const setReaction = async (reaction) => {
+        try {
+            await api.addReaction(Reactions.NONE, {
+                data: { msgId: event.data.msgId, cliMsgId: event.data.cliMsgId },
+                threadId,
+                type
+            });
+            await api.addReaction(reaction, {
+                data: { msgId: event.data.msgId, cliMsgId: event.data.cliMsgId },
+                threadId,
+                type
+            });
+        } catch {}
+    };
+
+    // Nhạc (không có video) → gửi voice
+    if (ytdlp.isAudioOnly(info)) {
+        const audioPath = path.join(tempDir, `audio_${Date.now()}.mp3`);
+        await ytdlp.downloadAudio(url, audioPath);
+        const voiceUrl = await processAudio(audioPath, threadId, type);
+        await api.sendMessage({ msg: messageBody, ttl: 300000 }, threadId, type);
+        await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
+        await setReaction(Reactions.HEART);
+        return true;
+    }
+
+    // Video → tải + xử lý + gửi video
+    const videoPath = path.join(tempDir, `video_${Date.now()}.mp4`);
+    await ytdlp.downloadVideo(url, videoPath);
+    const videoData = await processVideo(videoPath, threadId, type);
+    await api.sendVideo({
+        msg: messageBody,
+        videoUrl: videoData.videoUrl,
+        thumbnailUrl: videoData.thumbnailUrl,
+        duration: videoData.metadata.duration,
+        width: videoData.metadata.width,
+        height: videoData.metadata.height,
+        ttl: 300000
+    }, threadId, type);
+    await setReaction(Reactions.HEART);
+    return true;
 }
