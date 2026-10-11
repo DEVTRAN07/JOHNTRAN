@@ -274,15 +274,17 @@ plugins/
 
 ---
 
-## 🖥️ Chạy 24/7 trên Koyeb (free) + Database Supabase
+## 🖥️ Chạy 24/7 miễn phí (Northflank / Render) + Database Supabase
 
 ### Kiến trúc
 
 | Thành phần | Chạy ở đâu | Vai trò |
 |---|---|---|
-| Bot + Panel API | **Koyeb** (Docker, free) | WebSocket Zalo 24/7, lệnh, nhạc, quản lý bot con |
+| Bot + Panel API | **Northflank** (Docker, free — always-on) | WebSocket Zalo 24/7, lệnh, nhạc, quản lý bot con |
 | Database | **Supabase** (Postgres free) | Lưu settings nhóm, user, metrics — container restart KHÔNG mất |
-| Panel UI | **GitHub Pages** | Giao diện điều khiển từ xa, gọi API Koyeb |
+| Panel UI | **GitHub Pages** | Giao diện điều khiển từ xa, gọi API trên host |
+
+> ⚠️ Koyeb đã bị Mistral mua và **đóng free tier** với tài khoản mới (2026) nên không dùng được nữa. Northflank là phương án thay thế gần giống nhất: free tier **always-on, không ngủ**, gồm 2 service + 1 database.
 
 ### Bước 1 — Supabase (5 phút)
 
@@ -291,16 +293,26 @@ plugins/
 3. Vào **Project Settings → API** → copy:
    - **Project URL** → biến môi trường `SUPABASE_URL`
    - **service_role key** → biến môi trường `SUPABASE_SERVICE_KEY` (giữ bí mật, không commit)
+4. (Tuỳ chọn) chuyển dữ liệu cũ từ máy lên Supabase:
+   ```bash
+   SUPABASE_URL=https://xxx.supabase.co SUPABASE_SERVICE_KEY=eyJ... \
+     node scripts/migrate-to-supabase.js
+   ```
+5. Kiểm tra kết nối:
+   ```bash
+   SUPABASE_URL=https://xxx.supabase.co SUPABASE_SERVICE_KEY=eyJ... \
+     node scripts/verify-supabase.js
+   ```
 
-### Bước 2 — Deploy Koyeb
+### Bước 2 — Deploy Northflank
 
-[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=docker&repository=github.com/DEVTRAN07/JOHNTRAN&branch=main&name=johntran-bot)
-
-> ⚠️ Repo phải để **Public** (GitHub → Settings → Danger Zone → Change visibility → Public) thì Koyeb mới deploy được và GitHub Pages mới chạy. Repo không chứa secret nào — toàn bộ key nằm trong biến môi trường trên Koyeb.
-
-1. Đăng nhập [koyeb.com](https://koyeb.com) → **Create Service** → deploy từ GitHub repo này
-2. Builder: **Docker** (repo có sẵn `Dockerfile`: yt-dlp + ffmpeg + canvas deps)
-3. **Environment variables**:
+1. Đăng ký [northflank.com](https://northflank.com) (free tier, không cần thẻ — hoặc verify thẻ nhưng không trừ tiền)
+2. **Create project** → Northflank Cloud → chọn region
+3. Repo phải để **Public** (GitHub → Settings → Danger Zone → Change visibility) rồi kết nối GitHub trong **Integrations**
+4. **Create service** → **Combined service** → nhập tên → chọn repo `DEVTRAN07/JOHNTRAN` + branch `main`
+5. Build options → **Dockerfile** (repo đã có sẵn)
+6. Networking → thêm **public port 8000** (HTTP)
+7. Environment variables (runtime) → thêm:
 
 | Biến | Giá trị |
 |---|---|
@@ -312,8 +324,7 @@ plugins/
 | `JT_COOKIE_JSON` | nội dung file `cookie.json` |
 | `JT_AI__GEMINI_KEYS` | key Gemini (tuỳ chọn) |
 
-4. Instance: **Free** (1 instance, 512MB) → Deploy
-5. Koyeb cấp URL dạng `https://<ten>.koyeb.app` — health check tự động qua `PORT`
+8. **Create service** → đợi build xong → URL dạng `https://xxx.code.run` → mở `/health` phải thấy JSON
 
 > Login 1 lần ở máy: chạy `node JohnTran.js`, quét QR, thấy "Đã đăng nhập thành công" rồi lấy nội dung `account.json` + `cookie.json` điền vào env. Cookie hết hạn (vài tuần) thì làm lại.
 
@@ -321,13 +332,13 @@ plugins/
 
 1. Repo → **Settings → Pages** → Source: `main` branch, thư mục `/docs` → Save
 2. Mở `https://<user>.github.io/JOHNTRAN/panel.html`
-3. Nhập **REMOTE PANEL URL** = URL Koyeb + **TOKEN** = `JT_PANEL__TOKEN` → Bấm **Kết nối**
+3. Nhập **REMOTE PANEL URL** = URL Northflank + **TOKEN** = `JT_PANEL__TOKEN` → Bấm **Kết nối**
 
 Panel có: danh sách bot con (pid, uptime, restart, crash-loop) • chạy/dừng/khởi động lại/xoá • xem log realtime (tạm dừng/tiếp tục) • xem QR đăng nhập • bật/tắt auto-restart • metrics (lệnh, nhạc, AI, cache, RAM) • top lệnh • audit log admin • trang trạng thái tổng.
 
-### Không dùng Vercel nữa
+### Phương án dự phòng: Render + UptimeRobot
 
-Vercel là serverless — không giữ được WebSocket Zalo và không có ổ đĩa bền, nên bot không thể chạy ở đó. Toàn bộ file Vercel (`vercel.json`, `api/`, `public/`) đã được xoá khỏi repo.
+Render free (750h/tháng) **ngủ sau 15 phút** không có request. Nếu dùng Render: tạo Web Service (Docker) + UptimeRobot ping `https://xxx.onrender.com/health` mỗi 5 phút để giữ thức. Bot sẽ trễ ~1 phút mỗi lần thức dậy — Northflank không có vấn đề này.
 
 ---
 

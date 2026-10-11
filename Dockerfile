@@ -21,10 +21,12 @@ COPY package*.json ./
 RUN npm ci --omit=dev || npm install --omit=dev
 COPY . .
 
-# Koyeb inject PORT — health server + panel tự mở đúng port đó
+# Koyeb/Render/Northflank inject PORT — health server + panel tự mở đúng port đó.
+# PORT=8000 là mặc định nếu nền tảng không inject (Northflank đọc từ EXPOSE).
 ENV NODE_ENV=production
 ENV TZ=Asia/Ho_Chi_Minh
 ENV YTDLP_PATH=/usr/local/bin/yt-dlp
+ENV PORT=8000
 EXPOSE 8000
 
 CMD ["node", "index.js"]
