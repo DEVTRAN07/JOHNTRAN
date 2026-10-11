@@ -125,7 +125,8 @@ async function renderCardUser({ user }) {
     ["Giới tính", genderText(user.gender)],
     ["Sinh nhật", user.sdob || "Không công khai"],
     ["Bio", user.status ? truncate(ctx, user.status, W - 260) : "Không có"],
-    ["Trạng thái", user.isActive ? "🟢 Đang hoạt động" : "⚪ Không hoạt động"]
+    ["Trạng thái", user.isActive ? "🟢 Đang hoạt động" : "⚪ Không hoạt động"],
+    ...(Array.isArray(user.extra) ? user.extra.filter(([label]) => label) : [])
   ];
 
   let y = ay + avatarSize + 118;
@@ -211,7 +212,8 @@ async function renderCardInfo({ user }) {
     ["Giới tính", genderText(user.gender)],
     ["Sinh nhật", user.sdob || "Không công khai"],
     ["Bio", user.status ? truncate(ctx, user.status, avatarSize - 120) : "Không có"],
-    ["UID", String(user.userId || user.uid || "—")]
+    ["UID", String(user.userId || user.uid || "—")],
+    ...(Array.isArray(user.extra) ? user.extra.filter(([label]) => label) : [])
   ];
 
   let y = 175;

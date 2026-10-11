@@ -65,19 +65,47 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         return reply.success("Đã chuyển menu sang chế độ canvas.");
     }
 
+    // Thoát menu (nút OUT trong ảnh chỉ là minh hoạ — gõ /menu out để đóng)
+    if (argType === "out" || argType === "exit" || argType === "close") {
+        const thread = (await Threads.getData(threadId)).data || {};
+        delete thread.menu_page;
+        await Threads.setData(threadId, thread);
+        return reply.card({
+            theme: "brand",
+            title: "Đã đóng menu",
+            subtitle: `Gõ ${global.config.prefix}menu để mở lại bất cứ lúc nào`,
+            rows: [{ icon: "list", label: "Gợi ý", lines: [
+                `${global.config.prefix}menu next — trang sau`,
+                `${global.config.prefix}menu <số> — nhảy tới trang`,
+                `${global.config.prefix}menu <tên lệnh> — xem chi tiết`
+            ]}],
+            footer: `ᴶᴼᴴᴺ ᵀᴿᴬᴺ`
+        });
+    }
+
     // Xem chi tiết 1 lệnh
-    if (argType === "all" || (argType && !["next"].includes(argType) && !/^\d{1,2}$/.test(argType))) {
+    if (argType === "all" || (argType && !["next", "out", "exit", "close"].includes(argType) && !/^\d{1,2}$/.test(argType))) {
         return showCommandInfo(argType, senderId, prefix, api, threadId, type);
     }
 
     const commands = collectCommands(senderId);
     const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
-    let page = 1;
-    if (argType === "next") page = 2;
-    else if (/^\d{1,2}$/.test(argType)) page = parseInt(argType, 10);
-    page = Math.min(Math.max(page, 1), totalPages);
 
+    // Nhớ trang hiện tại theo nhóm để next đi tiếp đúng
     const threadData = (await Threads.getData(threadId)).data || {};
+    let page = 1;
+    if (argType === "next") {
+        page = (Number(threadData.menu_page) || 1) + 1;
+        if (page > totalPages) page = 1; // hết trang thì quay về đầu
+    } else if (/^\d{1,2}$/.test(argType)) {
+        page = parseInt(argType, 10);
+    }
+    page = Math.min(Math.max(page, 1), totalPages);
+    if (page !== Number(threadData.menu_page)) {
+        threadData.menu_page = page;
+        await Threads.setData(threadId, threadData);
+    }
+
     if (threadData.menu_mode === "text") {
         return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
     }

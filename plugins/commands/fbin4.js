@@ -12,7 +12,11 @@ module.exports.config = {
     category: 'Tiện ích',
     usage: 'fbin4 [uid hoặc link]',
     cooldowns: 2,
-    dependencies: {}
+    dependencies: {},
+    requires: [
+        { key: "services.facebook_access_token", label: "Token Facebook (services.facebook_access_token)", optional: false },
+        { key: "services.facebook_api_url", label: "Endpoint lấy UID FB (services.facebook_api_url)", optional: false }
+    ]
 };
 
 // Token Facebook đặt trong config.yml → services.facebook_access_token

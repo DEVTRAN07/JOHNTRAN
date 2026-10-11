@@ -364,6 +364,17 @@ function startPanel({ manager, config }) {
         }
       }
 
+      // ===== Trạng thái lệnh (thiếu API / endpoint gì) =====
+      if (pathname === "/api/commands/status" && req.method === "GET") {
+        try {
+          const audit = require("../core/commands/audit");
+          const list = audit.getAllCommandStatus();
+          return sendJson(res, 200, { ...audit.summarize(list), commands: list });
+        } catch (error) {
+          return sendJson(res, 500, { error: error.message });
+        }
+      }
+
       if (pathname === "/api/master" && req.method === "GET") {
         return sendJson(res, 200, {
           botCount: manager.list().length,

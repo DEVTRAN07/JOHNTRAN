@@ -24,7 +24,10 @@ module.exports.config = {
   category: "Tiện ích",
   usage: "say <văn bản> | say set <mã giọng> | say list",
   cooldowns: 5,
-  dependencies: {}
+  dependencies: {},
+    requires: [
+        { key: "ai.elevenlabs_key", label: "Key ElevenLabs (ai.elevenlabs_key)", optional: false }
+    ]
 };
 
 module.exports.run = async function ({ api, event, args, Threads }) {

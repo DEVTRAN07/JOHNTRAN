@@ -84,6 +84,16 @@
     </div>
   </section>
 
+  <!-- Trạng thái lệnh (thiếu API/config) -->
+  <section class="card">
+    <h2>Trạng thái lệnh <span class="badge-count" id="cmdStatusCount">—</span></h2>
+    <div class="row" style="margin-bottom:12px">
+      <span style="color:var(--sub);font-size:12.5px" id="cmdStatusHint">Đang tải...</span>
+      <button onclick="loadCommandStatus()">Tải lại</button>
+    </div>
+    <div class="cmd-grid" id="cmdStatusGrid"></div>
+  </section>
+
   <!-- Quản lý lệnh bot con -->
   <section class="card">
     <h2>Quản lý lệnh <span class="badge-count" id="cmd-total">0</span></h2>

@@ -11,7 +11,10 @@ module.exports.config = {
   category: "AI",
   usage: "gpt <text>",
   cooldowns: 3,
-  dependencies: {}
+  dependencies: {},
+    requires: [
+        { key: "ai.gemini_keys", label: "Key Gemini (ai.gemini_keys)", optional: false }
+    ]
 };
 
 module.exports.run = async ({ args, event, api, reply }) => {

@@ -13,7 +13,10 @@ module.exports.config = {
   description: 'Xem video gái ngẫu nhiên trên tiktok',
   category: 'Giải trí',
   usage: 'girltt',
-  cooldowns: 2
+  cooldowns: 2,
+  requires: [
+    { key: "services.media_generator_url", label: "Endpoint video (services.media_generator_url)", optional: false }
+  ]
 };
 
 module.exports.run = async ({ event, api }) => {

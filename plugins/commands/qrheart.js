@@ -12,7 +12,10 @@ module.exports.config = {
   category: "Tiện ích",
   usage: "qrheart <nội dung> - <chữ mô tả>",
   cooldowns: 2,
-  dependencies: {}
+  dependencies: {},
+    requires: [
+        { key: "services.image_generator_url", label: "Endpoint tạo ảnh (services.image_generator_url)", optional: false }
+    ]
 };
 
 module.exports.run = async ({ api, event, args }) => {

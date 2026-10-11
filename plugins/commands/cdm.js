@@ -9,7 +9,10 @@ module.exports.config = {
     category: "Tiện ích",
     usage: "cdm <tên miền>",
     cooldowns: 5,
-    dependencies: { "axios": "" }
+    dependencies: { "axios": "" },
+    requires: [
+        { key: "services.whois_url", label: "API whois (services.whois_url)", optional: true }
+    ]
 };
 
 module.exports.run = async function({ api, event, args }) {

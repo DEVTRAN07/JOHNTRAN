@@ -3,6 +3,25 @@ const path = require("path");
 const YAML = require("yaml");
 
 const CONFIG_PATH = path.join(__dirname, "..", "..", "config.yml");
+const ENV_PATH = path.join(__dirname, "..", "..", ".env");
+
+// Nạp .env vào process.env (key thật, không lên git)
+function loadDotEnv() {
+  try {
+    if (!fs.existsSync(ENV_PATH)) return;
+    for (const line of fs.readFileSync(ENV_PATH, "utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const idx = trimmed.indexOf("=");
+      if (idx <= 0) continue;
+      const key = trimmed.slice(0, idx).trim();
+      const value = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, "");
+      if (!(key in process.env)) process.env[key] = value;
+    }
+  } catch {
+    // .env lỗi thì bỏ qua, dùng env thật
+  }
+}
 
 const SECRET_KEYS = ["key", "keys", "secret", "token", "password", "cookie", "imei", "credential"];
 const REDACTED = "***";
@@ -41,15 +60,6 @@ function redact(object) {
   return output;
 }
 
-function parseEnvValue(rawValue) {
-  if (rawValue === "true") return true;
-  if (rawValue === "false") return false;
-  if (rawValue === "") return "";
-  if (rawValue.includes(",")) return rawValue.split(",").map((item) => item.trim()).filter(Boolean);
-  if (!Number.isNaN(Number(rawValue))) return Number(rawValue);
-  return rawValue;
-}
-
 function setNestedValue(target, pathSegments, value) {
   let current = target;
   for (let i = 0; i < pathSegments.length - 1; i++) {
@@ -58,6 +68,27 @@ function setNestedValue(target, pathSegments, value) {
     current = current[segment];
   }
   current[pathSegments[pathSegments.length - 1]] = value;
+}
+
+function getNestedValue(target, pathSegments) {
+  let current = target;
+  for (const segment of pathSegments) {
+    if (current == null) return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+function parseEnvValue(rawValue, isArrayTarget) {
+  // Đích là mảng (vd gemini_keys) → luôn tách theo dấu phẩy
+  if (rawValue === "true") return true;
+  if (rawValue === "false") return false;
+  if (rawValue === "") return "";
+  if (isArrayTarget || rawValue.includes(",")) {
+    return rawValue.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  if (!Number.isNaN(Number(rawValue))) return Number(rawValue);
+  return rawValue;
 }
 
 function applyEnvOverrides(config) {
@@ -70,7 +101,10 @@ function applyEnvOverrides(config) {
     const match = envKey.match(/^JT_([A-Z0-9_]+)$/);
     if (!match) continue;
     const pathSegments = match[1].toLowerCase().split("__");
-    setNestedValue(config, pathSegments, parseEnvValue(rawValue));
+    // Nếu giá trị hiện tại trong config là mảng → ép override thành mảng
+    const existing = getNestedValue(config, pathSegments);
+    const isArrayTarget = Array.isArray(existing);
+    setNestedValue(config, pathSegments, parseEnvValue(rawValue, isArrayTarget));
     applied.push(envKey);
   }
   return applied;
@@ -108,6 +142,10 @@ const DEFAULTS = {
     token: ""
   },
   zalo_client_config: {},
+  // Tải media (autodown) — cookies cho yt-dlp khi site chặn bot
+  media: {
+    ytdlp_cookies_file: ""
+  },
   privacy: {
     allow_all_hosts: false,
     allowed_hosts: [
@@ -223,6 +261,8 @@ function validate(config) {
 }
 
 function load() {
+  loadDotEnv();
+
   let config = {};
   try {
     config = YAML.parse(fs.readFileSync(CONFIG_PATH, "utf8")) || {};

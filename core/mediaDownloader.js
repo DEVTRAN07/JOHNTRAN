@@ -2,16 +2,20 @@
 // Hỗ trợ: Tiktok, Youtube, Facebook, Instagram, Twitter/X, Soundcloud, Zingmp3,
 // Douyin, Capcut, Vimeo, Reddit, Bilibili, v.v. ( Spotify không tải được — DRM )
 const { execFile } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 const DOWNLOAD_TIMEOUT = 180000;
 
-// Ứng viên binary yt-dlp: env → PATH → đường dẫn phổ biến trên macOS
+// Ứng viên binary yt-dlp: env → PATH (ưu tiên nightly: fix chống chặn YouTube nhanh hơn) → đường dẫn phổ biến
 const YTDLP_CANDIDATES = [
   process.env.YTDLP_PATH,
+  path.join(os.homedir(), ".local/bin/yt-dlp"),
   "yt-dlp",
+  "/usr/local/bin/yt-dlp",
   "/Library/Frameworks/Python.framework/Versions/3.14/bin/yt-dlp",
   "/opt/homebrew/bin/yt-dlp",
-  "/usr/local/bin/yt-dlp",
   "/usr/bin/yt-dlp"
 ].filter(Boolean);
 
@@ -60,6 +64,41 @@ function run(args, timeout = DOWNLOAD_TIMEOUT) {
   });
 }
 
+// ===== Cookies + player client (YouTube chặn bot khi không có cookie) =====
+function cookiesFile() {
+  return (global.config?.media?.ytdlp_cookies_file || process.env.YTDLP_COOKIES_FILE || "").trim();
+}
+
+function withCookies(args) {
+  const cookies = cookiesFile();
+  if (cookies && fs.existsSync(cookies)) args.push("--cookies", cookies);
+  return args;
+}
+
+// Thử các player_client khác nhau để qua mặt bước "Sign in to confirm you're not a bot"
+const YT_PLAYER_CLIENTS = ["tv,ios,web_embedded", "mweb,web_safari,mweb_embedded", "android,web_creator,web"];
+
+async function getMediaInfo(url) {
+  const base = withCookies(["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", url]);
+  try {
+    return JSON.parse(await run(base, 90000));
+  } catch (error) {
+    if (!isYoutube(url)) throw error;
+    for (const client of YT_PLAYER_CLIENTS) {
+      try {
+        const args = ["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", "--extractor-args", `youtube:player_client=${client}`, url];
+        return JSON.parse(await run(withCookies(args), 90000));
+      } catch { /* thử client tiếp */ }
+    }
+    throw error;
+  }
+}
+
+function isYoutube(url) {
+  return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
+}
+
+
 // Lấy metadata (title, duration, thumbnail, formats) dạng JSON
 async function getMediaInfo(url) {
   const stdout = await run(["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", url], 90000);
@@ -73,7 +112,7 @@ function isAudioOnly(info) {
 // Tải video ra file local (mp4 ưu tiên, cap 720p để vừa Zalo)
 async function downloadVideo(url, outputPath) {
   const format = "bv*[height<=720]+ba/b[height<=720]/b";
-  const args = [
+  const baseArgs = () => [
     "--no-warnings",
     "--no-playlist",
     "--no-check-certificate",
@@ -84,16 +123,27 @@ async function downloadVideo(url, outputPath) {
     url
   ];
   try {
-    await run(args);
+    await run(withCookies(baseArgs()));
     return outputPath;
   } catch (error) {
+    // YouTube chặn bot → thử các player_client khác
+    if (isYoutube(url)) {
+      for (const client of YT_PLAYER_CLIENTS) {
+        try {
+          const args = baseArgs();
+          args.push("--extractor-args", `youtube:player_client=${client}`);
+          await run(withCookies(args));
+          return outputPath;
+        } catch { /* thử client tiếp */ }
+      }
+    }
     // fallback: best có sẵn (một số site không cho merge)
-    await run([
+    await run(withCookies([
       "--no-warnings", "--no-playlist", "--no-check-certificate",
       "-f", "b/best",
       "-o", outputPath,
       url
-    ]);
+    ]));
     return outputPath;
   }
 }

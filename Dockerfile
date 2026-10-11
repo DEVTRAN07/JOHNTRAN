@@ -1,7 +1,8 @@
-# Dockerfile cho Koyeb (free) — deploy bot 24/7
+# Dockerfile cho Render/Koyeb (free) — deploy bot 24/7
 FROM node:22-slim
 
-# yt-dlp (autodown local) + ffmpeg (xử lý video/nhạc) + thư viện cho canvas
+# yt-dlp NIGHTLY (bản thường xuyên fix chống chặn YouTube hơn bản ổn định)
+# + ffmpeg (xử lý video/nhạc) + thư viện cho canvas
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip \
     ffmpeg \
@@ -13,8 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     librsvg2-dev \
     fonts-dejavu-core \
     ca-certificates \
-    && pip3 install --break-system-packages -U yt-dlp \
-    && rm -rf /var/lib/apt/lists/*
+    && pip3 install --break-system-packages -U --pre yt-dlp \
+    && rm -rf /var/lib/apt/lists/* && yt-dlp --version
 
 WORKDIR /app
 # copy package.json + vendor TRƯỚC để npm ci tìm thấy zalo-client (file:vendor/zalo-client)

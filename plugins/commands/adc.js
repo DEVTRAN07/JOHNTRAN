@@ -15,7 +15,10 @@ module.exports.config = {
   usage: 'adc [reply hoặc tên file]',
   usages: 'adc [reply hoặc tên file]',
   cooldowns: 2,
-  dependencies: { "cheerio": "" }
+  dependencies: { "cheerio": "" },
+    requires: [
+        { key: "services.dpaste_url", label: "API dpaste (services.dpaste_url)", optional: true }
+    ]
 };
 
 module.exports.run = async function ({ api, event, args }) {

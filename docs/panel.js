@@ -373,3 +373,27 @@ async function toggleCommand(el, name) {
 }
 
 loadCommandList();
+
+/* ---------- trạng thái lệnh (thiếu API/endpoint) ---------- */
+async function loadCommandStatus() {
+  try {
+    const s = await api("/api/commands/status");
+    $("cmdStatusCount").textContent = `${s.ready}/${s.total} sẵn sàng`;
+    $("cmdStatusHint").innerHTML = s.blocked > 0
+      ? `<b style="color:var(--red)">${s.blocked} lệnh đang thiếu API/endpoint</b> — thêm vào config.yml rồi redeploy.`
+      : `✅ Tất cả lệnh đã đầy đủ cấu hình.`;
+    const all = s.commands || [];
+    const blocked = all.filter(c => !c.ready);
+    const rest = all.filter(c => c.ready).slice(0, 40);
+    const rows = [...blocked.map(c => ({ ...c, blocked: true })), ...rest.map(c => ({ ...c, blocked: false }))];
+    $("cmdStatusGrid").innerHTML = rows.map(c => `
+      <div class="cmd-status ${c.blocked ? "blocked" : "ready"}">
+        <div style="min-width:0">
+          <div class="cname">${escapeHtml(c.name)}</div>
+          ${c.blocked ? `<div class="miss">${escapeHtml(c.missing.join(", "))}</div>` : ""}
+        </div>
+        <div class="st">${c.blocked ? "THIẾU" : "OK"}</div>
+      </div>`).join("");
+  } catch { /* bỏ qua */ }
+}
+loadCommandStatus();

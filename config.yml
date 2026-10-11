@@ -41,7 +41,7 @@ panel:
   enabled: false # bật panel quản lý bot + bot con
   host: "0.0.0.0"
   port: 3000
-  token: "" # để trống = không cần đăng nhập (chỉ dùng khi mở public)
+  token: "jt6132a94559f0bcc44662222e" # để trống = không cần đăng nhập (chỉ dùng khi mở public)
 
 # cấu hình của zalo-client
 zalo_client_config:
@@ -118,13 +118,17 @@ services:
 # ===== AI =====
 # Key Gemini: https://aistudio.google.com/apikey
 # Key ElevenLabs (TTS /say): https://elevenlabs.io → API Keys
-# Có thể set bằng biến môi trường: JT_GEMINI_KEYS=key1,key2 / JT_AI__ELEVENLABS_KEY=...
+# ⚠️ KHÔNG để key trực tiếp trong file này (sẽ bị lên git và bị leak).
+# Đặt key vào file .env ở thư mục gốc (file này đã được .gitignore):
+#   JT_AI__GEMINI_KEYS=key1,key2
+#   JT_AI__ELEVENLABS_KEY=sk_xxx
+# Hoặc set biến môi trường trực tiếp khi deploy trên Render/Koyeb.
 ai:
   gemini_keys: []
   gemini_model: "gemini-2.5-flash"
   max_prompt_length: 340 # giới hạn ký tự prompt gửi đi
   max_history: 8 # số tin nhắn AI nhớ trong hội thoại với mỗi user
-  elevenlabs_key: "" # key ElevenLabs cho lệnh /say (để trống = /say tắt)
+  elevenlabs_key: "" # key ElevenLabs cho lệnh /say (đặt trong .env)
   tts_enabled: true # bật lệnh /noi đọc giọng nói bằng Google TTS (miễn phí)
 
 # ===== NHẠC =====    
@@ -134,4 +138,10 @@ music:
   soundcloud_client_id: "" # để trống = bot tự lấy client_id từ asset chính chủ SoundCloud
   spotify_client_id: "" # tạo app tại https://developer.spotify.com/dashboard
   spotify_client_secret: "" # có 2 field này mới tìm kiếm được spotify theo từ khóa
+
+# ===== TẢI MEDIA (autodown) =====
+# YouTube đang chặn bot → dùng nightly yt-dlp đã fix đa số trường hợp.
+# Nếu vẫn bị chặn: export cookie Youtube (định dạng Netscape) vào đây.
+media:
+  ytdlp_cookies_file: "" # đường dẫn file cookies.txt cho yt-dlp (vd: /home/user/cookies.txt)
 

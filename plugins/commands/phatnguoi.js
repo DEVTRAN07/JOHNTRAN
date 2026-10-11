@@ -13,7 +13,10 @@ module.exports.config = {
   category: "Tiện ích",
   usage: "phatnguoi [biển số xe]",
   cooldowns: 5,
-  dependencies: {}
+  dependencies: {},
+    requires: [
+        { key: "services.phatnguoi_url", label: "API phạt nguội (services.phatnguoi_url)", optional: true }
+    ]
 };
 
 async function processCheckRequest(api, event, bienSo) {
