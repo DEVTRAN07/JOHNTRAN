@@ -140,6 +140,8 @@ function readMessageJson() {
         const data = fs.readFileSync(messageCachePath, "utf-8");
         return JSON.parse(data);
     } catch (error) {
+        // File chưa có (lần đầu chạy) là bình thường — không cần log lỗi
+        if (error.code === "ENOENT") return {};
         logger.log("Lỗi khi đọc file message.json: " + error.message, "error");
         return {};
     }
