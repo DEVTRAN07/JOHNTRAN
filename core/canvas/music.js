@@ -27,11 +27,23 @@ async function fetchThumb(url) {
 
 // ===== Lưới kết quả tìm kiếm =====
 async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source }) {
-  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 1180);
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text } = theme;
 
-  await theme.paintBackground(ctx, W, 1180);
+  // ===== Kích thước TỰ TÍNH: chỉ vừa đủ số bài trong trang =====
+  const cols = 4;
+  const rows = Math.max(1, Math.ceil(tracks.length / cols));
+  const cardW = 286;
+  const cardH = 320;
+  const gapX = 22;
+  const gapY = 20;
+  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const headerH = 130;
+  const footerH = 140;
+  const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
+
+  const { ctx, canvas } = theme.newCanvas(W, H);
+  await theme.paintBackground(ctx, W, H);
 
   text(ctx, "🔎", 40, 74, { font: "40px JT", color: PALETTE.accent });
   text(ctx, `Kết quả: ${theme.truncate(ctx, query, W - 500)}`, W / 2, 74, {
@@ -44,21 +56,13 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
     { font: "21px JT", color: PALETTE.ink2, align: "center" }
   );
 
-  const cols = 4;
-  const cardW = 286;
-  const cardH = 330;
-  const gapX = 22;
-  const gapY = 20;
-  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
-  const top = 150;
-
-  const perRow = tracks.slice(0, 8);
-  for (let index = 0; index < perRow.length; index++) {
-    const track = perRow[index];
+  const shown = tracks.slice(0, cols * rows);
+  for (let index = 0; index < shown.length; index++) {
+    const track = shown[index];
     const col = index % cols;
     const row = Math.floor(index / cols);
     const x = padX + col * (cardW + gapX);
-    const y = top + row * (cardH + gapY);
+    const y = headerH + row * (cardH + gapY);
 
     panel(ctx, x, y, cardW, cardH);
 
@@ -100,13 +104,13 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   }
 
   // ===== Footer điều hướng =====
-  const footY = 1080;
+  const footY = H - footerH + 18;
   button(ctx, 40, footY, 300, 52, "◀  PREV", PALETTE.gold);
-  text(ctx, `Trang ${page} / ${totalPages}`, W / 2, footY + 34, { font: "bold 28px JT-Bold", color: PALETTE.ink, align: "center" });
+  text(ctx, `📄 Trang ${page} / ${totalPages}`, W / 2, footY + 34, { font: "bold 28px JT-Bold", color: PALETTE.ink, align: "center" });
   button(ctx, W - 340, footY, 300, 52, "NEXT  ▶", PALETTE.green);
   text(
     ctx,
-    `Gõ ${global.config.prefix}scl <số> để tải bài • next / prev / out (không cần prefix)`,
+    `⌨️ Gõ ${global.config.prefix}scl <số> tải bài • gõ trần next / prev / out để điều hướng`,
     W / 2, footY + 92,
     { font: "19px JT", color: PALETTE.ink2, align: "center" }
   );

@@ -115,8 +115,10 @@ music:
 # YouTube đang chặn bot → dùng nightly yt-dlp đã fix đa số trường hợp.
 # Nếu vẫn báo "Sign in to confirm you're not a bot" thì cần cookie:
 media:
+  # Cách 2 (chạy trên MÁY BẠN, có trình duyệt đã đăng nhập YouTube):
+  # chrome | safari | firefox | edge | brave | chromium
+  # Không có trình duyệt đó (vd chạy trên Render) thì bot tự bỏ cờ và chạy lại.
+  ytdlp_cookies_from_browser: "chrome"
   # Cách 1 (Render/cloud — KHÔNG có trình duyệt): export cookies.txt rồi trỏ đường dẫn
   ytdlp_cookies_file: "" # vd: /app/cookies.txt hoặc set env YTDLP_COOKIES_FILE
-  # Cách 2 (chạy trên MÁY BẠN, có trình duyệt đã đăng nhập YouTube):
-  ytdlp_cookies_from_browser: "" # chrome | safari | firefox | edge | brave | chromium (để trống = không dùng)
 

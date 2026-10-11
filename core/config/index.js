@@ -151,7 +151,7 @@ const DEFAULTS = {
   // Tải media (autodown) — cookies cho yt-dlp khi site chặn bot
   media: {
     ytdlp_cookies_file: "",
-    ytdlp_cookies_from_browser: ""
+    ytdlp_cookies_from_browser: "chrome"
   },
   privacy: {
     allow_all_hosts: false,

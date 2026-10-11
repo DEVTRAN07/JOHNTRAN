@@ -4,20 +4,36 @@ const theme = require("./theme");
 // Ảnh trong Zalo KHÔNG có nút bấm được nên footer ghi rõ lệnh để gõ.
 // Đồng thời menu.js có handleEvent bắt "next"/"prev"/"out" (khỏi cần prefix).
 async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, commands, uptimeText }) {
-  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 1280);
+  theme.initFonts();
+  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 100);
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text } = theme;
+  const { PALETTE, panel, button, text, truncate } = theme;
 
-  await theme.paintBackground(ctx, W, 1280);
+  // ===== Kích thước TỰ TÍNH theo số thẻ (khừ cố định 1280px để trống) =====
+  const cols = 3;
+  const rows = Math.ceil(commands.page.length / cols);
+  const cardW = 384;
+  const cardH = 160;
+  const gapX = 24;
+  const gapY = 18;
+  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const headerH = 140;
+  const footerH = 150;
+  const gridH = rows * cardH + Math.max(0, rows - 1) * gapY;
+  const H = headerH + gridH + footerH;
+
+  canvas.height = H;
+  ctx.canvas.width = W;
+  await theme.paintBackground(ctx, W, H);
 
   // ===== Header =====
-  text(ctx, "⚡", 40, 78, { font: "44px JT", color: PALETTE.accent });
-  text(ctx, botName, W / 2, 78, { font: "bold 54px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 320 });
+  text(ctx, "⚡", 40, 74, { font: "40px JT", color: PALETTE.accent });
+  text(ctx, botName, W / 2, 74, { font: "bold 52px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 320 });
   text(
     ctx,
     `🕐 ${uptimeText}   •   🔑 Prefix: ${prefix}   •   📋 ${commands.total} lệnh`,
-    W / 2, 122,
-    { font: "22px JT", color: PALETTE.ink2, align: "center" }
+    W / 2, 114,
+    { font: "21px JT", color: PALETTE.ink2, align: "center" }
   );
 
   // avatar tròn góc phải
@@ -43,26 +59,18 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   }
 
   // ===== Lưới thẻ lệnh =====
-  const cols = 3;
-  const cardW = 384;
-  const cardH = 170;
-  const gapX = 24;
-  const gapY = 20;
-  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
-  const top = 160;
-
   commands.page.forEach((cmd, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
     const x = padX + col * (cardW + gapX);
-    const y = top + row * (cardH + gapY);
+    const y = headerH + row * (cardH + gapY);
 
     panel(ctx, x, y, cardW, cardH);
 
     text(ctx, commandEmoji(cmd.name), x + 20, y + 48, { font: "28px JT" });
-    text(ctx, cmd.name, x + 66, y + 46, { font: "bold 30px JT-Bold", color: PALETTE.ink, maxWidth: cardW - 96 });
-    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + 20, y + 92, { font: "18px JT", color: PALETTE.mute, maxWidth: cardW - 40 });
-    text(ctx, cmd.category.toUpperCase(), x + 20, y + 128, { font: "bold 15px JT-Bold", color: PALETTE.accent2, maxWidth: cardW - 40 });
+    text(ctx, cmd.name, x + 66, y + 44, { font: "bold 29px JT-Bold", color: PALETTE.ink, maxWidth: cardW - 96 });
+    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + 20, y + 88, { font: "17px JT", color: PALETTE.mute, maxWidth: cardW - 40 });
+    text(ctx, cmd.category.toUpperCase(), x + 20, y + 122, { font: "bold 14px JT-Bold", color: PALETTE.accent2, maxWidth: cardW - 40 });
   });
 
   // ===== Footer điều hướng (nút vẽ để HƯỚNG DẪN, gõ lệnh mới chạy) =====

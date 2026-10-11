@@ -127,10 +127,16 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     try {
       const music = require("../../core/music");
       if (music.getPending && music.getPending(music.pickKey(event.threadId, event.data.uidFrom))) return;
-    } catch { /* không nạp được music thì thôi */ }
+    } catch { /* không nạy được music thì thôi */ }
 
     const threadData = (await Threads.getData(event.threadId)).data || {};
-    if (!threadData.menu_page) return; // menu chưa mở trong nhóm này
+    if (!threadData.menu_page) {
+      // Chưa mở menu → nhắc 1 câu ngắn (không tự mở để khỏi nhiễu nhóm)
+      return api.sendMessage({
+        msg: `📋 Gõ ${global.config.prefix}menu trước đã, rồi gõ next / prev / out để điều hướng.`,
+        ttl: 60000
+      }, threadId, type);
+    }
 
     const senderId = event.data.uidFrom;
     await navigate({ api, event, Threads, action: content, senderId });

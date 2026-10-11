@@ -117,15 +117,29 @@ function cookiesBrowser() {
 
 // Cờ xác thực cho YouTube. Ưu tiên file cookies.txt (dùng được cả trên
 // Render); nếu không có thì lấy cookie từ trình duyệt của máy (chỉ chạy local).
+let authLogged = false; // chỉ log 1 lần cho đỡ nhiễu log
 function authArgs() {
   const file = cookiesFile();
   if (file) {
-    if (fs.existsSync(file)) return ["--cookies", file];
+    if (fs.existsSync(file)) {
+      logAuth(`cookies.txt (${file})`);
+      return ["--cookies", file];
+    }
     logger.log(`[yt-dlp] Không thấy file cookies: ${file}`, "warn");
     return [];
   }
   const browser = cookiesBrowser();
-  return browser ? ["--cookies-from-browser", browser] : [];
+  if (browser) {
+    logAuth(`trình duyệt "${browser}"`);
+    return ["--cookies-from-browser", browser];
+  }
+  return [];
+}
+
+function logAuth(source) {
+  if (authLogged) return;
+  authLogged = true;
+  logger.log(`[yt-dlp] Đang dùng cookie ${source} để qua bước "Sign in" của YouTube`, "info");
 }
 
 // Thử các player_client khác nhau để qua mặt bước "Sign in to confirm you're not a bot"
