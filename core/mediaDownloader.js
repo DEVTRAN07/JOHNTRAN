@@ -21,6 +21,7 @@ const YTDLP_CANDIDATES = [
 
 let resolvedBinary = null;
 let availabilityChecked = false;
+let impersonateSupported = null; // null = chưa kiểm tra
 
 function tryBinary(binary, args) {
   return new Promise((resolve) => {
@@ -43,6 +44,29 @@ async function ytDlpAvailable() {
   return false;
 }
 
+// yt-dlp bản mới (>= 2023.07) giả làm trình duyệt thật (TLS fingerprint) — nhiều
+// site (Facebook, Vimeo...) chặn bot thì không lấy được metadata nếu thiếu cờ này.
+async function supportsImpersonate() {
+  if (impersonateSupported !== null) return impersonateSupported;
+  if (!resolvedBinary) await ytDlpAvailable(); // chưa dò binary thì dò trước
+  if (!resolvedBinary) return (impersonateSupported = false);
+  try {
+    const { stdout } = await new Promise((resolve, reject) => {
+      execFile(resolvedBinary, ["--help"], { timeout: 15000, maxBuffer: 32 * 1024 * 1024 }, (err, out) => {
+        err ? reject(err) : resolve({ stdout: out });
+      });
+    });
+    impersonateSupported = /--impersonate/.test(stdout || "");
+  } catch {
+    impersonateSupported = false;
+  }
+  return impersonateSupported;
+}
+
+function impersonateArgs() {
+  return ["--impersonate", "chrome"];
+}
+
 function run(args, timeout = DOWNLOAD_TIMEOUT) {
   if (!resolvedBinary) {
     return Promise.reject(new Error("yt-dlp không khả dụng (chưa cài đặt hoặc sai đường dẫn)"));
@@ -53,15 +77,26 @@ function run(args, timeout = DOWNLOAD_TIMEOUT) {
       args,
       { timeout, maxBuffer: 32 * 1024 * 1024 },
       (error, stdout, stderr) => {
-        if (error) {
-          const message = (stderr || stdout || error.message || "").split("\n").filter(Boolean).slice(-2).join(" ");
-          reject(new Error(message.slice(0, 200)));
-          return;
+        // Thiếu curl_cffi/impersonate lỗi → bỏ cờ --impersonate rồi chạy lại
+        if (error && /impersonate|curl_cffi/i.test(stderr || "")) {
+          const retryArgs = args.filter((a, i) => a !== "--impersonate" && args[i - 1] !== "--impersonate");
+          if (retryArgs.length !== args.length) {
+            return execFile(resolvedBinary, retryArgs, { timeout, maxBuffer: 32 * 1024 * 1024 }, (e2, so2, se2) => {
+              if (e2) return reject(new Error(cleanError(e2, se2 || so2)));
+              resolve(so2);
+            });
+          }
         }
+        if (error) return reject(new Error(cleanError(error, stderr || stdout)));
         resolve(stdout);
       }
     );
   });
+}
+
+function cleanError(error, stderr) {
+  const message = (stderr || error.message || "").split("\n").filter(Boolean).slice(-2).join(" ");
+  return message.slice(0, 200);
 }
 
 // ===== Cookies + player client (YouTube chặn bot khi không có cookie) =====
@@ -82,17 +117,24 @@ function isYoutube(url) {
   return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
 }
 
+// Args cơ bản cho MỌI lệnh yt-dlp: impersonate giúp lấy được Facebook/Vimeo...
+async function commonArgs(extra = []) {
+  const args = ["--no-warnings", "--no-playlist", "--no-check-certificate", ...extra];
+  if (await supportsImpersonate()) args.push(...impersonateArgs());
+  return args;
+}
+
 // Lấy metadata (title, duration, thumbnail, formats) dạng JSON.
 // YouTube hay chặn bot → thử lần lượt các player_client khác nhau.
 async function getMediaInfo(url) {
-  const base = withCookies(["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", url]);
+  const base = withCookies(await commonArgs(["-J", url]));
   try {
     return JSON.parse(await run(base, 90000));
   } catch (error) {
     if (!isYoutube(url)) throw error;
     for (const client of YT_PLAYER_CLIENTS) {
       try {
-        const args = ["-J", "--no-warnings", "--no-playlist", "--no-check-certificate", "--extractor-args", `youtube:player_client=${client}`, url];
+        const args = await commonArgs(["-J", "--extractor-args", `youtube:player_client=${client}`, url]);
         return JSON.parse(await run(withCookies(args), 90000));
       } catch { /* thử client tiếp */ }
     }
@@ -100,17 +142,22 @@ async function getMediaInfo(url) {
   }
 }
 
+// Là "chỉ có tiếng" (không hình) → gửi voice. Một số site không set vcodec ở
+// top-level nên phải xem thêm danh sách formats mới tin được.
 function isAudioOnly(info) {
-  return !info || info.vcodec === "none" || info.vcodec === undefined;
+  if (!info) return true;
+  if (info.vcodec && info.vcodec !== "none") return false;
+  if (Array.isArray(info.formats) && info.formats.length > 0) {
+    return !info.formats.some((f) => f && f.vcodec && f.vcodec !== "none");
+  }
+  return info.vcodec === "none";
 }
 
 // Tải video ra file local (mp4 ưu tiên, cap 720p để vừa Zalo)
 async function downloadVideo(url, outputPath) {
   const format = "bv*[height<=720]+ba/b[height<=720]/b";
-  const baseArgs = () => [
-    "--no-warnings",
-    "--no-playlist",
-    "--no-check-certificate",
+  const baseArgs = async () => [
+    ...(await commonArgs()),
     "-f", format,
     "--merge-output-format", "mp4",
     "--concurrent-fragments", "4",
@@ -118,14 +165,14 @@ async function downloadVideo(url, outputPath) {
     url
   ];
   try {
-    await run(withCookies(baseArgs()));
+    await run(withCookies(await baseArgs()));
     return outputPath;
   } catch (error) {
     // YouTube chặn bot → thử các player_client khác
     if (isYoutube(url)) {
       for (const client of YT_PLAYER_CLIENTS) {
         try {
-          const args = baseArgs();
+          const args = await baseArgs();
           args.push("--extractor-args", `youtube:player_client=${client}`);
           await run(withCookies(args));
           return outputPath;
@@ -134,7 +181,7 @@ async function downloadVideo(url, outputPath) {
     }
     // fallback: best có sẵn (một số site không cho merge)
     await run(withCookies([
-      "--no-warnings", "--no-playlist", "--no-check-certificate",
+      ...(await commonArgs()),
       "-f", "b/best",
       "-o", outputPath,
       url
@@ -145,17 +192,15 @@ async function downloadVideo(url, outputPath) {
 
 // Tải audio (mp3)
 async function downloadAudio(url, outputPath) {
-  await run([
-    "--no-warnings",
-    "--no-playlist",
-    "--no-check-certificate",
+  await run(withCookies([
+    ...(await commonArgs()),
     "-f", "bestaudio/best",
     "-x",
     "--audio-format", "mp3",
     "--audio-quality", "0",
     "-o", outputPath,
     url
-  ]);
+  ]));
   return outputPath;
 }
 
@@ -171,4 +216,4 @@ function describe(info) {
   return meta;
 }
 
-module.exports = { ytDlpAvailable, getMediaInfo, downloadVideo, downloadAudio, isAudioOnly, describe };
+module.exports = { ytDlpAvailable, supportsImpersonate, getMediaInfo, downloadVideo, downloadAudio, isAudioOnly, describe };

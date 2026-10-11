@@ -257,8 +257,18 @@ assets/
 **Lệnh tiện ích:**
 | Lệnh | Chức năng |
 |---|---|
+| `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
+
+**Autodown — tự tải link trong nhóm (sau `/autodown on`):**
+- Nhận **mọi dạng Zalo gửi link**: gõ tay, link kèm chú thích, tin chia sẻ (`href`/`url`/`link`), link gợi ý, object lồng object — bot tự quét tìm URL.
+- Tải bằng **yt-dlp chạy local** (link không qua bên thứ 3). yt-dlp bản mới được chạy với `--impersonate chrome` (giả TLS fingerprint trình duyệt) — thiếu cờ này thì Facebook/Vimeo... báo *"Cannot parse data"*. Bản yt-dlp cũ không có cờ thì bot tự bỏ cờ chạy lại.
+- **YouTube** có sẵn chuỗi player_client dự phòng để qua bước *"Sign in to confirm you're not a bot"*.
+- Video → gửi video; chỉ có tiếng → tải mp3 gửi voice.
+- Link Facebook/Instagram hay bị chặn nếu chưa đăng nhập: xuất `cookies.txt` từ trình duyệt rồi set `media.ytdlp_cookies_file` trong `config.yml` là tải được.
+- TikTok/Douyin: thử API công khai (chain: `services.tiktok_api_url` → tikwm → dự phòng) rồi tới yt-dlp. Các API public hiện hay chết nên **nên tự cấu hình `services.tiktok_api_url`** nếu có nguồn riêng.
+- Nền tảng không hỗ trợ (link lạ) → bot im lặng, không làm nhiễu nhóm.
 
 **Lệnh spam (chỉ admin bot):**
 | Lệnh | Chức năng |

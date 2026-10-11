@@ -24,28 +24,73 @@ const LINK_RE = /(https?:\/\/[^\s<>"']+)/i;
 // Các nền tảng được hỗ trợ — link lạ (vd example.com) sẽ bị bỏ qua, khỏi làm nhiễu nhóm
 const SUPPORTED_PATTERNS = [
     /tiktok\.com/, /douyin\.com/, /capcut\.com/, /threads\.net/, /instagram\.com/, /facebook\.com/,
-    /espn\.com/, /pinterest\.com/, /imdb\.com/, /imgur\.com/, /ifunny\.co/, /izlesene\.com/,
-    /reddit\.com/, /youtube\.com/, /youtu\.be/, /twitter\.com/, /x\.com/, /vimeo\.com/, /snapchat\.com/,
-    /bilibili\.com/, /dailymotion\.com/, /sharechat\.com/, /likee\.video/, /linkedin\.com/, /tumblr\.com/,
-    /hipi\.co\.in/, /telegram\.org/, /getstickerpack\.com/, /bitchute\.com/, /febspot\.com/, /9gag\.com/,
-    /ok\.ru/, /rumble\.com/, /streamable\.com/, /ted\.com/, /sohu\.com/, /xvideos\.com/, /xnxx\.com/,
-    /xiaohongshu\.com/, /ixigua\.com/, /weibo\.com/, /miaopai\.com/, /meipai\.com/, /xiaoying\.tv/,
-    /nationalvideo\.com/, /yingke\.com/, /sina\.com\.cn/, /vk\.com/, /vk\.ru/, /soundcloud\.com/,
-    /mixcloud\.com/, /spotify\.com/, /zingmp3\.vn/, /bandcamp\.com/
+    /fb\.watch/, /youtube\.com/, /youtu\.be/, /espn\.com/, /pinterest\.com/, /pin\.it/, /imdb\.com/,
+    /imgur\.com/, /ifunny\.co/, /izlesene\.com/, /reddit\.com/, /twitter\.com/, /x\.com/, /vimeo\.com/,
+    /snapchat\.com/, /bilibili\.com/, /dailymotion\.com/, /sharechat\.com/, /likee\.video/,
+    /linkedin\.com/, /tumblr\.com/, /hipi\.co\.in/, /telegram\.org/, /getstickerpack\.com/,
+    /bitchute\.com/, /febspot\.com/, /9gag\.com/, /ok\.ru/, /rumble\.com/, /streamable\.com/, /ted\.com/,
+    /sohu\.com/, /xvideos\.com/, /xnxx\.com/, /xiaohongshu\.com/, /ixigua\.com/, /weibo\.com/,
+    /miaopai\.com/, /meipai\.com/, /xiaoying\.tv/, /nationalvideo\.com/, /yingke\.com/, /sina\.com\.cn/,
+    /vk\.com/, /vk\.ru/, /soundcloud\.com/, /mixcloud\.com/, /spotify\.com/, /zingmp3\.vn/, /bandcamp\.com/
 ];
 
 function sanitizeError(msg) {
   return String(msg || "lỗi không xác định").replace(/https?:\/\/\S+/g, "[link]").slice(0, 200);
 }
 
-// Tách URL SẠCH khỏi tin nhắn: "xem link này https://youtu.be/abc nha" → "https://youtu.be/abc"
-function extractUrl(text) {
-  if (typeof text === "string") {
-    const m = text.match(LINK_RE);
-    if (m) return m[1].replace(/[.,)\]]+$/, ""); // bỏ dấu câu cuối câu
+// Gợi ý sửa lỗi theo loại link — Facebook/Instagram hay cần cookie đăng nhập
+function errorHint(url, message) {
+  const text = String(message || "");
+  if (/facebook|fb\.watch/i.test(url) && /cannot parse|login|log in|cookie/i.test(text)) {
+    return "\n\n💡 Facebook thường cần cookie: export cookies.txt từ trình duyệt rồi set media.ytdlp_cookies_file trong config.yml.";
   }
-  // Tin chia sẻ dạng object: { href: "https://..." }
-  if (text && typeof text === "object" && typeof text.href === "string") return text.href;
+  if (/instagram/i.test(url) && /empty media|login|cookie|rate/i.test(text)) {
+    return "\n\n💡 Instagram hay chặn/bắt đăng nhập — thử lại sau hoặc set media.ytdlp_cookies_file trong config.yml.";
+  }
+  if (/sign in|not a bot|inappropriate|confirm your age/i.test(text)) {
+    return "\n\n💡 Site đang chặn bot — bot đã tự thử nhiều cách, nếu vẫn lỗi thì cấu hình cookie hoặc media_downloader_url trong config.yml.";
+  }
+  return "";
+}
+
+// Tách URL SẠCH khỏi tin nhắn — xử lý MỌI dạng Zalo gửi link:
+//   "xem link này https://youtu.be/abc nha"  → "https://youtu.be/abc"
+//   { href: "..." } / { url: "..." } / { link: "..." } (tin chia sẻ)
+//   { action: "recommened.link", href: "..." } (link gợi ý)
+//   object lồng object: { media: { src: { value: "..." } } }
+function findUrlInString(text) {
+  const m = String(text).match(LINK_RE);
+  return m ? m[1].replace(/[.,)\]]+$/, "") : null; // bỏ dấu câu cuối câu
+}
+
+function extractUrl(content, depth = 0) {
+  if (!content || depth > 4) return null;
+
+  if (typeof content === "string") return findUrlInString(content);
+  if (typeof content !== "object") return null;
+
+  // Ưu tiên các key thường chứa link
+  for (const key of ["href", "url", "link", "src", "value", "thumb"]) {
+    const value = content[key];
+    if (typeof value === "string") {
+      const found = findUrlInString(value);
+      if (found) return found;
+    } else if (value && typeof value === "object") {
+      const found = extractUrl(value, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  // Rồi quét mọi giá trị còn lại (kéo cả mảng)
+  for (const value of Object.values(content)) {
+    if (typeof value === "string") {
+      const found = findUrlInString(value);
+      if (found) return found;
+    } else if (value && typeof value === "object") {
+      const found = extractUrl(value, depth + 1);
+      if (found) return found;
+    }
+  }
   return null;
 }
 
@@ -81,13 +126,8 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     // Chỉ hoạt động trong nhóm — không chat riêng
     if (event.type !== ThreadType.Group) return;
 
-    // Zalo gửi link theo 2 dạng: tin "webchat" (link dạng text) hoặc tin chia sẻ (content.href)
-    const content = event.data.content;
-    const isLinkShare = content && typeof content === "object" && typeof content.href === "string";
-    const isWebchatWithLink = String(content).match(LINK_RE) || isLinkShare;
-    if (!isWebchatWithLink) return;
-
-    const url = extractUrl(content);
+    // Zalo gửi link dạng text (webchat) HOẶC dạng object (tin chia sẻ, link gợi ý...)
+    const url = extractUrl(event.data.content);
     if (!url) return;
 
     // Không hỗ trợ nền tảng này → im lặng (không làm nhiễu nhóm bằng tin báo lỗi)
@@ -155,7 +195,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
             if (!services.serviceUrl("media_downloader_url")) {
                 await setReactions([Reactions.CRY]);
                 return api.sendMessage({
-                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}\n\n💡 TikTok/Facebook thường chặn bot — nếu cần, admin hãy cấu hình media_downloader_url trong config.yml.`,
+                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}${errorHint(url, error.message)}`,
                     ttl: 60000
                 }, threadId, type);
             }
