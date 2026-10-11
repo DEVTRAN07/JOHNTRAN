@@ -327,3 +327,49 @@ function escapeAttr(str) { return escapeHtml(str).replace(/"/g, "&quot;"); }
 /* ---------- khởi động ---------- */
 loadConfig();
 if (API) refresh();
+
+/* ---------- quản lý lệnh theo nhóm ---------- */
+let allCommands = [];
+
+async function loadCommandList() {
+  try {
+    const { commands, total } = await api("/api/commands");
+    allCommands = commands;
+    $("cmd-total").textContent = total;
+  } catch { /* bỏ qua */ }
+}
+
+async function loadGroupCommands() {
+  const gid = $("cmdGroupId").value.trim();
+  if (!gid) return toast("Nhập Group ID trước");
+  try {
+    const { disabled } = await api(`/api/groups/${encodeURIComponent(gid)}/commands`);
+    if (allCommands.length === 0) await loadCommandList();
+    const disabledSet = new Set(disabled || []);
+    $("cmdGrid").innerHTML = allCommands.map(c => `
+      <div class="cmd-item">
+        <div style="min-width:0">
+          <div class="cname">${escapeHtml(c.name)}</div>
+          <div class="cdesc">${escapeHtml(c.description || "")}</div>
+        </div>
+        <div class="toggle ${disabledSet.has(c.name) ? "" : "on"}" onclick="toggleCommand(this, \x27${escapeAttr(c.name)}\x27)"></div>
+      </div>`).join("");
+    $("cmdHint").textContent = `Nhóm ${gid} — ${disabled.length} lệnh đang tắt.`;
+  } catch (e) { toast(e.message); }
+}
+
+async function toggleCommand(el, name) {
+  const gid = $("cmdGroupId").value.trim();
+  if (!gid) return toast("Chưa có Group ID");
+  const willEnable = !el.classList.contains("on");
+  try {
+    await api(`/api/groups/${encodeURIComponent(gid)}/commands`, {
+      method: "PATCH",
+      body: JSON.stringify({ command: name, enabled: willEnable })
+    });
+    el.classList.toggle("on", willEnable);
+    toast(willEnable ? `Đã bật ${name}` : `Đã tắt ${name}`);
+  } catch (e) { toast(e.message); }
+}
+
+loadCommandList();

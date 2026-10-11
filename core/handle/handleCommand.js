@@ -102,6 +102,15 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
     return;
   }
 
+  // Lệnh bị tắt trong nhóm này (quản lý từ panel)
+  const disabledCommands = threadInfo?.disabled_commands;
+  if (Array.isArray(disabledCommands) && disabledCommands.includes(commandName)) {
+    if (api && threadId && type) {
+      await api.sendMessage({ msg: `🚫 Lệnh '${commandName}' đã bị tắt trong nhóm này.`, ttl: 60000 }, threadId, type);
+    }
+    return;
+  }
+
   if (!checkSpam(UIDUsage)) {
     return api.sendMessage({
       msg: "🚫 Bạn đang gửi lệnh quá nhanh. Vui lòng chậm lại!",

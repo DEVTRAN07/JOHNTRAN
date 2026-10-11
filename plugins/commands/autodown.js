@@ -18,11 +18,12 @@ module.exports.config = {
     cooldowns: 5
 };
 
+function sanitizeError(msg) {
+  return String(msg || "lỗi không xác định").replace(/https?:\/\/\S+/g, "[link]").slice(0, 200);
+}
+
 module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     if (!event.data || !event.data.content) return;
-
-    // Không tự tải link trong tin do chính bot gửi (tránh loop)
-    if (isSelf) return;
 
     // Chỉ hoạt động trong nhóm — không chat riêng
     if (event.type !== ThreadType.Group) return;
@@ -89,7 +90,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
                     });
                 } catch {}
                 return api.sendMessage({
-                    msg: `❌ Không tải được link này bằng yt-dlp.\n${error.message}\n\n💡 TikTok thường chặn bot — nếu cần, admin hãy cấu hình media_downloader_url trong config.yml.`,
+                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}\n\n💡 TikTok/Facebook thường chặn bot — nếu cần, admin hãy cấu hình media_downloader_url trong config.yml.`,
                     ttl: 60000
                 }, threadId, type);
             }

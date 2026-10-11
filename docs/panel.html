@@ -84,6 +84,19 @@
     </div>
   </section>
 
+  <!-- Quản lý lệnh bot con -->
+  <section class="card">
+    <h2>Quản lý lệnh <span class="badge-count" id="cmd-total">0</span></h2>
+    <div class="row" style="margin-bottom:12px">
+      <label>Group ID
+        <input id="cmdGroupId" size="30" placeholder="ID nhóm cần quản lý">
+      </label>
+      <button class="primary" onclick="loadGroupCommands()">Tải lệnh nhóm</button>
+      <span style="color:var(--sub);font-size:12px" id="cmdHint">Nhập ID nhóm rồi bấm "Tải lệnh nhóm" để bật/tắt từng lệnh.</span>
+    </div>
+    <div class="cmd-grid" id="cmdGrid"></div>
+  </section>
+
   <!-- Master info + Audit -->
   <section class="two-col">
     <div class="card">

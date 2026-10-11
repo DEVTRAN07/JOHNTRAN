@@ -300,6 +300,40 @@ function startPanel({ manager, config }) {
         }
       }
 
+      // ===== Tắt/bật lệnh theo nhóm =====
+      const cmdMatch = pathname.match(/^\/api\/groups\/([a-zA-Z0-9_-]+)\/commands$/);
+      if (cmdMatch) {
+        const gid = cmdMatch[1];
+        const db = require("../utils/db");
+        const Threads = require("../core/controller/controllerThreads");
+
+        if (req.method === "GET") {
+          const thread = await Threads.getData(gid);
+          const all = Array.from(global.client.commands.keys());
+          const disabled = thread.data?.disabled_commands || [];
+          return sendJson(res, 200, { gid, disabled, all });
+        }
+
+        if (req.method === "PATCH" || req.method === "PUT" || req.method === "POST") {
+          const body = await readBody(req);
+          const command = String(body.command || "").toLowerCase();
+          if (!global.client.commands.has(command)) {
+            return sendJson(res, 404, { error: `Lệnh '${command}' không tồn tại` });
+          }
+          const thread = await Threads.getData(gid);
+          const data = thread.data || {};
+          const disabled = Array.isArray(data.disabled_commands) ? [...data.disabled_commands] : [];
+          const index = disabled.indexOf(command);
+          const enable = body.enabled === true;
+          if (enable && index >= 0) disabled.splice(index, 1);
+          if (!enable && index < 0) disabled.push(command);
+          data.disabled_commands = disabled;
+          await Threads.setData(gid, data);
+          return sendJson(res, 200, { gid, command, enabled: enable, disabled });
+        }
+        return sendJson(res, 405, { error: "Method không hỗ trợ" });
+      }
+
       if (pathname === "/api/stats" && req.method === "GET") {
         try {
           const db = require("../utils/db");
@@ -307,6 +341,24 @@ function startPanel({ manager, config }) {
           const stats = {};
           for (const row of rows) stats[row.name] = row.data;
           return sendJson(res, 200, { stats });
+        } catch (error) {
+          return sendJson(res, 500, { error: error.message });
+        }
+      }
+
+      // ===== Quản lý lệnh =====
+      if (pathname === "/api/commands" && req.method === "GET") {
+        try {
+          const commands = Array.from(global.client.commands.values()).map((cmd) => ({
+            name: cmd.config.name,
+            aliases: cmd.config.aliases || [],
+            description: cmd.config.description || "",
+            category: cmd.config.category || "Khác",
+            role: cmd.config.role || 0,
+            usage: cmd.config.usage || cmd.config.name,
+            cooldowns: cmd.config.cooldowns || 0
+          })).sort((a, b) => a.name.localeCompare(b.name));
+          return sendJson(res, 200, { commands, total: commands.length });
         } catch (error) {
           return sendJson(res, 500, { error: error.message });
         }

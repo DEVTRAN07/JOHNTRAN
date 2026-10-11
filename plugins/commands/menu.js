@@ -1,15 +1,17 @@
-const moment = require("moment-timezone");
-const stringSimilarity = require('string-similarity');
+const fs = require("fs");
+const menuCard = require("../../core/canvas/menu");
+
+const PAGE_SIZE = 9;
 
 module.exports.config = {
     name: "menu",
-    aliases: ['help'],
-    version: "2.0.0",
+    aliases: ["help", "menu2"],
+    version: "3.0.0",
     role: 0,
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
     description: "Xem danh sách lệnh và info",
     category: "Tiện ích",
-    usage: "[tên lệnh/all]",
+    usage: "[tên lệnh/all/next] [text/canvas]",
     cooldowns: 2,
     dependencies: {
         "string-similarity": "",
@@ -17,145 +19,140 @@ module.exports.config = {
     }
 };
 
-function getDayVN() {
-    const days = {
-        'Sunday': 'Chủ Nhật',
-        'Monday': 'Thứ Hai',
-        'Tuesday': 'Thứ Ba',
-        'Wednesday': 'Thứ Tư',
-        'Thursday': 'Thứ Năm',
-        'Friday': 'Thứ Sáu',
-        'Saturday': 'Thứ Bảy'
-    };
-    const thu = moment.tz('Asia/Ho_Chi_Minh').format('dddd');
-    return days[thu] || thu;
+function getUptimeText() {
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    return hours > 0 ? `${hours}h${minutes}m` : `${minutes}m`;
 }
 
-function TextPr(permission) {
-    return permission == 0 ? "Thành Viên" : permission == 1 ? "Support Bot" : permission == 2 ? "Admin Bot" : "Toàn Quyền";
+function collectCommands(userId) {
+    const isAdmin = global.users?.admin?.includes(userId);
+    const isSupport = global.users?.support?.includes(userId);
+    return Array.from(global.client.commands.values())
+        .filter((cmd) => {
+            const role = cmd.config.role || 0;
+            if (role === 2) return isAdmin;
+            if (role === 1) return isAdmin || isSupport;
+            return true;
+        })
+        .map((cmd) => ({
+            name: cmd.config.name.toLowerCase(),
+            usage: cmd.config.usage || cmd.config.name,
+            category: cmd.config.category || "Khác"
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function sortByLengthDesc(arr, key) {
-    return arr.sort((a, b) => b[key].length - a[key].length);
-}
-
-module.exports.run = async function({ api, event, args, Threads, reply }) {
+module.exports.run = async function ({ api, event, args, Threads, reply }) {
     const { threadId, type, data } = event;
     const senderId = data.uidFrom;
-    const cmds = global.client.commands;
-    const TIDdata = (global.data && global.data.threadData && global.data.threadData.get)
-        ? global.data.threadData.get(threadId) || {}
-        : {};
-    const config = global.config;
-    const admin = Array.isArray(config.admin_bot) ? config.admin_bot : [];
-    const NameBot = config.name_bot;
-    const currentPrefix = (typeof TIDdata.PREFIX === "string" && TIDdata.PREFIX.length > 0)
-        ? TIDdata.PREFIX
-        : config.prefix;
-    const argType = args[0] ? args[0].toLowerCase() : "";
-    const isPageNumber = /^\d{1,2}$/.test(argType);
+    const prefix = global.config.prefix;
+    const argType = (args[0] || "").toLowerCase();
 
-    // Xem tất cả lệnh
-    if (argType === "all") {
-        const lines = Array.from(cmds.values()).map((cmd, idx) =>
-            `${String(idx + 1).padStart(2, " ")}. ${cmd.config.name} — ${cmd.config.description}`
-        );
-        return reply.card({
-            theme: "brand",
-            title: "Tất cả lệnh",
-            subtitle: `Tổng ${cmds.size} lệnh`,
-            sections: [{ title: "Danh sách", lines }],
-            footer: `${NameBot} • ${currentPrefix}help + tên lệnh để xem chi tiết`
-        });
+    // Chế độ text cho nhóm này
+    if (argType === "text") {
+        const thread = (await Threads.getData(threadId)).data || {};
+        thread.menu_mode = "text";
+        await Threads.setData(threadId, thread);
+        return reply.success("Đã chuyển menu sang chế độ text.");
     }
 
-    // Show specific command info or fuzzy search
-    if (argType) {
-        let command = Array.from(cmds.values()).find(cmd => cmd.config.name.toLowerCase() === argType);
-        if (!command) {
-            const commandNames = Array.from(cmds.keys());
-            const checker = stringSimilarity.findBestMatch(argType, commandNames);
-            if (checker.bestMatch.rating >= 0.5) {
-                command = cmds.get(checker.bestMatch.target);
-                return reply.card({
-                    theme: "warn",
-                    title: `Lệnh gần giống: ${checker.bestMatch.target}`,
-                    subtitle: `Không tìm thấy lệnh '${argType}'. Có phải bạn muốn dùng lệnh này?`,
-                    sections: [{ title: "Thông tin", lines: [
-                        `Tên: ${command.config.name}`,
-                        `Phiên bản: ${command.config.version || "1.0.0"}`,
-                        `Quyền: ${TextPr(command.config.role)}`,
-                        `Mô tả: ${command.config.description}`,
-                        `Cách dùng: ${currentPrefix}${command.config.usage}`
-                    ]}]
-                });
-            }
-            return reply.error(`Không tìm thấy lệnh '${argType}' trong hệ thống.`);
-        }
-        const cmd = command.config;
-        return reply.card({
-            theme: "brand",
-            title: cmd.name,
-            subtitle: cmd.description,
-            sections: [{ title: "Chi tiết lệnh", lines: [
-                `Tên lệnh: ${cmd.name}`,
-                `Phiên bản: ${cmd.version || "1.0.0"}`,
-                `Quyền hạn: ${TextPr(cmd.role)}`,
-                `Tác giả: ${cmd.author}`,
-                `Nhóm: ${cmd.category}`,
-                `Cách dùng: ${currentPrefix}${cmd.usage}`,
-                `Cooldowns: ${cmd.cooldowns || 0}s`
-            ]}],
-            footer: NameBot
-        });
+    if (argType === "canvas") {
+        const thread = (await Threads.getData(threadId)).data || {};
+        thread.menu_mode = "canvas";
+        await Threads.setData(threadId, thread);
+        return reply.success("Đã chuyển menu sang chế độ canvas.");
     }
 
-  // Nhóm lệnh theo category (các nhánh trên đã return hết nếu có arg đặc biệt)
-  const commandsArray = Array.from(cmds.values()).map(cmd => cmd.config);
-    const grouped = [];
-    commandsArray.forEach(cmd => {
-        const { category, name } = cmd;
-        let group = grouped.find(g => g.cmdCategory === category);
-        if (!group) {
-            grouped.push({ cmdCategory: category, nameModule: [name] });
-        } else {
-            group.nameModule.push(name);
-        }
-    });
-    sortByLengthDesc(grouped, "nameModule");
+    // Xem chi tiết 1 lệnh
+    if (argType === "all" || (argType && !["next"].includes(argType) && !/^\d{1,2}$/.test(argType))) {
+        return showCommandInfo(argType, senderId, prefix, api, threadId, type);
+    }
 
-    const sections = [];
-    grouped.forEach(cmd => {
-        if (
-            cmd.cmdCategory &&
-            ['NO PREFIX'].includes(cmd.cmdCategory.toUpperCase()) &&
-            !admin.includes(senderId)
-        ) return;
-        sections.push({
-            title: `${cmd.cmdCategory || "Khác"} • ${cmd.nameModule.length} lệnh`,
-            lines: [cmd.nameModule.join(", ")]
+    const commands = collectCommands(senderId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
+    let page = 1;
+    if (argType === "next") page = 2;
+    else if (/^\d{1,2}$/.test(argType)) page = parseInt(argType, 10);
+    page = Math.min(Math.max(page, 1), totalPages);
+
+    const threadData = (await Threads.getData(threadId)).data || {};
+    if (threadData.menu_mode === "text") {
+        return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
+    }
+
+    // Canvas menu
+    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    let gridPath = null;
+    try {
+        gridPath = await menuCard.renderMenuGrid({
+            botName: global.config.name_bot,
+            avatarUrl: data.avatar,
+            prefix,
+            page,
+            totalPages,
+            commands: { total: commands.length, page: slice },
+            uptimeText: getUptimeText()
         });
-    });
-
-  const threadData = await Threads.getData(threadId);
-  const threadInfo = threadData?.data || {};
-  const prefixNow = threadInfo.prefix ? threadInfo.prefix : config.prefix;
-
-  // Phân trang: mỗi trang 5 nhóm lệnh
-  const PER_PAGE = 5;
-  const totalPages = Math.max(1, Math.ceil(sections.length / PER_PAGE));
-  const page = Math.min(Math.max(parseInt(args[0], 10) || 1, 1), totalPages);
-  const pageSections = sections.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  return reply.card({
-    theme: "brand",
-    title: "Menu lệnh",
-    subtitle: `${NameBot} • trang ${page}/${totalPages}`,
-    rows: pageSections.map((section) => ({
-      icon: "list",
-      label: section.title,
-      lines: section.lines
-    })),
-    footer: `${moment.tz("Asia/Ho_Chi_Minh").format("HH:mm:ss | DD/MM/YYYY")} • ${getDayVN()}\nTổng ${cmds.size} lệnh • ${admin.length} admin • Prefix: ${prefixNow}\n${page < totalPages ? `${prefixNow}menu ${page + 1} — xem trang sau • ` : ""}${prefixNow}help + tên lệnh xem chi tiết • ${prefixNow}help + all xem tất cả`
-  });
+        await api.sendMessage({ msg: "", attachments: gridPath, ttl: 120000 }, threadId, type);
+    } catch (error) {
+        console.error("Lỗi render menu:", error.message);
+        await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
+    } finally {
+        if (gridPath && fs.existsSync(gridPath)) {
+            try { fs.unlinkSync(gridPath); } catch { /* bỏ qua */ }
+        }
+    }
 };
+
+function showTextMenu(commands, page, totalPages, prefix, api, threadId, type) {
+    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const byCategory = {};
+    for (const cmd of slice) {
+        if (!byCategory[cmd.category]) byCategory[cmd.category] = [];
+        byCategory[cmd.category].push(cmd.name);
+    }
+    const sections = Object.entries(byCategory)
+        .map(([cat, names]) => `【 ${cat.toUpperCase()} 】\n${names.map((n) => `${prefix}${n}`).join(" • ")}`)
+        .join("\n\n");
+    return api.sendMessage({
+        msg: `╭─「 ${global.config.name_bot} 」\n│ Trang ${page}/${totalPages} • ${commands.length} lệnh\n${sections}\n╰── ${prefix}menu <trang|next> để xem thêm`,
+        ttl: 120000
+    }, threadId, type);
+}
+
+async function showCommandInfo(argType, senderId, prefix, api, threadId, type) {
+    const stringSimilarity = require("string-similarity");
+    const command = global.client.commands.get(argType);
+
+    if (!command) {
+        const checker = stringSimilarity.findBestMatch(argType, Array.from(global.client.commands.keys()));
+        if (checker.bestMatch.rating < 0.5) {
+            return api.sendMessage({ msg: `❌ Không tìm thấy lệnh '${argType}'`, ttl: 30000 }, threadId, type);
+        }
+        const match = global.client.commands.get(checker.bestMatch.target);
+        return api.sendMessage({
+            msg: `🔍 Có phải bạn muốn dùng lệnh '${checker.bestMatch.target}'?\n\n` + formatCommandInfo(match.config, prefix),
+            ttl: 60000
+        }, threadId, type);
+    }
+
+    return api.sendMessage({
+        msg: `╭─「 ${command.config.name.toUpperCase()} 」\n` + formatCommandInfo(command.config, prefix),
+        ttl: 60000
+    }, threadId, type);
+}
+
+function formatCommandInfo(config, prefix) {
+    const roleText = config.role === 2 ? "Admin Bot" : config.role === 1 ? "Support Bot" : "Thành viên";
+    return [
+        `│ 📛 Tên: ${config.name}`,
+        `│ 📖 Mô tả: ${config.description}`,
+        `│ 🏷️ Nhóm: ${config.category}`,
+        `│ 👤 Quyền: ${roleText}`,
+        `│ 💡 Cách dùng: ${prefix}${config.usage}`,
+        `│ ⏱️ Cooldown: ${config.cooldowns || 0}s`,
+        `╰──────────◆`
+    ].join("\n");
+}
