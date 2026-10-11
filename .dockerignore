@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.github
+data
+bots
+plugins/commands/temp
+plugins/events/temp
+account.json
+cookie.json
+qr.png
+.env
+.env.*
+*.log
+.DS_Store
+docs
+scripts
