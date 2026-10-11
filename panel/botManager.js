@@ -91,6 +91,12 @@ class BotInstance {
       ...(process.env.JT_ACCOUNT_JSON ? { JT_ACCOUNT_JSON: process.env.JT_ACCOUNT_JSON } : {}),
       ...(process.env.JT_COOKIE_JSON ? { JT_COOKIE_JSON: process.env.JT_COOKIE_JSON } : {})
     };
+    // Bot con KHÔNG mở panel/health riêng và không chiếm PORT của master
+    // (panel + health do master lo; tránh tranh giật cổng trên Koyeb)
+    delete env.PORT;
+    delete env.JT_PANEL__ENABLED;
+    delete env.JT_PANEL__TOKEN;
+    delete env.JT_PANEL__PORT;
 
     const child = spawn(process.execPath, [path.join(ROOT, "JohnTran.js")], {
       cwd: ROOT,

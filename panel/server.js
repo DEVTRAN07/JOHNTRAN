@@ -249,7 +249,8 @@ setInterval(refresh, 5000);
 
 function startPanel({ manager, config }) {
   const token = config?.panel?.token || "";
-  const port = config?.panel?.port || 3000;
+  // Koyeb/Railway inject PORT — panel phải bind đúng port đó để health check + routing
+  const port = Number(process.env.PORT) || Number(config?.panel?.port) || 3000;
   const host = config?.panel?.host || "0.0.0.0";
 
   const server = http.createServer(async (req, res) => {
