@@ -105,17 +105,31 @@ module.exports.onLoad = async function ({ api, Threads }) {
 
   setInterval(autosend, 1000);
 
-  async function autosend() {
-    const now = new Date().toLocaleTimeString('en-US', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      hour12: true,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+  // Khớp theo PHÚT (trước khớp theo giây → setInterval trôi là bỏ lỡ cả khung giờ)
+  function currentHm() {
+    const vn = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    return String(vn.getHours()).padStart(2, '0') + ':' + String(vn.getMinutes()).padStart(2, '0');
+  }
 
-    const matched = setting.find(item => item.timer === now);
+  function timerToHm(timer) {
+    const m = String(timer).match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const mm = m[2];
+    const ap = (m[3] || '').toUpperCase();
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return String(h).padStart(2, '0') + ':' + mm;
+  }
+
+  let lastFiredSlot = '';
+
+  async function autosend() {
+    const hm = currentHm();
+    const matched = setting.find(item => timerToHm(item.timer) === hm);
     if (!matched) return;
+    if (lastFiredSlot === hm) return; // đã gửi trong phút này rồi
+    lastFiredSlot = hm;
 
     const randomMessage = matched.message[Math.floor(Math.random() * matched.message.length)];
     const msg = form

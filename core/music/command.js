@@ -156,4 +156,9 @@ function createMusicCommand(providerName, meta = {}) {
   };
 }
 
-module.exports = { createMusicCommand, runMusic };
+// Chọn bài bằng số trần (vd gõ "2" không cần /zing 2)
+async function select(providerName, number, context) {
+  return runMusic(providerName, { ...context, args: [String(number)] });
+}
+
+module.exports = { createMusicCommand, runMusic, select };
