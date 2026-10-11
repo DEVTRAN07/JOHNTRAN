@@ -266,9 +266,22 @@ assets/
 - Tải bằng **yt-dlp chạy local** (link không qua bên thứ 3). yt-dlp bản mới được chạy với `--impersonate chrome` (giả TLS fingerprint trình duyệt) — thiếu cờ này thì Facebook/Vimeo... báo *"Cannot parse data"*. Bản yt-dlp cũ không có cờ thì bot tự bỏ cờ chạy lại.
 - **YouTube** có sẵn chuỗi player_client dự phòng để qua bước *"Sign in to confirm you're not a bot"*.
 - Video → gửi video; chỉ có tiếng → tải mp3 gửi voice.
-- Link Facebook/Instagram hay bị chặn nếu chưa đăng nhập: xuất `cookies.txt` từ trình duyệt rồi set `media.ytdlp_cookies_file` trong `config.yml` là tải được.
+- **Khi YouTube báo "Sign in to confirm you're not a bot"** (IP bị chặn) thì cấu hình cookie, chọn 1 trong 2 cách trong `config.yml → media`:
+  - Bot chạy **trên máy bạn** (có trình duyệt đã đăng nhập YouTube):
+    ```yaml
+    media:
+      ytdlp_cookies_from_browser: chrome   # chrome | safari | firefox | edge | brave
+    ```
+  - Bot chạy **trên Render** (không có trình duyệt): export `cookies.txt` (định dạng Netscape, dùng extension "Get cookies.txt LOCALLY") rồi:
+    ```yaml
+    media:
+      ytdlp_cookies_file: /app/cookies.txt  # hoặc set env YTDLP_COOKIES_FILE
+    ```
+- Facebook/Instagram hay chặn nếu chưa đăng nhập → cũng dùng cookie như trên.
 - TikTok/Douyin: thử API công khai (chain: `services.tiktok_api_url` → tikwm → dự phòng) rồi tới yt-dlp. Các API public hiện hay chết nên **nên tự cấu hình `services.tiktok_api_url`** nếu có nguồn riêng.
 - Nền tảng không hỗ trợ (link lạ) → bot im lặng, không làm nhiễu nhóm.
+
+> Chi tiết: `--cookies-from-browser` và `--impersonate` không dùng được cùng lúc (xung đh, có khi treo yt-dlp) nên `core/mediaDownloader.js` thử lần lượt: cookie → giả trình duyệt → mặc định, cách nào chạy được thì dùng.
 
 **Lệnh spam (chỉ admin bot):**
 | Lệnh | Chức năng |

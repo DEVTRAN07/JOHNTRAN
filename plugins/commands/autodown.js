@@ -41,6 +41,11 @@ function sanitizeError(msg) {
 // Gợi ý sửa lỗi theo loại link — Facebook/Instagram hay cần cookie đăng nhập
 function errorHint(url, message) {
   const text = String(message || "");
+  if (/youtube|youtu\.be/i.test(url) && /sign in|not a bot|cookies|login/i.test(text)) {
+    return "\n\n💡 YouTube đang chặn IP này. Sửa 1 trong 2 cách:\n" +
+           "1) Bot chạy trên máy bạn → config.yml: media.ytdlp_cookies_from_browser: chrome\n" +
+           "2) Bot chạy trên Render → export cookies.txt từ trình duyệt rồi set media.ytdlp_cookies_file (hoặc env YTDLP_COOKIES_FILE)";
+  }
   if (/facebook|fb\.watch/i.test(url) && /cannot parse|login|log in|cookie/i.test(text)) {
     return "\n\n💡 Facebook thường cần cookie: export cookies.txt từ trình duyệt rồi set media.ytdlp_cookies_file trong config.yml.";
   }

@@ -77,9 +77,16 @@ function run(args, timeout = DOWNLOAD_TIMEOUT) {
       args,
       { timeout, maxBuffer: 32 * 1024 * 1024 },
       (error, stdout, stderr) => {
-        // Thiếu curl_cffi/impersonate lỗi → bỏ cờ --impersonate rồi chạy lại
-        if (error && /impersonate|curl_cffi/i.test(stderr || "")) {
-          const retryArgs = args.filter((a, i) => a !== "--impersonate" && args[i - 1] !== "--impersonate");
+        const dropFlags = ["--impersonate", "--cookies-from-browser"];
+        const errText = stderr || "";
+        // Thiếu curl_cffi/impersonate hoặc trình duyệt đọc không được
+        // → bỏ cờ đó (KÈM GIÁ TRỊ) rồi chạy lại, khỏi bó tay vì 1 tuỳ chọn phụ
+        if (error && new RegExp(dropFlags.join("|"), "i").test(errText)) {
+          const retryArgs = [];
+          for (let i = 0; i < args.length; i++) {
+            if (dropFlags.includes(args[i])) { i++; continue; } // bỏ flag + giá trị đi kèm
+            retryArgs.push(args[i]);
+          }
           if (retryArgs.length !== args.length) {
             return execFile(resolvedBinary, retryArgs, { timeout, maxBuffer: 32 * 1024 * 1024 }, (e2, so2, se2) => {
               if (e2) return reject(new Error(cleanError(e2, se2 || so2)));
@@ -104,10 +111,21 @@ function cookiesFile() {
   return (global.config?.media?.ytdlp_cookies_file || process.env.YTDLP_COOKIES_FILE || "").trim();
 }
 
-function withCookies(args) {
-  const cookies = cookiesFile();
-  if (cookies && fs.existsSync(cookies)) args.push("--cookies", cookies);
-  return args;
+function cookiesBrowser() {
+  return (global.config?.media?.ytdlp_cookies_from_browser || "").trim();
+}
+
+// Cờ xác thực cho YouTube. Ưu tiên file cookies.txt (dùng được cả trên
+// Render); nếu không có thì lấy cookie từ trình duyệt của máy (chỉ chạy local).
+function authArgs() {
+  const file = cookiesFile();
+  if (file) {
+    if (fs.existsSync(file)) return ["--cookies", file];
+    logger.log(`[yt-dlp] Không thấy file cookies: ${file}`, "warn");
+    return [];
+  }
+  const browser = cookiesBrowser();
+  return browser ? ["--cookies-from-browser", browser] : [];
 }
 
 // Thử các player_client khác nhau để qua mặt bước "Sign in to confirm you're not a bot"
@@ -117,25 +135,45 @@ function isYoutube(url) {
   return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
 }
 
-// Args cơ bản cho MỌI lệnh yt-dlp: impersonate giúp lấy được Facebook/Vimeo...
-async function commonArgs(extra = []) {
-  const args = ["--no-warnings", "--no-playlist", "--no-check-certificate", ...extra];
-  if (await supportsImpersonate()) args.push(...impersonateArgs());
-  return args;
+function baseArgs(extra = []) {
+  return ["--no-warnings", "--no-playlist", "--no-check-certificate", ...extra];
+}
+
+// Cờ cookie và --impersonate KHÔNG dùng được cùng lúc (xung đh, có khi treo
+// yt-dlp) nên tách thành các "biến thể" và thử lần lượt từ khả thi nhất:
+//   1) cookie (nếu admin cấu hình)     2) giả trình duyệt   3) mặc định
+async function argVariants(extra = []) {
+  const variants = [];
+  const auth = authArgs();
+  if (auth.length) variants.push([...baseArgs(extra), ...auth]);
+  if (await supportsImpersonate()) variants.push([...baseArgs(extra), ...impersonateArgs()]);
+  variants.push(baseArgs(extra));
+  return variants;
+}
+
+async function runTryAll(variants, timeout = DOWNLOAD_TIMEOUT) {
+  let lastError = null;
+  for (const args of variants) {
+    try {
+      return await run(args, timeout);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("yt-dlp thất bại");
 }
 
 // Lấy metadata (title, duration, thumbnail, formats) dạng JSON.
 // YouTube hay chặn bot → thử lần lượt các player_client khác nhau.
 async function getMediaInfo(url) {
-  const base = withCookies(await commonArgs(["-J", url]));
   try {
-    return JSON.parse(await run(base, 90000));
+    return JSON.parse(await runTryAll(await argVariants(["-J", url]), 90000));
   } catch (error) {
     if (!isYoutube(url)) throw error;
     for (const client of YT_PLAYER_CLIENTS) {
       try {
-        const args = await commonArgs(["-J", "--extractor-args", `youtube:player_client=${client}`, url]);
-        return JSON.parse(await run(withCookies(args), 90000));
+        const extra = ["-J", "--extractor-args", `youtube:player_client=${client}`, url];
+        return JSON.parse(await runTryAll(await argVariants(extra), 90000));
       } catch { /* thử client tiếp */ }
     }
     throw error;
@@ -156,51 +194,34 @@ function isAudioOnly(info) {
 // Tải video ra file local (mp4 ưu tiên, cap 720p để vừa Zalo)
 async function downloadVideo(url, outputPath) {
   const format = "bv*[height<=720]+ba/b[height<=720]/b";
-  const baseArgs = async () => [
-    ...(await commonArgs()),
-    "-f", format,
-    "--merge-output-format", "mp4",
-    "--concurrent-fragments", "4",
-    "-o", outputPath,
-    url
-  ];
+  const withOutput = (extra) => [...extra, "-o", outputPath, url];
+  const mainExtra = ["-f", format, "--merge-output-format", "mp4", "--concurrent-fragments", "4"];
+
   try {
-    await run(withCookies(await baseArgs()));
+    await runTryAll(await argVariants(withOutput(mainExtra)));
     return outputPath;
   } catch (error) {
     // YouTube chặn bot → thử các player_client khác
     if (isYoutube(url)) {
       for (const client of YT_PLAYER_CLIENTS) {
         try {
-          const args = await baseArgs();
-          args.push("--extractor-args", `youtube:player_client=${client}`);
-          await run(withCookies(args));
+          const extra = [...mainExtra, "--extractor-args", `youtube:player_client=${client}`];
+          await runTryAll(await argVariants(withOutput(extra)));
           return outputPath;
         } catch { /* thử client tiếp */ }
       }
     }
     // fallback: best có sẵn (một số site không cho merge)
-    await run(withCookies([
-      ...(await commonArgs()),
-      "-f", "b/best",
-      "-o", outputPath,
-      url
-    ]));
+    await runTryAll(await argVariants(withOutput(["-f", "b/best"])));
     return outputPath;
   }
 }
 
 // Tải audio (mp3)
 async function downloadAudio(url, outputPath) {
-  await run(withCookies([
-    ...(await commonArgs()),
-    "-f", "bestaudio/best",
-    "-x",
-    "--audio-format", "mp3",
-    "--audio-quality", "0",
-    "-o", outputPath,
-    url
-  ]));
+  await runTryAll(await argVariants(
+    ["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputPath, url]
+  ));
   return outputPath;
 }
 

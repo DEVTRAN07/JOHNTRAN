@@ -144,7 +144,8 @@ const DEFAULTS = {
   zalo_client_config: {},
   // Tải media (autodown) — cookies cho yt-dlp khi site chặn bot
   media: {
-    ytdlp_cookies_file: ""
+    ytdlp_cookies_file: "",
+    ytdlp_cookies_from_browser: ""
   },
   privacy: {
     allow_all_hosts: false,
