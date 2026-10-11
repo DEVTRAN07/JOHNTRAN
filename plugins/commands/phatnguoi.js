@@ -6,6 +6,8 @@ function apiUrl() {
 
 module.exports.config = {
   name: "phatnguoi",
+  aliases: ["phatnguoi","phatn guoi","checkphat"],
+
   version: "2.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

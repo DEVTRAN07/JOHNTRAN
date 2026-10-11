@@ -8,6 +8,8 @@ const { networkInterfaces } = require('os');
 
 module.exports.config = {
   name: 'upt',
+  aliases: ["system","hethong"],
+
   version: '1.0.0',
   role: 0,
   author: 'ShinTHL09, GwenDev, ᴶᴼᴴᴺ ᵀᴿᴬᴺ',

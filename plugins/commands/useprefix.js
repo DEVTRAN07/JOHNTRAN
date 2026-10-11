@@ -2,6 +2,8 @@ const moment = require("moment-timezone");
 
 module.exports.config = {
   name: "useprefix",
+  aliases: ["useprefix","dunghay"],
+
   version: "2.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

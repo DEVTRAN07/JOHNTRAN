@@ -5,6 +5,8 @@ const path = require("path");
 
 module.exports.config = {
     name: "boxinfo",
+  aliases: ["info","box"],
+
     version: "1.0.0",
     role: 0,
     author: "NLam182",

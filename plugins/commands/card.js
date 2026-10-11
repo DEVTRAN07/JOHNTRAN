@@ -13,7 +13,8 @@ function formatCount(n) {
 }
 
 module.exports.config = {
-  name: "carduser",
+  name: "card",
+  aliases: ["carduser", "cardinfo", "userinfo"],
   version: "3.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

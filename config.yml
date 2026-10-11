@@ -85,17 +85,17 @@ privacy:
     - whois.inet.vn
     - dpaste.com
     - graph.facebook.com
-     - facebook.com
-     - tiktokcdn.com
-     - tiktokcdn-us.com
-     - fbcdn.net
-     - googleusercontent.com
-     - zalo.ai
-     - zadn.vn
-     - zdn.vn
-     - api.elevenlabs.io
-     - api.checkphatnguoi.vn
-     - tikwm.com
+    - facebook.com
+    - tiktokcdn.com
+    - tiktokcdn-us.com
+    - fbcdn.net
+    - googleusercontent.com
+    - zalo.ai
+    - zadn.vn
+    - zdn.vn
+    - api.elevenlabs.io
+    - api.checkphatnguoi.vn
+    - tikwm.com
 
 # ===== DỊCH VỤ NGOÀI (chỉ chạy khi admin tự cấu hình endpoint) =====
 # Để trống = tính năng tắt hoàn toàn, bot KHÔNG gửi dữ liệu đi đâu cả.

@@ -1,5 +1,7 @@
 module.exports.config = {
   name: 'reloadconfig',
+  aliases: ["reset","reboot"],
+
   version: '1.0.0',
   role: 2,
   author: 'ShinTHL09',

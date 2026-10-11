@@ -2,6 +2,8 @@ const axios = require("axios");
 
 module.exports.config = {
     name: "cdm",
+  aliases: ["whois","domain"],
+
     version: "1.1.2",
     role: 0,
     author: "NLam182",

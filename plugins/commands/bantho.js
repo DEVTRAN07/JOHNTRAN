@@ -9,6 +9,8 @@ const BG_URL = () => global.config?.services?.bantho_bg_url || "https://i.imgur.
 
 module.exports.config = {
   name: "bantho",
+  aliases: ["cho","ban tho"],
+
   version: "2.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

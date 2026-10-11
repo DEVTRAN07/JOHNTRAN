@@ -1,6 +1,8 @@
 // Tự động kick thành viên vi phạm từ cấm (lưu theo nhóm trong DB)
 module.exports.config = {
   name: "autokick",
+  aliases: ["kick","tucam"],
+
   version: "2.0.0",
   role: 1,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

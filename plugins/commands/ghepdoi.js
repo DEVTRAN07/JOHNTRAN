@@ -5,6 +5,8 @@ const { TextStyle } = require("zalo-client");
 
 module.exports.config = {
   name: 'ghepdoi',
+  aliases: ["ghep","doi"],
+
   version: '1.0.2',
   role: 0,
   author: 'ShinTHL09',
@@ -38,10 +40,11 @@ module.exports.run = async function({ api, event, args }) {
   try {
     const tle = getRandomMatchRate();
     const groupInfo = (await api.getGroupInfo(threadId)).gridInfoMap[threadId];
-    const members = groupInfo.memVerList;
 
+    // memVerList có thể thiếu trong một số API/Zalo thay đổi → chặn lỗi
+    const members = groupInfo.memVerList || [];
     if (members.length < 2) {
-      return api.sendMessage("❌ Nhóm không đủ thành viên để ghép đôi!", threadId, type);
+        return api.sendMessage({ msg: "❌ Nhóm cần có ít nhất 2 thành viên để ghép đôi.", ttl: 60000 }, threadId, type);
     }
 
     const member1 = senderId;

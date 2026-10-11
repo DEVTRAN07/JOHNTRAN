@@ -4,6 +4,8 @@ const axios = require('axios');
 
 module.exports.config = {
   name: 'tile',
+  aliases: ["tyle","tl"],
+
   version: '1.0.1',
   role: 0,
   author: 'ShinTHL09', // ý tưởng từ mdl gốc của D-Jukie

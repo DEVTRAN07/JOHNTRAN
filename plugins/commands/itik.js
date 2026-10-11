@@ -4,6 +4,8 @@ const services = require("../../core/services");
 
 module.exports.config = {
   name: "itik",
+  aliases: ["tiktok","userinfo"],
+
   version: "1.0.0",
   role: 0,
   author: "NLam182 (ᴶᴼᴴᴺ ᵀᴿᴬᴺ)",

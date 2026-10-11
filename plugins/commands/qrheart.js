@@ -5,6 +5,8 @@ const services = require("../../core/services");
 
 module.exports.config = {
   name: "qrheart",
+  aliases: ["qr","qrtrum"],
+
   version: "2.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
