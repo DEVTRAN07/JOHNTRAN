@@ -269,13 +269,15 @@ assets/
 - Nhạc: `/scl <từ khóa>` → `/scl next` / `/scl prev` / `/scl out`, hoặc gõ trần **`next`** / số thứ tự khi đang có kết quả.
 - Kết quả nhạc **xếp bài nhiều người nghe & thích nhất lên đầu** (20 bài/trang, mỗi trang 8 bài).
 
-**Bộ sự kiện tự động** (`/events <tên> on|off`, mặc định **tắt**):
-| Sự kiện | Làm gì |
+**Bộ sự kiện tự động** — **mặc định TẮT**, phải bật bằng lệnh `/events <tên> on`:
+| Lệnh bật | Sự kiện |
 |---|---|
-| `welcome` | 👋 Có thành viên mới → thẻ chào mừng + mention + reaction |
-| `bye` | 🚪 Có thành viên rời/bị kick → thẻ tạm biệt |
-| `rank` | 🏆 Chat để nhận EXP (30s/lần), lên level → thẻ chúc mừng |
-| `guard` | 🚨 Canh link lạ & từ cấm (`assets/spam/badwords.txt`): cảnh cáo 3 lần → kick |
+| `/events welcome on` | 👋 Có thành viên mới → thẻ chào mừng + mention + reaction |
+| `/events bye on` | 🚪 Có thành viên rời/bị kick → thẻ tạm biệt |
+| `/events rank on` | 🏆 Chat để nhận EXP (30s/lần), lên level → thẻ chúc mừng |
+| `/events guard on` | 🚨 Canh link lạ & từ cấm (`assets/spam/badwords.txt`): cảnh cáo 3 lần → kick |
+| `/events` | Xem trạng thái tất cả + hướng dẫn bật/tắt |
+| `/events guard allow <host>` / `guard allowed` | Thêm / xem host được phép (mặc định: youtube, facebook, tiktok, instagram...) |
 
 **Lệnh spam (chỉ admin bot):**
 | Lệnh | Chức năng |

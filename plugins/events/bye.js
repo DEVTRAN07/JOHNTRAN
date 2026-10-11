@@ -1,7 +1,7 @@
 // ===== EVENT MỚI: BYE — tạm biệt thành viên rời nhóm =====
 // Có người LEAVE / bị REMOVE / bị BLOCK → bot gửi thẻ tạm biệt (không tag).
 // Bật/tắt: /events bye on|off
-const { GroupEventType } = require("zalo-client");
+const { GroupEventType, ThreadType } = require("zalo-client");
 
 module.exports.config = {
   name: "bye",
@@ -26,12 +26,13 @@ function leftMembers(eventData) {
   return [];
 }
 
-module.exports.run = async function ({ api, event, Threads, isSelf }) {
+module.exports.run = async function ({ api, event, Threads, isSelf, threadType }) {
   if (isSelf) return;
 
   const eventData = event.data || {};
-  const type = eventData.action || eventData.type || event.type;
-  if (!LEAVE_TYPES.includes(type)) return;
+  const zaloType = eventData.act || eventData.type || event.type;
+  const sendType = threadType || ThreadType.Group;
+  if (!LEAVE_TYPES.includes(zaloType)) return;
 
   const { threadId } = event;
   const thread = (await Threads.getData(threadId)).data || {};
@@ -56,7 +57,7 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
       footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
       ttl: 120000
     });
-    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, event.type);
+    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, sendType);
   } catch (error) {
     console.error("Lỗi bye:", error.message);
   } finally {

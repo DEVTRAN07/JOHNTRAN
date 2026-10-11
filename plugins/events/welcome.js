@@ -1,7 +1,7 @@
 // ===== EVENT MỚI: WELCOME — chào thành viên mới vào nhóm =====
 // Có thành viên JOIN → bot gửi thẻ chào mừng (canvas theme chung) + mention
 // tất cả người mới + reaction chào. Bật/tắt: /events welcome on|off
-const { Reactions, GroupEventType } = require("zalo-client");
+const { Reactions, GroupEventType, ThreadType } = require("zalo-client");
 
 module.exports.config = {
   name: "welcome",
@@ -25,29 +25,36 @@ function newMembers(eventData) {
   return [];
 }
 
-module.exports.run = async function ({ api, event, Threads, isSelf }) {
+module.exports.run = async function ({ api, event, Threads, isSelf, threadType }) {
   if (isSelf) return;
 
   const eventData = event.data || {};
-  // Chỉ xử lý thành viên MỚI (JOIN / được thêm vào nhóm)
-  const type = eventData.action || eventData.type || event.type;
-  if (type !== GroupEventType.JOIN && type !== "join") return;
+  // Zalo gửi type/act = "join" (loại sự kiện) — Type của gửi tin là ThreadType.Group
+  const zaloType = eventData.act || eventData.type || event.type;
+  if (zaloType !== GroupEventType.JOIN && zaloType !== "join") return;
 
   const { threadId } = event;
+  // Type để GỬI TIN (ThreadType.Group = 1), khác hẳn "join" (loại sự kiện)
+  const sendType = threadType || ThreadType.Group;
+
   const thread = (await Threads.getData(threadId)).data || {};
   if (!thread.event_welcome) return;
 
-  const members = newMembers(eventData).filter((uid) => uid !== api.getOwnId?.());
-  if (!members.length) return;
+  const members = newMembers(eventData).filter(Boolean);
+  // Bỏ chính bot (id bot) — getOwnId là async nên phải await
+  let botId = null;
+  try { botId = await api.getOwnId?.(); } catch { /* bỏ qua */ }
+  const realMembers = members.filter((uid) => uid !== botId);
+  if (!realMembers.length) return;
 
   // Mention tất cả thành viên mới
   let pos = 0;
-  const mentions = members.map((uid) => {
+  const mentions = realMembers.map((uid) => {
     const item = { pos, uid, len: 2 };
     pos += 3; // "@. " cho mỗi người
     return item;
   });
-  const names = members.map(() => "@.").join(" ");
+  const names = realMembers.map(() => "@.").join(" ");
 
   const { renderVipCard } = require("../../core/canvas/vip");
   const fs = require("fs");
@@ -65,7 +72,7 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
       footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
       ttl: 300000
     });
-    await api.sendMessage({ msg: "", attachments: cardPath, mentions, ttlKind: "card" }, threadId, event.type);
+    await api.sendMessage({ msg: "", attachments: cardPath, mentions, ttlKind: "card" }, threadId, sendType);
   } catch (error) {
     console.error("Lỗi welcome:", error.message);
   } finally {
