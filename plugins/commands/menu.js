@@ -54,10 +54,11 @@ async function navigate({ api, event, Threads, action, senderId }) {
 
     const threadData = (await Threads.getData(threadId)).data || {};
 
-    // Đóng menu: xoá trạng thái phân trang + thông báo (không hiện lại danh sách)
+    // Đóng menu: thu hồi trang đang hiện + xoá trạng thái phân trang
     if (action === "out" || action === "exit" || action === "close") {
         delete threadData.menu_page;
         await Threads.setData(threadId, threadData);
+        await require("../../core/recall").recall(api, threadId, "menu", type);
         return api.sendMessage({
             msg: "✅ Đã đóng menu. Gõ /menu để mở lại.",
             ttl: 30000
@@ -102,7 +103,7 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
             commands: { total: commands.length, page: slice },
             uptimeText: getUptimeText()
         });
-        await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "menu" }, threadId, type);
+        await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "menu", replace: "menu" }, threadId, type);
     } catch (error) {
         console.error("Lỗi render menu:", error.message);
         await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);

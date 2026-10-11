@@ -3,6 +3,7 @@ const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
 const ttlSystem = require("./ttl");
+const recallModule = require("./recall");
 
 const MIN_TTL = ttlSystem.MIN_TTL_MS; // Zalo chỉ tự xóa tin nhắn khi ttl >= 60s
 
@@ -164,7 +165,22 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
 
-    // Loại tin quyết định TTL mặc định: ảnh/video → media; lệnh tự chọn → ttlKind
+    // replace: "<key>" → thu hồi tin cũ cùng khung rồi mới gửi tin mới
+    // (menu: next/prev/số/out xoá trang cũ; nhạc: chọn bài xong xoá lưới kết quả)
+    const replaceKey = content.replace;
+    if (replaceKey) {
+      const key = replaceKey === true ? `cmd:${commandName}` : String(replaceKey);
+      delete content.replace;
+      if (content.plain) delete content.plain;
+      const ttlKind = content.ttlKind || (content.attachments ? "media" : "message");
+      delete content.ttlKind;
+      content.ttl = normalizeTtl(content.ttl, ttlKind);
+      await recallModule.recall(api, targetThreadId, key, targetType);
+      const response = await api.sendMessage(content, targetThreadId, targetType);
+      recallModule.remember(targetThreadId, key, response);
+      return response;
+    }
+
     const ttlKind = content.ttlKind || (content.attachments ? "media" : "message");
     delete content.ttlKind;
     if (content.plain) delete content.plain;
