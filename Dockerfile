@@ -1,5 +1,5 @@
 # Dockerfile cho Koyeb (free) — deploy bot 24/7
-FROM node:20-slim
+FROM node:22-slim
 
 # yt-dlp (autodown local) + ffmpeg (xử lý video/nhạc) + thư viện cho canvas
 RUN apt-get update && apt-get install -y --no-install-recommends \
