@@ -171,6 +171,7 @@ const DEFAULTS = {
       "drive.google.com",
       "dpaste.com",
       "googleusercontent.com",
+      "stickers.zaloapp.com",
       "zalo.ai",
       "zadn.vn",
       "zdn.vn",

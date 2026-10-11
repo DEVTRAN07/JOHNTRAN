@@ -1,0 +1,71 @@
+# BỘ NGÔN TỪ SPAM — mỗi DÒNG là một câu
+# Dòng bắt đầu bằng # là chú thích, bot bỏ qua.
+# Thêm/sửa/xoá tuỳ ý — KHÔNG cần sửa code, lệnh tự nạp lại khi gõ /spam reload
+# hoặc khi khởi động bot.
+
+Chửi ai mà chửi hoài vậy bạn
+Sống có tâm một chút đi bạn ơi
+Nói chuyện vô duyên quá nha
+Bạn bị làm sao đó hả bạn
+Có ngon thì tag tao trả lời đi
+Im lặng là vàng bạn ơi
+Bạn đúng là cao thủ gõ bàn phím
+Mày tưởng mày hay lắm hả
+Sống cho có người yêu đi bạn
+Mặt dày quá nha bạn hiền
+Câm miệng lại đi bạn
+Bạn nói chuyện khó nghe quá
+Ngủ đi bạn ơi, đêm khuya rồi
+Bạn bị out não rồi phải không
+Nói ít thôi bạn, nghe mệt quá
+Có bản lĩnh thì nói thẳng vào mặt
+Mày là ai mà tao phải sợ
+Bạn có học hành gì không đó
+Bớt giả tạo đi bạn
+Thiếu tình yêu rồi phải không bạn
+Bạn đúng là trò hề của nhóm
+Cười vào mặt bạn luôn đó
+Bạn làm tôi buồn cười quá
+Mệt bạn quá đi thôi
+Bạn bị ảo à bạn
+Nói chuyện cho đàng hoàng đi
+Bạn có não không đó
+Xin lỗi nha, tao quên mất mày là ai
+Bạn đỉnh quá, đỉnh của sự vô duyên
+Mày tưởng ai cũng quan tâm mày hả
+Bớt làm phiền người khác đi
+Tuổi gì mà vô học vậy bạn
+Có ai dạy bạn cách nói chuyện chưa
+Bạn im đi cho đời yên bình
+Nghe nói bạn hay nói xấu người ta
+Sống lại đi bạn ơi
+Mày gõ bàn phím giỏi thật đó
+Cạn lời với bạn luôn á
+Bạn đúng là nhất quá đi
+Bạn có biết ngượng là gì không
+Thôi nha bạn, đừng để tóc đen suy nghĩ nữa
+Bạn bị từ chối chat chưa
+Nói ít thôi, vibe người ta đang đẹp
+Bạn đúng là mẫu người hoàn hảo... trong danh sách chặn
+Có tâm một chút được không bạn
+Mày tưởng mày nói tao sẽ tin hả
+Bạn sống ảo quá nha
+Bớt áp đặt đi bạn
+Sống thật lên đi bạn ơi
+Bạn có thấy mệt khi làm phiền người khác không
+Nói xấu người ta nhiều vào, khéo may lắm
+Mày bị theo dõi hơi nhiều đó nha
+Bạn đúng là minh chứng sống cho sự vô duyên
+Cho tao xin lỗi vì đã đọc tin nhắn của bạn
+Bạn nghĩ bạn hài hước lắm hả
+Thôi đi bạn, tao cười không nổi nữa rồi
+Bạn bị lỗi não rồi phải không
+Sống cho ra dáng người đi bạn
+Bạn đúng là hàng hiếm của nhóm
+Mệt mỏi quá đi bạn ơi
+Bạn im lặng đi là đóng góp lớn nhất rồi
+Có não mà không dùng thì tặng người ta đi
+Bạn đừng để người ta chặn bạn nha
+Nói chuyện kiểu đó ai chơi với bạn
+Bạn hay đó, nhưng hơi vô duyên
+Cho qua đi bạn, đừng để não mình cô đơn

@@ -117,8 +117,6 @@ async function runCmd(name, args = [], eventOverride = {}) {
     ["menu", ["next"]],
     ["menu", ["out"]],
     ["menu", ["uptime"]],
-    ["getavt", []],
-    ["getavt", ["12345678"]],
     ["id", ["box"]],
     ["id", ["12345678"]],
     ["stats", []],

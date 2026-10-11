@@ -1,5 +1,6 @@
 const http = require("http");
 const https = require("https");
+const zlib = require("zlib");
 const { URL } = require("url");
 const logger = require("../../utils/logger");
 
@@ -46,6 +47,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Giải nén body khi server trả gzip/deflate/brotli (vd stickers.zaloapp.com
+// luôn gzip dù client không gửi Accept-Encoding)
+function decodeBody(raw, contentEncoding) {
+  const encoding = String(contentEncoding || "").toLowerCase();
+  if (!encoding || encoding === "identity") return raw;
+  try {
+    if (encoding.includes("gzip")) return zlib.gunzipSync(raw);
+    if (encoding.includes("deflate")) return zlib.inflateSync(raw);
+    if (encoding.includes("br")) return zlib.brotliDecompressSync(raw);
+  } catch (error) {
+    logger.log(`Giải nén phản hồi (${encoding}) thất bại: ${error.message}`, "warn");
+  }
+  return raw;
+}
+
 function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -85,7 +101,8 @@ function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
         const chunks = [];
         res.on("data", (chunk) => chunks.push(chunk));
         res.on("end", () => {
-          const body = Buffer.concat(chunks);
+          const raw = Buffer.concat(chunks);
+          const body = decodeBody(raw, res.headers["content-encoding"]);
           resolve({
             status: res.statusCode,
             headers: res.headers,

@@ -209,6 +209,7 @@ core/
 ├── services.js    # endpoint do admin cấu hình (trống = tính năng TẮT, không gửi data đi đâu)
 ├── ai/            # tts (đọc giọng nói Google TTS cho /noi)
 ├── music/         # registry nhạc: model Track + provider SoundCloud + lyric + cache chọn bài
+├── stickerStore.js # kho sticker hiệu ứng màn hình (stickers.zaloapp.com → lọc effectId)
 ├── message.js     # TTL chuẩn (>= 60s vì Zalo bỏ qua TTL nhỏ hơn) + reply helper + wrap api (auto TTL + auto card + reaction)
 ├── canvas/        # render thẻ: vip.js (glassmorphism, icon vector, avatar, progress) + icons.js
 ├── cache.js       # LRU cache TTL cho group/user info + kết quả nhạc
@@ -225,8 +226,12 @@ panel/
 └── server.js      # panel API zero-dependency (không cần express)
 docs/             # panel UI tĩnh cho GitHub Pages
 plugins/
-├── commands/      # 24 lệnh (gồm scl, lyric, noi, stats, menu)
+├── commands/      # 23 lệnh (gồm scl, lyric, noi, stats, menu, spam, spamsticker)
 └── events/        # (đã bỏ — bot thuần lệnh, mọi hành vi qua lệnh /xxx)
+assets/
+├── spam/          # ngôn từ spam cho /spam (mỗi dòng .txt = 1 câu)
+├── bg/ fonts/     # tài nguyên render thẻ canvas
+└── autosend.json girl.json vdgirl.json   # dữ liệu ảnh cho autosend/girl/vdgirl
 ```
 
 **Tính năng nổi bật v3:**
@@ -255,6 +260,22 @@ plugins/
 |---|---|
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
+
+**Lệnh spam (chỉ admin bot):**
+| Lệnh | Chức năng |
+|---|---|
+| `/spam @bạn` | Spam tin nhắn + tag người kia, nội dung lấy **ngẫu nhiên từ `assets/spam/*.txt`** |
+| `/spam @bạn -t 50 -d 1` | 50 lần, mỗi 1 giây (`-t 0` = không giới hạn) |
+| `/spam @bạn Xin chào` | Dùng câu tự gõ thay vì câu trong folder |
+| `/spam off` | Dừng job spam đang chạy trong nhóm |
+| `/spam reload` / `/spam list` | Nạp lại / xem số câu trong folder |
+| `/spamsticker on [số lần]` | Spam sticker **hiệu ứng màn hình** (gây lag) — nguồn `stickers.zaloapp.com`, bot tự lọc sticker có `effectId` |
+| `/spamsticker off` | Dừng spam sticker |
+| `/spamsticker list` / `reload` | Xem kho sticker hiệu ứng / nạp lại |
+
+- Folder ngôn từ spam: `assets/spam/` — mỗi dòng một câu, dòng `#` là chú thích. Sửa file xong gõ `/spam reload`, **không cần sửa code**.
+- Kho sticker hiệu ứng nạp 1 lần rồi nhớ 30 phút; mỗi lần `reload` xáo trộn và quét 24 bộ sticker mới.
+- `core/stickerStore.js`: catalog từ `stickers.zaloapp.com/sticker` → `getStickerCategoryDetail` → giữ sticker `effectId > 0`.
 
 **Kiến trúc + vận hành:**
 - `/stats` — thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate).
