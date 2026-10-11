@@ -12,8 +12,8 @@ const RECONNECT_MAX_DELAY = 60000;
 // supervisor (index.js / botManager) tự khởi động lại + đăng nhập lại từ đầu
 const CONNECT_FAIL_LIMIT = 3;
 const WATCHDOG_INTERVAL = 30000;
-// 2 phút không nhận được frame nào → coi socket là chết (half-open)
-const WATCHDOG_STALE_MS = 120000;
+// 30 phút không có frame nào MỚI coi là half-open (nhóm im lặng vài phút là bình thường)
+const WATCHDOG_STALE_MS = 1800000;
 
 function startListening(api) {
   if (!api?.listener?.on || !api.listener.start) {
@@ -136,6 +136,7 @@ function startListening(api) {
   let reconnectAttempt = 0;
   let connectFailStreak = 0;
   let lastFrameAt = 0;
+  let connectingSince = 0;
 
   const connectListener = (reason) => {
     // connectListener chỉ chạy khi không có timer pending hoặc từ chính timer đã fired
@@ -144,6 +145,7 @@ function startListening(api) {
       // retryOnClose: false → mọi lần đóng WS đều phát event "closed",
       // reconnect chỉ đi qua MỘT luồng duy nhất (tránh 2 WS đấu nhau)
       listener.start({ retryOnClose: false });
+      connectingSince = Date.now();
       logger.log(`Đã bắt đầu lắng nghe sự kiện${reason ? ` (${reason})` : ""}`, "info");
     } catch (error) {
       reconnectAttempt += 1;
@@ -166,6 +168,7 @@ function startListening(api) {
     reconnectAttempt = 0;
     connectFailStreak = 0;
     lastFrameAt = Date.now();
+    connectingSince = 0;
 
     // Lấy lại tin nhắn miss trong lúc socket rớt
     try {
@@ -201,14 +204,28 @@ function startListening(api) {
   listener.on("message", markAlive);
   listener.on("cipher_key", markAlive);
 
-  // Watchdog: bắt socket kẹt CONNECTING hoặc half-open (mất mạng, không có close event)
+  // Watchdog: chỉ dựa vào trạng thái socket THẬT — không coi "im lặng vài phút"
+  // là chết (nhóm không ai nhắn thì bot vẫn sống, ép reconnect chỉ làm mất tin)
   const watchdog = setInterval(() => {
-    const isOpen = listener.ws?.readyState === 1; // WebSocket.OPEN
-    const isFresh = Date.now() - lastFrameAt < WATCHDOG_STALE_MS;
-    if (isOpen && isFresh) return;
-    if (reconnectTimer) return;
+    const ws = listener.ws;
+    const state = ws ? ws.readyState : -1;
 
-    logger.log("Watchdog: listener không còn sống — buộc kết nối lại", "warn");
+    // OPEN → sống, thôi. Chỉ khi im lặng RẤT lâu (30 phút) mới coi là half-open
+    if (state === 1) {
+      connectingSince = 0;
+      if (Date.now() - lastFrameAt < WATCHDOG_STALE_MS) return;
+      logger.log("Watchdog: 30 phút không có frame nào — thử khôi phục kết nối", "warn");
+    } else if (state === 0) {
+      // CONNECTING: chỉ nhảy khi kẹt quá 90s
+      if (!connectingSince) connectingSince = Date.now();
+      if (Date.now() - connectingSince < 90000) return;
+      logger.log("Watchdog: kẹt kết nối quá 90s — buộc thử lại", "warn");
+    } else if (reconnectTimer) {
+      return; // đã có lịch reconnect
+    } else {
+      logger.log(`Watchdog: socket state=${state} — buộc kết nối lại`, "warn");
+    }
+
     try {
       listener.stop();
     } catch {

@@ -147,6 +147,8 @@ function readMessageJson() {
 
 function writeMessageJson(data) {
     try {
+        const dir = path.dirname(messageCachePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(messageCachePath, JSON.stringify(data, null, 2), "utf-8");
     } catch (error) {
         logger.log("Lỗi khi ghi file message.json: " + error.message, "error");
