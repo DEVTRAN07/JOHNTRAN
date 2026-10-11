@@ -1,6 +1,7 @@
 node_modules/
 account.json
 cookie.json
+cookies.txt
 qr.png
 data/
 plugins/*/temp/

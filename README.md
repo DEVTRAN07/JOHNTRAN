@@ -272,11 +272,7 @@ assets/
     media:
       ytdlp_cookies_from_browser: chrome   # chrome | safari | firefox | edge | brave
     ```
-  - Bot chạy **trên Render** (không có trình duyệt): export `cookies.txt` (định dạng Netscape, dùng extension "Get cookies.txt LOCALLY") rồi:
-    ```yaml
-    media:
-      ytdlp_cookies_file: /app/cookies.txt  # hoặc set env YTDLP_COOKIES_FILE
-    ```
+  - Bot chạy **trên Render** (không có trình duyệt): export `cookies.txt` (định dạng Netscape, dùng extension "Get cookies.txt LOCALLY") rồi set biến môi trường `YTDLP_COOKIES_CONTENT` = **nội dung** file đó — bot tự ghi ra `cookies.txt` mỗi lần khởi động (Render xoá ổ đĩa khi restart). Cách khác: set `YTDLP_COOKIES_FILE` trỏ tới file đã đặt sẵn.
 - Facebook/Instagram hay chặn nếu chưa đăng nhập → cũng dùng cookie như trên.
 - TikTok/Douyin: thử API công khai (chain: `services.tiktok_api_url` → tikwm → dự phòng) rồi tới yt-dlp. Các API public hiện hay chết nên **nên tự cấu hình `services.tiktok_api_url`** nếu có nguồn riêng.
 - Nền tảng không hỗ trợ (link lạ) → bot im lặng, không làm nhiễu nhóm.
