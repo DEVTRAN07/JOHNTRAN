@@ -69,6 +69,12 @@ privacy:
     - translate.google.com
     - files.catbox.moe
     - catbox.moe
+    - www.tikwm.com
+    - tikwm.com
+    - v16m.tiktokcdn-us.com
+    - v19-notes.tiktokcdn-us.com
+    - tiktokcdn-us.com
+    - tiktokcdn.com
     - imgur.com
     - i.imgur.com
     - postimg.cc
@@ -94,7 +100,7 @@ services:
   media_downloader_url: "" # endpoint tải media (autodown)
   media_generator_url: "" # endpoint video ngẫu nhiên (girltt)
   image_generator_url: "" # endpoint tạo ảnh/qr (qrheart)
-  tiktok_api_url: "" # endpoint thông tin tiktok (itik)
+  tiktok_api_url: "" # endpoint lấy VIDEO tiktok/douyin (autodown) — để trống dùng tikwm.com mặc định
   facebook_api_url: "" # endpoint lấy uid facebook
   facebook_access_token: "" # token Graph API facebook của bạn (fbin4)
 

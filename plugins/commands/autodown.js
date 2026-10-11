@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const { Reactions, ThreadType } = require("zalo-client");
 const services = require("../../core/services");
+const tiktokApi = require("../../core/tiktok");
 const ytdlp = require("../../core/mediaDownloader");
 const { processVideo, processAudio } = require("../../utils/index");
 
@@ -57,8 +58,18 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
         });
     } catch {}
 
+    // ===== Cách 0: TikTok/Douyin qua API (IP bị TikTok chặn nên yt-dlp không qua được) =====
+    if (tiktokApi.isTikTokUrl(url)) {
+      try {
+        return await downloadLocal(url, api, event, threadId, type);
+      } catch (error) {
+        console.log(`[autodown] TikTok API thất bại: ${error.message}`);
+        // thử tiếp yt-dlp bên dưới
+      }
+    }
+
     // ===== Cách 1: tải LOCAL bằng yt-dlp (link KHÔNG đi qua bên thứ 3) =====
-    if (await ytdlp.ytDlpAvailable()) {
+    if (!tiktokApi.isTikTokUrl(url) && await ytdlp.ytDlpAvailable()) {
         try {
             return await downloadLocal(url, api, event, threadId, type);
         } catch (error) {
@@ -401,15 +412,10 @@ async function downloadMedia(url, mediaType) {
         return null;
     }
 }
-// Tải media local bằng yt-dlp — link KHÔNG gửi đi bên thứ 3
+// Tải media local bằng yt-dlp / API TikTok — link KHÔNG đi qua API lạ của bên thứ 3
 async function downloadLocal(url, api, event, threadId, type) {
-    const info = await ytdlp.getMediaInfo(url);
-    if (!info) throw new Error("Không lấy được thông tin media");
-
     const tempDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-
-    const messageBody = "🎦 AUTODOWN\n" + ytdlp.describe(info).join("\n");
 
     const setReaction = async (reaction) => {
         try {
@@ -425,6 +431,41 @@ async function downloadLocal(url, api, event, threadId, type) {
             });
         } catch {}
     };
+
+    // ---------- TikTok/Douyin: lấy link qua API rồi tải trực tiếp ----------
+    if (tiktokApi.isTikTokUrl(url)) {
+        const info = await tiktokApi.getVideoInfo(url);
+        const duration = info.duration;
+
+        const res = await axios.get(info.videoUrl, {
+            responseType: "arraybuffer",
+            timeout: 90000,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                Referer: "https://www.tiktok.com/"
+            }
+        });
+        const videoPath = path.join(tempDir, `tiktok_${Date.now()}.mp4`);
+        fs.writeFileSync(videoPath, res.data);
+
+        const videoData = await processVideo(videoPath, threadId, type);
+        await api.sendVideo({
+            msg: "🎦 AUTODOWN\n" + `Title: ${info.title}\n` + `Author: ${info.author}`,
+            videoUrl: videoData.videoUrl,
+            thumbnailUrl: videoData.thumbnailUrl,
+            duration: videoData.metadata.duration,
+            width: videoData.metadata.width,
+            height: videoData.metadata.height,
+            ttl: 300000
+        }, threadId, type);
+        await setReaction(Reactions.HEART);
+        return true;
+    }
+
+    const info = await ytdlp.getMediaInfo(url);
+    if (!info) throw new Error("Không lấy được thông tin media");
+
+    const messageBody = "🎦 AUTODOWN\n" + ytdlp.describe(info).join("\n");
 
     // Nhạc (không có video) → gửi voice
     if (ytdlp.isAudioOnly(info)) {

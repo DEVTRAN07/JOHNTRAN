@@ -128,6 +128,9 @@ const DEFAULTS = {
       "translate.google.com",
       "files.catbox.moe",
       "catbox.moe",
+      "tikwm.com",
+      "tiktokcdn.com",
+      "tiktokcdn-us.com",
       // CDN/media cần cho các tính năng có sẵn
       "imgur.com",
       "i.imgur.com",
