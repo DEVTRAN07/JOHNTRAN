@@ -63,7 +63,6 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
     try {
       await api.sendMessage({
         mentions: [{ pos: 0, uid, len: 2 }],
-        ttlKind: "card",
         msg: ""
       }, threadId, event.type);
       // Thông báo level up bằng thẻ canvas
@@ -79,13 +78,11 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
           { label: "Cách lên level", lines: ["💬 Chat trong nhóm để nhận EXP (30s/lần)"] }
         ],
         footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-        ttl: 120000
-      });
+        });
       await api.sendMessage({
         msg: "",
         attachments: card,
-        mentions: [{ pos: 0, uid, len: 2 }],
-        ttlKind: "card"
+        mentions: [{ pos: 0, uid, len: 2 }]
       }, threadId, event.type);
       fs.unlinkSync(card);
     } catch (error) {

@@ -3,7 +3,6 @@ const music = require("./index");
 const models = require("./models");
 const cards = require("../canvas/music");
 const logger = require("../../utils/logger");
-const recall = require("../recall");
 
 let nextPageCursor = null; // "zing|2"
 
@@ -54,10 +53,10 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
     // Thẻ NOW PLAYING
     try {
       cardPath = await cards.renderNowPlaying(track, provider.label.toUpperCase());
-      await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "music" }, threadId, type);
+      await api.sendMessage({ msg: "", attachments: cardPath }, threadId, type);
     } catch { /* hỏng thẻ thì thôi */ }
 
-    await api.sendVoice({ voiceUrl, ttlKind: "media" }, threadId, type);
+    await api.sendVoice({ voiceUrl }, threadId, type);
     await reply.done();
   } catch (error) {
     logger.log(`[music:${providerName}] ${error.message}`, "error");
@@ -73,11 +72,7 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
   }
 }
 
-function gridKey(key) {
-  return `music_grid:${key}`;
-}
-
-async function showResults(api, threadId, type, provider, query, tracks, page, replaceKey = "music_grid") {
+async function showResults(api, threadId, type, provider, query, tracks, page) {
   const perPage = 8;
   const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
   const safePage = Math.min(Math.max(page, 1), totalPages);
@@ -86,7 +81,7 @@ async function showResults(api, threadId, type, provider, query, tracks, page, r
   let gridPath = null;
   try {
     gridPath = await cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() });
-    await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "music", replace: replaceKey }, threadId, type);
+    await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
     if (fs.existsSync(gridPath)) fs.unlinkSync(gridPath);
   } catch {
     // Fallback: thẻ text nếu canvas lỗi
@@ -127,7 +122,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
       return reply.error(`Số thứ tự không hợp lệ (1 - ${pending.tracks.length}).`);
     }
     // Chọn được bài → xoá ngay lưới kết quả (đừng để nằm chiếm nhóm)
-    await recall.recall(api, threadId, gridKey(key), type);
+    
     return sendTrack(reply, threadId, type, track, providerName, api, options.quality);
   }
 
@@ -142,7 +137,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
     // Thoát: xoá danh sách đang chọn
     if (["out", "exit", "close"].includes(nav)) {
       music.clearPending(key);
-      await recall.recall(api, threadId, gridKey(key), type);
+      
       return reply.success(`Đã đóng danh sách nhạc "${pending.query || ""}". Gõ ${global.config.prefix}${provider.name} <từ khóa> để tìm lại.`);
     }
 
@@ -154,7 +149,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
       : (current <= 1 ? totalPages : current - 1);
 
     music.setPending(key, providerName, pending.tracks, pending.query, page);
-    return showResults(api, threadId, type, provider, pending.query, pending.tracks, page, gridKey(key));
+    return showResults(api, threadId, type, provider, pending.query, pending.tracks, page);
   }
 
   if (!options.queryArgs.length) {
@@ -174,7 +169,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
     const entry = music.getPending(key);
     if (entry) entry.quality = options.quality;
   }
-  return showResults(api, threadId, type, provider, query, tracks, 1, gridKey(key));
+  return showResults(api, threadId, type, provider, query, tracks, 1);
 }
 
 function createMusicCommand(providerName, meta = {}) {

@@ -28,23 +28,6 @@ hot_reload: true # tự nạp lại plugin khi file thay đổi (không cần re
 device:
   user_agent: "" # ví dụ macOS: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0
 
-# ===== TTL TIN NHẮN (ms) =====
-# Zalo chỉ tự xóa tin nhắn khi ttl >= 60000 (1 phút) — giá trị nhỏ hơn bị bỏ qua
-# ===== TTL TỰ XOÁ TIN NHẮN =====
-# Đơn vị: số ms thuần HOẶC 30s / 2m / 1h / 1d (dễ đọc hơn).
-# Zalo chỉ tự xoá khi ttl >= 60s và từ chối ttl quá lớn nên hệ thống tự kẹp
-# về khoản an toàn (tối thiểu 60s, tối đa 7 ngày) — core/ttl.js
-ttl:
-  message: 60s  # tin nhắn thông báo ngắn
-  error: 2m     # thông báo lỗi (cần đọc kỹ)
-  info: 2m      # thẻ hướng dẫn / thông tin
-  media: 5m     # ảnh / video / voice
-  card: 3m      # thẻ canvas
-  menu: 5m      # menu ảnh (người dùng soi kỹ)
-  music: 5m     # kết quả tìm nhạc + thẻ đang phát
-  spam: 60s     # tin spam (xoá nhanh cho nhóm sạch)
-  sticker: 60s  # sticker spam
-
 # ===== WEB PANEL QUẢN LÝ BOT =====
 panel:
   enabled: false # bật panel quản lý bot + bot con

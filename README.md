@@ -209,10 +209,8 @@ core/
 ├── services.js    # endpoint do admin cấu hình (trống = tính năng TẮT, không gửi data đi đâu)
 ├── ai/            # tts (đọc giọng nói Google TTS cho /noi)
 ├── music/         # registry nhạc: model Track + provider SoundCloud + lyric + cache chọn bài
-├── stickerStore.js # kho sticker hiệu ứng màn hình (stickers.zaloapp.com → lọc effectId)
-├── ttl.js         # TTL tự xoá tin: hiểu 60s/2m/1h, kẹp [60s, 7 ngày], TTL theo loại tin
-├── message.js     # reply helper (thẻ/card) + wrap api (auto TTL + reaction cho mọi lệnh)
-├── canvas/        # render thẻ: vip.js (glassmorphism, icon vector, avatar, progress) + icons.js
+├── message.js     # reply helper (thẻ/card) + wrap api (reaction cho mọi lệnh)
+├── canvas/        # theme.js (nền/font/bo góc chung) + vip.js, menu.js, music.js
 ├── cache.js       # LRU cache TTL cho group/user info + kết quả nhạc
 ├── storage/       # JSON store atomic (local/dev) + Supabase adapter (deploy Koyeb)
 ├── metrics.js     # thống kê ngày + audit log (data/audit.log)
@@ -268,9 +266,9 @@ assets/
 
 **Điều hướng menu & nhạc (không cần nhớ lệnh dài):**
 - Menu chỉ có `/menu` (bỏ alias `/menu2` vì gõ `/menu2` bị hiểu là mở lại trang 1, gây nhầm) — muốn tới trang 2 thì gõ `/menu 2`.
-- Menu: `/menu` → trang 1, `/menu next` / `/menu prev`, `/menu <số>`, `/menu out` (đóng).
+- Menu: `/menu` → trang 1, `/menu next` / `/menu prev`, `/menu <số>`, `/menu out` (đóng). Bố cục 3 cột × 3 hàng = 9 lệnh/trang.
 - Khi menu đang mở, gõ trần **`next`** / **`prev`** / **`out`** (không cần prefix) cũng chuyển trang được.
-- Nhạc: `/scl <từ khóa>` → `/scl next` / `/scl prev` / `/scl out`, hoặc gõ trần **`next`** / số thứ tự khi đang có kết quả.
+- Nhạc: `/scl <từ khóa>` → `/scl next` / `/scl prev` / `/scl out`, hoặc gõ trần **`next`** / số thứ tự khi đang có kết quả. Kết quả hiện dạng lưới 4 cột (8 bài/trăng), xếp bài nhiều người nghe & thích nhất lên đầu.
 - Kết quả nhạc **xếp bài nhiều người nghe & thích nhất lên đầu** (20 bài/trang, mỗi trang 8 bài).
 
 **Bộ sự kiện tự động** — **mặc định TẮT**, phải bật bằng lệnh `/events <tên> on`:

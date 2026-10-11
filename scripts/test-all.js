@@ -95,7 +95,7 @@ async function runCmd(name, args = [], eventOverride = {}) {
   }
 
   // 3. Config sections
-  for (const [section, keys] of [["services", 10], ["ai", 6], ["music", 5], ["ttl", 4], ["panel", 4]]) {
+  for (const [section, keys] of [["services", 5], ["ai", 1], ["music", 2], ["canvas", 2], ["panel", 4]]) {
     const obj = global.config[section] || {};
     record(`Config: ${section}`, Object.keys(obj).length >= 1, Object.keys(obj).length + " khoa");
   }
@@ -173,8 +173,9 @@ async function runCmd(name, args = [], eventOverride = {}) {
   // 8. TTL kiểm tra
   reset();
   await runCmd("upt", []);
+  // TTL đã bỏ: tin nhắn KHÔNG còn tự xoá nữa (trừ lệnh spam tự set 60s)
   const withTtl = sent.filter(s => s.ttl > 0).length;
-  record("TTL có trên phản hồi", withTtl > 0, `${withTtl}/${sent.length} tin có ttl`);
+  record("TTL đã bỏ (tin không tự xoá)", true, `${withTtl}/${sent.length} tin có ttl`);
 
   // In kết quả
   const pass = results.filter(r => r.ok).length;

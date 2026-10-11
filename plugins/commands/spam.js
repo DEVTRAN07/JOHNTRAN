@@ -109,10 +109,10 @@ module.exports.run = async function ({ api, event, args }) {
   // ===== TẮT =====
   if (sub === "off" || sub === "stop") {
     const job = running.get(threadId);
-    if (!job) return api.sendMessage({ msg: "❌ Không có spam nào đang chạy.", ttlKind: "spam" }, threadId, type);
+    if (!job) return api.sendMessage({ msg: "❌ Không có spam nào đang chạy.", ttl: 60000 }, threadId, type);
     clearInterval(job.timer);
     running.delete(threadId);
-    return api.sendMessage({ msg: `✅ Đã dừng spam (đã gửi ${job.count}/${job.timesText}).`, ttlKind: "spam" }, threadId, type);
+    return api.sendMessage({ msg: `✅ Đã dừng spam (đã gửi ${job.count}/${job.timesText}).`, ttl: 60000 }, threadId, type);
   }
 
   // ===== NẠP LẠI NGÔN NGỮ =====
@@ -123,7 +123,7 @@ module.exports.run = async function ({ api, event, args }) {
       msg: total
         ? `✅ Đã nạp ${total} câu / ${langNames().length} ngôn ngữ: ${langNames().map((l) => l.toUpperCase()).join(", ")}`
         : "❌ Không đọc được câu nào trong assets/spam/ — kiểm tra folder.",
-      ttlKind: "spam"
+      ttl: 60000
     }, threadId, type);
   }
 
@@ -136,7 +136,7 @@ module.exports.run = async function ({ api, event, args }) {
            `Cách dùng: ${global.config.prefix}spam @bạn en (chỉ tiếng Anh)\n` +
            `Hoặc: ${global.config.prefix}spam @bạn vi en zh (nhiều ngôn ngữ)\n` +
            `Không gõ ngôn ngữ = lấy ngẫu nhiên tất cả.`,
-      ttlKind: "spam"
+      ttl: 60000
     }, threadId, type);
   }
 
@@ -163,17 +163,17 @@ module.exports.run = async function ({ api, event, args }) {
            `• /spam @bạn vi en → pha tiếng Việt + Anh\n` +
            `• /spam @bạn Xin chào -t 5 -d 1 → nội dung tự gõ\n` +
            `• /spam @bạn -t 0 → không giới hạn (dừng bằng /spam off)`,
-      ttlKind: "spam"
+      ttl: 60000
     }, threadId, type);
   }
 
   if (running.has(threadId)) {
-    return api.sendMessage({ msg: "⚠️ Spam đang chạy. Gõ /spam off để dừng.", ttlKind: "spam" }, threadId, type);
+    return api.sendMessage({ msg: "⚠️ Spam đang chạy. Gõ /spam off để dừng.", ttl: 60000 }, threadId, type);
   }
 
   const usingFolder = !opts.message;
   if (usingFolder && !langNames().length) {
-    return api.sendMessage({ msg: "❌ Không có câu spam nào trong assets/spam/.", ttlKind: "spam" }, threadId, type);
+    return api.sendMessage({ msg: "❌ Không có câu spam nào trong assets/spam/.", ttl: 60000 }, threadId, type);
   }
 
   const timesText = opts.times === 0 ? "∞" : String(opts.times);
@@ -197,13 +197,13 @@ module.exports.run = async function ({ api, event, args }) {
     if (opts.times !== 0 && job.count >= opts.times) {
       clearInterval(job.timer);
       running.delete(threadId);
-      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} lần.`, ttlKind: "spam" }, threadId, type);
+      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} lần.`, ttl: 60000 }, threadId, type);
     }
 
     const message = opts.message || pickSentence(opts.langs) || "Hello";
     try {
       const { text, mentions } = buildText(message);
-      await api.sendMessage({ msg: text, mentions, ttlKind: "spam" }, threadId, type);
+      await api.sendMessage({ msg: text, mentions, ttl: 60000 }, threadId, type);
       job.count++;
     } catch (error) {
       console.error("Lỗi gửi spam:", error.message);
@@ -222,6 +222,6 @@ module.exports.run = async function ({ api, event, args }) {
     msg: `▶️ Bắt đầu spam ${timesText} lần • mỗi ${opts.delay / 1000}s\n` +
          `👥 ${targets.length} người • ${usingFolder ? langText : `nội dung: ${opts.message}`}\n` +
          `Dừng: ${global.config.prefix}spam off`,
-    ttlKind: "spam"
+    ttl: 60000
   }, threadId, type);
 };

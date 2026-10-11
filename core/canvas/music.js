@@ -33,14 +33,17 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text } = theme;
 
-  const perPage = 4;
+  const perPage = 8;
+  const cols = 4;
   const shown = tracks.slice(0, perPage);
-  const cardW = W - S(44);
-  const cardH = S(190);
-  const gapY = S(12);
-  const headerH = S(108);
-  const footerH = S(130);
-  const H = headerH + shown.length * cardH + Math.max(0, shown.length - 1) * gapY + footerH;
+  const rows = Math.max(1, Math.ceil(shown.length / cols));
+  const cardW = (W - S(50) - S(18) * (cols - 1)) / cols;
+  const cardH = S(300);
+  const gapX = S(18);
+  const gapY = S(16);
+  const headerH = S(110);
+  const footerH = S(118);
+  const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
@@ -61,15 +64,17 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const covers = [];
   for (const track of shown) covers.push(await fetchThumb(track.thumbnail));
 
-  // ===== Danh sách bài =====
+  // ===== Lưới bài hát (4 cột) =====
   shown.forEach((track, index) => {
-    const x = S(22);
-    const y = headerH + index * (cardH + gapY);
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = S(25) + col * (cardW + gapX);
+    const y = headerH + row * (cardH + gapY);
 
     panel(ctx, x, y, cardW, cardH, S(14));
 
-    // ảnh bìa vuông bên trái
-    const coverSize = cardH - S(36);
+    // ảnh bìa (vuông, chiếm trên nửa thẻ)
+    const coverSize = cardW - S(36);
     const cover = covers[index];
     if (cover) {
       ctx.save();
@@ -81,7 +86,7 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
       ctx.fillStyle = "rgba(56, 189, 248, .12)";
       theme.roundRect(ctx, x + S(18), y + S(18), coverSize, coverSize, S(12));
       ctx.fill();
-      text(ctx, "🎵", x + S(18) + coverSize / 2, y + S(18) + coverSize / 2 + S(16), { size: 34, color: PALETTE.accent, align: "center" });
+      text(ctx, "🎵", x + S(18) + coverSize / 2, y + S(18) + coverSize / 2 + S(20), { size: 40, color: PALETTE.accent, align: "center" });
     }
 
     // số thứ tự nổi trên ảnh bìa
@@ -90,26 +95,27 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
     ctx.fill();
     text(ctx, String(index + 1), x + S(48), y + S(51), { size: 20, family: "JT-Bold", color: PALETTE.accent, align: "center" });
 
-    // thông tin bài bên phải
-    const infoX = x + coverSize + S(34);
-    const infoW = cardW - coverSize - S(52);
-    text(ctx, track.title, infoX, y + S(56), { size: 22, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: infoW });
-    text(ctx, `♫ ${track.artist} • ${formatDuration(track.duration)}`, infoX, y + S(92), { size: 16, family: "JT-Mono", color: PALETTE.ink2, maxWidth: infoW });
+    // tên bài + ca sĩ + lượt nghe
+    const infoX = x + S(18);
+    const infoW = cardW - S(36);
+    const textY = y + S(18) + coverSize + S(30);
+    text(ctx, track.title, infoX, textY, { size: 18, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: infoW });
+    text(ctx, `♫ ${track.artist} • ${formatDuration(track.duration)}`, infoX, textY + S(30), { size: 14, family: "JT-Mono", color: PALETTE.ink2, maxWidth: infoW });
     text(
       ctx,
-      `👤 ${shortPlays(track.plays)} nghe  •  ❤️ ${shortPlays(track.likes)}`,
-      infoX, y + S(124),
-      { size: 15, family: "JT-Bold", color: PALETTE.green, maxWidth: infoW }
+      `👤 ${shortPlays(track.plays)}  •  ❤️ ${shortPlays(track.likes)}`,
+      infoX, textY + S(58),
+      { size: 14, family: "JT-Bold", color: PALETTE.green, maxWidth: infoW }
     );
   });
 
   // ===== Footer điều hướng: 3 nút emoji =====
   const footY = H - footerH + S(16);
-  const btnW = (W - S(44) - S(20)) / 3;
-  button(ctx, S(22), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
+  const btnW = (W - S(50) - S(20)) / 3;
+  button(ctx, S(25), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
   text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(30), { size: 22, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(22) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
-  button(ctx, S(22) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
+  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
+  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
 
   text(
     ctx,

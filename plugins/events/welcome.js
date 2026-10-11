@@ -70,9 +70,8 @@ module.exports.run = async function ({ api, event, Threads, isSelf, threadType }
         { label: "Bước tiếp theo", lines: [`📜 Xem lệnh: ${global.config.prefix}menu`, "💬 Giới thiệu bản thân với mọi người nhé"] }
       ],
       footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-      ttl: 300000
-    });
-    await api.sendMessage({ msg: "", attachments: cardPath, mentions, ttlKind: "card" }, threadId, sendType);
+      });
+    await api.sendMessage({ msg: "", attachments: cardPath, mentions }, threadId, sendType);
   } catch (error) {
     console.error("Lỗi welcome:", error.message);
   } finally {

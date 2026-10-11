@@ -27,10 +27,10 @@ module.exports.run = async function ({ api, event, args }) {
   // ===== TẮT =====
   if (sub === "off" || sub === "stop") {
     const job = running.get(threadId);
-    if (!job) return api.sendMessage({ msg: "❌ Không có spam sticker nào đang chạy.", ttlKind: "sticker" }, threadId, type);
+    if (!job) return api.sendMessage({ msg: "❌ Không có spam sticker nào đang chạy.", ttl: 60000 }, threadId, type);
     clearInterval(job.timer);
     running.delete(threadId);
-    return api.sendMessage({ msg: `✅ Đã dừng spam sticker (đã gửi ${job.count}/${job.times}).`, ttlKind: "sticker" }, threadId, type);
+    return api.sendMessage({ msg: `✅ Đã dừng spam sticker (đã gửi ${job.count}/${job.times}).`, ttl: 60000 }, threadId, type);
   }
 
   // ===== KIỂM TRA NGUỒN (test 1 bộ, không spam) =====
@@ -40,10 +40,10 @@ module.exports.run = async function ({ api, event, args }) {
       const sample = pool.slice(0, 3).map((s, i) => `${i + 1}. id=${s.id} cate=${String(s.cateId).slice(0, 10)} type=${s.type} effect=${s.effectId || "?"}`).join("\n");
       return api.sendMessage({
         msg: `✅ Nguồn sticker OK — ${pool.length} sticker hiệu ứng\n${sample}\n\nGõ /spamsticker on để bắt đầu.`,
-        ttlKind: "sticker"
+        ttl: 60000
       }, threadId, type);
     } catch (error) {
-      return api.sendMessage({ msg: `❌ Không nạp được sticker: ${error.message}`, ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: `❌ Không nạp được sticker: ${error.message}`, ttl: 60000 }, threadId, type);
     }
   }
 
@@ -54,7 +54,7 @@ module.exports.run = async function ({ api, event, args }) {
       msg: `📦 Kho sticker hiệu ứng: ${s.total} sticker\n` +
            `Trạng thái: ${s.fresh ? "sẵn sàng ✅" : "cần nạp lại (dùng /spamsticker reload)"}` +
            (s.total ? "" : `\n\n🔎 Log nạp gần nhất:\n${(s.log || []).join("\n") || "(chưa nạp)"}`),
-      ttlKind: "sticker"
+      ttl: 60000
     }, threadId, type);
   }
 
@@ -62,9 +62,9 @@ module.exports.run = async function ({ api, event, args }) {
   if (sub === "reload" || sub === "load") {
     try {
       const pool = await stickerStore.build(api);
-      return api.sendMessage({ msg: `✅ Đã nạp ${pool.length} sticker hiệu ứng từ stickers.zaloapp.com.`, ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: `✅ Đã nạp ${pool.length} sticker hiệu ứng từ stickers.zaloapp.com.`, ttl: 60000 }, threadId, type);
     } catch (error) {
-      return api.sendMessage({ msg: `❌ Nạp sticker thất bại: ${error.message}`, ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: `❌ Nạp sticker thất bại: ${error.message}`, ttl: 60000 }, threadId, type);
     }
   }
 
@@ -78,23 +78,23 @@ module.exports.run = async function ({ api, event, args }) {
            `${global.config.prefix}spamsticker test — kiểm tra nguồn (không spam)\n` +
            `${global.config.prefix}spamsticker reload — nạp lại kho\n\n` +
            "Sticker hiệu ứng = loại bắn hiệu ứng full màn hình, gửi liên tiếp sẽ lag điện thoại.",
-      ttlKind: "sticker"
+      ttl: 60000
     }, threadId, type);
   }
 
   if (running.has(threadId)) {
-    return api.sendMessage({ msg: "⚠️ Spam sticker đang chạy trong nhóm này. Gõ /spamsticker off để dừng.", ttlKind: "sticker" }, threadId, type);
+    return api.sendMessage({ msg: "⚠️ Spam sticker đang chạy trong nhóm này. Gõ /spamsticker off để dừng.", ttl: 60000 }, threadId, type);
   }
 
   try {
-    await api.sendMessage({ msg: "⏳ Đang nạp sticker hiệu ứng từ stickers.zaloapp.com...", ttlKind: "sticker" }, threadId, type);
+    await api.sendMessage({ msg: "⏳ Đang nạp sticker hiệu ứng từ stickers.zaloapp.com...", ttl: 60000 }, threadId, type);
   } catch { /* không bắt buộc */ }
 
   let pool;
   try {
     pool = await stickerStore.ensure(api);
   } catch (error) {
-    return api.sendMessage({ msg: `❌ ${error.message}`, ttlKind: "sticker" }, threadId, type);
+    return api.sendMessage({ msg: `❌ ${error.message}`, ttl: 60000 }, threadId, type);
   }
 
   // Số lần: mặc định 100, 0 = không giới hạn (dừng bằng off)
@@ -107,13 +107,13 @@ module.exports.run = async function ({ api, event, args }) {
     if (wanted !== 0 && job.count >= times) {
       clearInterval(job.timer);
       running.delete(threadId);
-      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} sticker hiệu ứng.`, ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} sticker hiệu ứng.`, ttl: 60000 }, threadId, type);
     }
     const sticker = stickerStore.pick();
     if (!sticker) {
       clearInterval(job.timer);
       running.delete(threadId);
-      return api.sendMessage({ msg: "❌ Kho sticker rỗng — dùng /spamsticker reload.", ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: "❌ Kho sticker rỗng — dùng /spamsticker reload.", ttl: 60000 }, threadId, type);
     }
     try {
       await api.sendSticker({
@@ -126,7 +126,7 @@ module.exports.run = async function ({ api, event, args }) {
       console.error("Lỗi gửi sticker:", error.message);
       clearInterval(job.timer);
       running.delete(threadId);
-      return api.sendMessage({ msg: `❌ Lỗi khi gửi sticker (đã gửi ${job.count}/${timesText}) — Zalo có thể đang chặn.\n${error.message}`.slice(0, 300), ttlKind: "sticker" }, threadId, type);
+      return api.sendMessage({ msg: `❌ Lỗi khi gửi sticker (đã gửi ${job.count}/${timesText}) — Zalo có thể đang chặn.\n${error.message}`.slice(0, 300), ttl: 60000 }, threadId, type);
     }
   }, SEND_DELAY_MS);
 
@@ -134,6 +134,6 @@ module.exports.run = async function ({ api, event, args }) {
   return api.sendMessage({
     msg: `▶️ Bắt đầu spam ${timesText} sticker hiệu ứng (kho ${pool.length} sticker).\n` +
          `Tắt: ${global.config.prefix}spamsticker off`,
-    ttlKind: "sticker"
+    ttl: 60000
   }, threadId, type);
 };

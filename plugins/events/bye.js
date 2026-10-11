@@ -55,9 +55,8 @@ module.exports.run = async function ({ api, event, Threads, isSelf, threadType }
         { label: "Lưu ý", lines: ["🌼 Chúc bạn nhiều điều tốt đẹp ở bên ngoài"] }
       ],
       footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-      ttl: 120000
-    });
-    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, sendType);
+      });
+    await api.sendMessage({ msg: "", attachments: cardPath }, threadId, sendType);
   } catch (error) {
     console.error("Lỗi bye:", error.message);
   } finally {

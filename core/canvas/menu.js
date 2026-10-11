@@ -11,16 +11,16 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text, font } = theme;
 
-  // ===== Bố cục: 8 lệnh/trang, 2 cột =====
-  const perPage = 8;
-  const cols = 2;
+  // ===== Bố cục CŨ: 9 lệnh/trang (3 cột x 3 hàng) =====
+  const perPage = 9;
+  const cols = 3;
   const rows = Math.ceil(Math.min(commands.page.length, perPage) / cols);
-  const cardW = (W - S(36) - S(18)) / cols;
-  const cardH = S(148);
-  const gapX = S(18);
-  const gapY = S(14);
-  const headerH = S(118);
-  const footerH = S(132);
+  const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
+  const cardH = S(170);
+  const gapX = S(24);
+  const gapY = S(18);
+  const headerH = S(120);
+  const footerH = S(118);
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
@@ -62,7 +62,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   shown.forEach((cmd, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
-    const x = S(22) + col * (cardW + gapX);
+    const x = S(25) + col * (cardW + gapX);
     const y = headerH + row * (cardH + gapY);
 
     panel(ctx, x, y, cardW, cardH, S(14));
@@ -80,11 +80,11 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
 
   // ===== Footer điều hướng: 3 nút emoji =====
   const footY = H - footerH + S(16);
-  const btnW = (W - S(44) - S(20)) / 3;
-  button(ctx, S(22), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
+  const btnW = (W - S(50) - S(20)) / 3;
+  button(ctx, S(25), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
   text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(30), { size: 22, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(22) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
-  button(ctx, S(22) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
+  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
+  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
 
   text(
     ctx,

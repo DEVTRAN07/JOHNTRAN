@@ -127,19 +127,6 @@ const DEFAULTS = {
   device: {
     user_agent: ""
   },
-  // TTL tự xoá tin nhắn — hỗ trợ "60s" / "2m" / "1h" (hoặc ms thuần).
-  // core/ttl.js tự kẹp về [60s, 7 ngày] vì Zalo từ chối ngoài khoản này.
-  ttl: {
-    message: "60s",
-    error: "2m",
-    info: "2m",
-    media: "5m",
-    card: "3m",
-    menu: "5m",
-    music: "5m",
-    spam: "60s",
-    sticker: "60s"
-  },
   // Web panel quản lý bot + bot con
   panel: {
     enabled: false,
@@ -228,16 +215,6 @@ function validate(config) {
   }
   if (config.music && (!Number.isFinite(config.music.max_results) || config.music.max_results < 1)) {
     errors.push("music.max_results phải là số >= 1");
-  }
-  if (config.ttl) {
-    // Nhận cả "60s"/"2m"/"1h" lẫn số ms thuần; core/ttl.js lo phần kẹp khoản an toàn
-    const { parseDuration, MIN_TTL_MS } = require("../ttl");
-    for (const [key, value] of Object.entries(config.ttl)) {
-      const ms = parseDuration(value);
-      if (ms === null || ms < MIN_TTL_MS) {
-        errors.push(`ttl.${key} không hợp lệ — dùng "60s" | "2m" | "1h" hoặc số ms >= 60000`);
-      }
-    }
   }
   if (config.panel && config.panel.enabled && !Number.isFinite(config.panel.port)) {
     errors.push("panel.port phải là số khi panel.enabled = true");

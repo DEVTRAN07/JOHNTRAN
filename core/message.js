@@ -2,23 +2,10 @@ const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
-const ttlSystem = require("./ttl");
-const recallModule = require("./recall");
 
-const MIN_TTL = ttlSystem.MIN_TTL_MS; // Zalo chỉ tự xóa tin nhắn khi ttl >= 60s
-
-function ttlConfig() {
-  // Giữ API cũ (một số plugin gọi ttlConfig()) — nay trả về ms đã kẹp an toàn
-  const kinds = {};
-  for (const kind of ["message", "error", "media", "card", "info", "menu", "music", "spam", "sticker"]) {
-    kinds[kind] = ttlSystem.ms(kind);
-  }
-  return kinds;
-}
-
-function normalizeTtl(value, fallback = "message") {
-  return ttlSystem.normalize(value, fallback);
-}
+// TTL (tự xoá tin) nay chỉ là tuỳ chọn THÔ: lệnh nào muốn tin tự xoá thì
+// truyền ttl (ms, Zalo chỉ nhận >= 60000), không truyền thì tin nằm lại.
+// Không còn hệ thống ttlKind/config nữa — tránh rườm rà.
 
 class Reply {
   constructor(api, threadId, type, commandName, event = null) {
@@ -31,7 +18,7 @@ class Reply {
   }
 
   async text(msg, options = {}) {
-    const ttl = normalizeTtl(options.ttl, "message");
+    const ttl = options.ttl;
     if (options.plain) {
       return this.api.sendMessage({ msg, ttl }, this.threadId, this.type);
     }
@@ -39,7 +26,7 @@ class Reply {
   }
 
   async error(msg, options = {}) {
-    return this._sendCard(null, normalizeTtl(options.ttl, "error"), {
+    return this._sendCard(null, options.ttl, {
       ...options,
       theme: "error",
       title: options.title || "Đã xảy ra lỗi",
@@ -49,7 +36,7 @@ class Reply {
   }
 
   async success(msg, options = {}) {
-    return this._sendCard(null, normalizeTtl(options.ttl, "message"), {
+    return this._sendCard(null, options.ttl, {
       ...options,
       theme: "success",
       title: options.title || "Hoàn thành",
@@ -60,7 +47,7 @@ class Reply {
 
   // Thẻ thông tin / hướng dẫn (TTL dài hơn tin thường vì người ta cần đọc kỹ)
   async info(msg, options = {}) {
-    return this._sendCard(null, normalizeTtl(options.ttl, "info"), {
+    return this._sendCard(null, options.ttl, {
       ...options,
       theme: options.theme || "info",
       title: options.title || "Thông tin",
@@ -70,17 +57,17 @@ class Reply {
   }
 
   async card(spec = {}) {
-    const ttl = normalizeTtl(spec.ttl, "card");
+    const ttl = spec.ttl;
     return this._sendCard(spec, ttl, spec);
   }
 
   async media({ msg, attachments, ttl }) {
-    return this.api.sendMessage({ msg, attachments, ttl: normalizeTtl(ttl, "media") }, this.threadId, this.type);
+    return this.api.sendMessage({ msg, attachments, ttl }, this.threadId, this.type);
   }
 
   async voice({ voiceUrl, msg, ttl }) {
     if (msg) await this.text(msg, { plain: true });
-    return this.api.sendVoice({ voiceUrl, ttl: normalizeTtl(ttl, "media") }, this.threadId, this.type);
+    return this.api.sendVoice({ voiceUrl, ttl }, this.threadId, this.type);
   }
 
   async video({ videoUrl, thumbnailUrl, msg, duration, width, height, ttl }) {
@@ -91,7 +78,7 @@ class Reply {
       width,
       height,
       msg,
-      ttl: normalizeTtl(ttl, "media")
+      ttl
     }, this.threadId, this.type);
   }
 
@@ -164,40 +151,19 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetThreadId = threadId || tid;
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
-
-    // replace: "<key>" → thu hồi tin cũ cùng khung rồi mới gửi tin mới
-    // (menu: next/prev/số/out xoá trang cũ; nhạc: chọn bài xong xoá lưới kết quả)
-    const replaceKey = content.replace;
-    if (replaceKey) {
-      const key = replaceKey === true ? `cmd:${commandName}` : String(replaceKey);
-      delete content.replace;
-      if (content.plain) delete content.plain;
-      const ttlKind = content.ttlKind || (content.attachments ? "media" : "message");
-      delete content.ttlKind;
-      content.ttl = normalizeTtl(content.ttl, ttlKind);
-      await recallModule.recall(api, targetThreadId, key, targetType);
-      const response = await api.sendMessage(content, targetThreadId, targetType);
-      recallModule.remember(targetThreadId, key, response);
-      return response;
-    }
-
-    const ttlKind = content.ttlKind || (content.attachments ? "media" : "message");
-    delete content.ttlKind;
+    delete content.ttlKind;   // không còn cơ chế ttl theo loại tin
+    delete content.replace;    // không còn thu hồi tin cũ
     if (content.plain) delete content.plain;
-    content.ttl = normalizeTtl(content.ttl, ttlKind);
     return api.sendMessage(content, targetThreadId, targetType);
   });
 
   defineWrapped(wrapped, "sendVoice", async (payload, tid, ty) => {
     const content = typeof payload === "string" ? { voiceUrl: payload } : { ...payload };
-    content.ttl = normalizeTtl(content.ttl, "media");
     return api.sendVoice(content, threadId || tid, type || ty);
   });
 
   defineWrapped(wrapped, "sendVideo", async (payload, tid, ty) => {
-    const content = { ...payload };
-    content.ttl = normalizeTtl(content.ttl, "media");
-    return api.sendVideo(content, threadId || tid, type || ty);
+    return api.sendVideo({ ...payload }, threadId || tid, type || ty);
   });
 
   // ===== Cache tầng API Zalo: giảm gọi API, phản hồi nhanh hơn =====
@@ -220,4 +186,4 @@ function wrapApi(api, threadId, type, commandName, event = null) {
   return wrapped;
 }
 
-module.exports = { Reply, wrapApi, normalizeTtl, ttlConfig, MIN_TTL };
+module.exports = { Reply, wrapApi };

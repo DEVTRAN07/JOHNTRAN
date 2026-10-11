@@ -2,7 +2,7 @@ const fs = require("fs");
 const logger = require("../../utils/logger");
 const menuCard = require("../../core/canvas/menu");
 
-const PAGE_SIZE = 8; // khớp canvas 8 lệnh/trang
+const PAGE_SIZE = 9; // khớp canvas 3 cột x 3 hàng
 const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 
 module.exports.config = {
@@ -59,11 +59,10 @@ async function navigate({ api, event, Threads, action, senderId }) {
     if (action === "out" || action === "exit" || action === "close") {
         delete threadData.menu_page;
         await Threads.setData(threadId, threadData);
-        await require("../../core/recall").recall(api, threadId, "menu", type);
+        
         return api.sendMessage({
             msg: "✅ Đã đóng menu. Gõ /menu để mở lại.",
-            ttl: 30000
-        }, threadId, type);
+            }, threadId, type);
     }
 
     const current = Number(threadData.menu_page) || 1;
@@ -104,7 +103,7 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
             commands: { total: commands.length, page: slice },
             uptimeText: getUptimeText()
         });
-        await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "menu", replace: "menu" }, threadId, type);
+        await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
     } catch (error) {
         console.error("Lỗi render menu:", error.message);
         await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
@@ -143,8 +142,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     // Không có gì đang mở → nhắc 1 câu ngắn (không tự mở để khỏi nhiễu nhóm)
     return api.sendMessage({
         msg: `📋 Gõ ${global.config.prefix}menu trước đã, rồi gõ next / prev / out để điều hướng.`,
-        ttl: 60000
-    }, threadId, type);
+        }, threadId, type);
 };
 
 module.exports.run = async function ({ api, event, args, Threads, reply }) {
@@ -199,8 +197,7 @@ function showTextMenu(commands, page, totalPages, prefix, api, threadId, type) {
         .map(([cat, names]) => `【 ${cat.toUpperCase()} 】\n${names.map((n) => `${prefix}${n}`).join(" • ")}`)
         .join("\n\n");
     return api.sendMessage({
-        msg: `╭─「 ${global.config.name_bot} 」\n│ 🔖 Trang ${page}/${totalPages} • ${commands.length} lệnh\n${sections}\n╰── ${prefix}menu <trang|next|prev|out>`,
-        ttlKind: "menu"
+        msg: `╭─「 ${global.config.name_bot} 」\n│ 🔖 Trang ${page}/${totalPages} • ${commands.length} lệnh\n${sections}\n╰── ${prefix}menu <trang|next|prev|out>`
     }, threadId, type);
 }
 
@@ -211,19 +208,17 @@ async function showCommandInfo(argType, senderId, prefix, api, threadId, type) {
     if (!command) {
         const checker = stringSimilarity.findBestMatch(argType, Array.from(global.client.commands.keys()));
         if (checker.bestMatch.rating < 0.5) {
-            return api.sendMessage({ msg: `❌ Không tìm thấy lệnh '${argType}'`, ttl: 30000 }, threadId, type);
+            return api.sendMessage({ msg: `❌ Không tìm thấy lệnh '${argType}'`, }, threadId, type);
         }
         const match = global.client.commands.get(checker.bestMatch.target);
         return api.sendMessage({
             msg: `🔍 Có phải bạn muốn dùng lệnh '${checker.bestMatch.target}'?\n\n` + formatCommandInfo(match.config, prefix),
-            ttl: 60000
-        }, threadId, type);
+            }, threadId, type);
     }
 
     return api.sendMessage({
         msg: `╭─「 ${command.config.name.toUpperCase()} 」\n` + formatCommandInfo(command.config, prefix),
-        ttl: 60000
-    }, threadId, type);
+        }, threadId, type);
 }
 
 function formatCommandInfo(config, prefix) {
