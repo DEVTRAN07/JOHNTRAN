@@ -26,8 +26,10 @@ class SupabaseStore {
     this.retryQueue = [];
     this.syncing = null;
     this.lastSyncAt = 0;
+    this.syncError = null;
     this.readyPromise = this.sync().catch((error) => {
       // Không nạp được lần đầu vẫn cho bot chạy (sẽ thử lại theo chu kỳ)
+      this.syncError = error.message;
       console.log(`[supabase] Lần đồng bộ đầu thất bại: ${error.message}`);
     });
     this.interval = setInterval(() => {
@@ -38,7 +40,12 @@ class SupabaseStore {
   }
 
   async ready() {
-    return this.readyPromise;
+    await this.readyPromise;
+    // Chưa đồng bộ được lần nào → báo lỗi để caller biết (URL/key sai, schema thiếu...)
+    if (this.syncError && this.lastSyncAt === 0) {
+      throw new Error(this.syncError);
+    }
+    this.syncError = null;
   }
 
   tableFor(name) {
