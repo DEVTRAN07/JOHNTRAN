@@ -81,14 +81,30 @@ function toTrack(item) {
     thumbnail: (item.artwork_url || "").replace("-large.", "-t500x500."),
     source: SOURCE,
     sourceUrl: item.permalink_url,
-    plays: item.playback_count || 0
+    plays: item.playback_count || 0,
+    likes: item.likes_count || item.favoritings_count || 0,
+    // preview 30s: bài Go+/chặn vẫn nghe được đoạn đầu
+    previewUrl: item.media?.transcodings?.find((t) => t.format?.protocol === "hls")?.url || ""
   });
 }
 
+// Điểm phổ biến: lượt nghe + like (like nặng hơn vì chứng tỏ bài hay)
+function popularity(item) {
+  return (item.playback_count || 0) + (item.likes_count || item.favoritings_count || 0) * 3;
+}
+
+// Tìm nhạc: lấy NHIỀU rồi xếp bài nhiều người nghe/thích nhất lên đầu
+// (SoundCloud không sort được phía server nên sort phía bot).
 async function search(query, limit) {
-  const data = await apiGet("/search/tracks", { q: query, limit: Math.max(limit, 10) });
+  const wanted = Math.max(Number(limit) || 20, 20);
+  const data = await apiGet("/search/tracks", { q: query, limit: Math.max(wanted, 40) });
   const collection = data?.collection || [];
-  return collection.slice(0, limit).map(toTrack);
+  const tracks = collection
+    .filter((item) => item && item.id && !(item.policy || "").includes("BLOCK"))
+    .sort((a, b) => popularity(b) - popularity(a))
+    .slice(0, wanted)
+    .map(toTrack);
+  return tracks;
 }
 
 async function resolve(track) {

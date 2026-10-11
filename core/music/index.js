@@ -24,7 +24,8 @@ function listProviders() {
 
 async function search(providerName, query, limit) {
   const provider = getProvider(providerName);
-  const maxResults = limit || global.config?.music?.max_results || 5;
+  // Mặc định 40 bài — đủ nhiều để phân trang và ưu tiên bài thịnh hành
+  const maxResults = limit || global.config?.music?.max_results || 40;
   const tracks = await provider.search(query, maxResults);
   if (!Array.isArray(tracks) || tracks.length === 0) {
     const error = new Error(`Không tìm thấy bài hát nào cho '${query}' trên ${provider.label}`);

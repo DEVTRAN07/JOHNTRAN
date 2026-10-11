@@ -138,10 +138,20 @@ async function runCmd(name, args = [], eventOverride = {}) {
     record(`Args /${name} ${args.join(" ")}`.trim(), isNet ? true : r.ok, isNet ? `network — ${r.detail}` : r.detail);
   }
 
-  // 6. Không còn event module (bot thuần lệnh — mọi hành vi qua lệnh /xxx)
+  // 6. Bộ sự kiện mới (welcome/bye/rank/guard) — mặc định TẮT, bật bằng /events <tên> on
   {
-    const size = global.client.events ? global.client.events.size : 0;
-    record("Không còn event tự động", size === 0, size === 0 ? "bot thuần lệnh" : `còn ${size} event module`);
+    const names = [...global.client.events.keys()].sort();
+    const expected = ["bye", "guard", "rank", "welcome"];
+    record("Nạp sự kiện", expected.every((n) => names.includes(n)), `event: ${names.join(", ") || "không có"}`);
+    // Không event nào chạy khi chưa bật (tránh bot tự động quấy rầy nhóm)
+    let leaked = null;
+    for (const [name, mod] of global.client.events) {
+      try {
+        await mod.run({ api: { sendMessage: async () => { leaked = name; return {}; }, addReaction: async () => {} }, event: { threadId: "GT", type: 1, data: { uidFrom: "1", msgId: "t", cliMsgId: "t", content: "xin chào cả nhà" } }, Threads, isSelf: false });
+        void mod;
+      } catch { /* event lỗi cũng không được crash test */ }
+    }
+    record("Sự kiện tắt = im lặng", !leaked, leaked ? `${leaked} tự chạy khi chưa bật!` : "không sự kiện nào tự chạy");
   }
 
   // 7. handleEvent của commands (anti — xử lý undo/link trong nhóm)

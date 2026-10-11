@@ -1,0 +1,19 @@
+# TỪ CẤM cho event guard (/events guard on) — mỗi dòng 1 từ/cụm.
+# Bot sẽ reaction 🚫 + xoá... (không xoá được thì cảnh cáo) khi tin chứa các từ này.
+# Dòng bắt đầu bằng # là chú thích.
+lừa đảo
+đánh bạc
+cá độ
+nạp thẻ trúng thưởng
+làm tiền online
+vay nhanh
+lãi suất thấp
+số đề
+bán hàng cấm
+mua bán ma tuý
+xxx miễn phí
+clip nóng
+link lạ
+tặng vòng quay
+miễn phí 100%
+inbox ngay

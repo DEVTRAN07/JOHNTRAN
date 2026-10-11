@@ -1,337 +1,160 @@
-// ===== Render thẻ nhạc theo thiết kế ᴶᴼᴴᴺ ᵀᴿᴬᴺ =====
-// 3 loại: lưới kết quả tìm kiếm, thẻ NOW PLAYING, thẻ player (waveform)
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { createCanvas, registerFont, loadImage } = require("canvas");
+// ===== Thẻ nhạc — dùng theme chung (core/canvas/theme.js) =====
+const theme = require("./theme");
 
-let fontsReady = false;
-
-function initFonts() {
-  if (fontsReady) return;
-  fontsReady = true;
-  const register = (p, family) => { try { if (fs.existsSync(p)) registerFont(p, { family }); } catch { /* bỏ qua */ } };
-  const platform = process.platform;
-  if (platform === "darwin") {
-    register("/System/Library/Fonts/Supplemental/Arial.ttf", "Arial");
-    register("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "Arial-Bold");
-  } else if (platform === "win32") {
-    register("C:\\Windows\\Fonts\\arial.ttf", "Arial");
-    register("C:\\Windows\\Fonts\\arialbd.ttf", "Arial-Bold");
-  } else {
-    register("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "Arial");
-    register("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "Arial-Bold");
-  }
+// Số lượt nghe gọn: 12345 → 12K, 1234567 → 1.2M
+function shortPlays(n) {
+  const value = Number(n) || 0;
+  if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
+  return String(value);
 }
 
 function formatDuration(seconds) {
-  const m = Math.floor((seconds || 0) / 60);
-  const s = Math.floor((seconds || 0) % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
+  const total = Number(seconds) || 0;
+  return `${Math.floor(total / 60)}:${String(Math.floor(total % 60)).padStart(2, "0")}`;
 }
 
-function formatPlays(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
-  return String(n);
-}
-
-const BADGE_COLORS = ["#22c55e", "#f97316", "#ef4444", "#a855f7", "#111827", "#ec4899", "#06b6d4", "#eab308"];
-
-function rr(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function truncate(ctx, text, maxWidth) {
-  let t = String(text ?? "");
-  if (ctx.measureText(t).width <= maxWidth) return t;
-  while (t.length > 1 && ctx.measureText(t + "…").width > maxWidth) t = t.slice(0, -1);
-  return t + "…";
-}
-
-async function loadThumb(url) {
+async function fetchThumb(url) {
   if (!url) return null;
   try {
-    const { buffer } = await require("../http").getBuffer(url, { timeout: 12000, retries: 1 });
-    return await loadImage(buffer);
+    const { buffer } = await require("../http").getBuffer(url, { timeout: 10000, retries: 1 });
+    return await require("canvas").loadImage(buffer);
   } catch {
     return null;
   }
 }
 
-function drawThumbFill(ctx, img, x, y, w, h, radius) {
-  ctx.save();
-  rr(ctx, x, y, w, h, radius);
-  ctx.clip();
-  if (img) {
-    const scale = Math.max(w / img.width, h / img.height);
-    const dw = img.width * scale;
-    const dh = img.height * scale;
-    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-  } else {
-    ctx.fillStyle = "#1f2937";
-    ctx.fillRect(x, y, w, h);
-  }
-  ctx.restore();
-}
+// ===== Lưới kết quả tìm kiếm =====
+async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source }) {
+  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 1180);
+  const W = theme.WIDTH;
+  const { PALETTE, panel, button, text } = theme;
 
-function drawEqualizer(ctx, x, y, width, height, seed) {
-  const bars = 24;
-  const gap = 2;
-  const bw = (width - gap * (bars - 1)) / bars;
-  for (let i = 0; i < bars; i++) {
-    const pseudo = Math.abs(Math.sin(i * 12.9898 + seed) * 43758.5453) % 1;
-    const h = Math.max(3, pseudo * height);
-    ctx.fillStyle = BADGE_COLORS[i % BADGE_COLORS.length];
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(x + i * (bw + gap), y + (height - h), bw, h);
-  }
-  ctx.globalAlpha = 1;
-}
+  await theme.paintBackground(ctx, W, 1180);
 
-/* ================= LƯỚI KẾT QUẢ TÌM KIẾM ================= */
-async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source } = {}) {
-  initFonts();
+  text(ctx, "🔎", 40, 74, { font: "40px JT", color: PALETTE.accent });
+  text(ctx, `Kết quả: ${theme.truncate(ctx, query, W - 500)}`, W / 2, 74, {
+    font: "bold 48px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 320
+  });
+  text(
+    ctx,
+    `🎵 ${tracks.length} bài • 📡 ${source || "SoundCloud"} • 🔥 xếp theo lượt nghe & lượt thích`,
+    W / 2, 116,
+    { font: "21px JT", color: PALETTE.ink2, align: "center" }
+  );
+
   const cols = 4;
-  const rows = Math.ceil(tracks.length / cols);
-  const cardW = 260;
-  const cardH = 235;
-  const gap = 18;
-  const padX = 40;
-  const headerH = 100;
-  const W = padX * 2 + cols * cardW + (cols - 1) * gap;
-  const H = headerH + rows * (cardH + gap) + 40;
+  const cardW = 286;
+  const cardH = 330;
+  const gapX = 22;
+  const gapY = 20;
+  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
+  const top = 150;
 
-  const canvas = createCanvas(W, H);
-  const ctx = canvas.getContext("2d");
+  const perRow = tracks.slice(0, 8);
+  for (let index = 0; index < perRow.length; index++) {
+    const track = perRow[index];
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = padX + col * (cardW + gapX);
+    const y = top + row * (cardH + gapY);
 
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#0a1014");
-  bg.addColorStop(1, "#0d151b");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+    panel(ctx, x, y, cardW, cardH);
 
-  // header
-  ctx.fillStyle = "#22d3ee";
-  ctx.fillRect(padX, 34, 16, 16);
-  ctx.font = "bold 30px Arial-Bold";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(`Kết quả: "${truncate(ctx, query, 500)}"`, padX + 30, 50);
-  ctx.font = "19px Arial";
-  ctx.fillStyle = "#8b98ad";
-  ctx.fillText(`Trang ${page}/${totalPages} • Nhấn số để tải • 'next' trang sau`, padX + 30, 82);
+    // ảnh bìa (vuông)
+    const cover = await fetchThumb(track.thumbnail);
+    const coverSize = cardW - 40;
+    if (cover) {
+      ctx.save();
+      theme.roundRect(ctx, x + 20, y + 18, coverSize, coverSize, 12);
+      ctx.clip();
+      ctx.drawImage(cover, x + 20, y + 18, coverSize, coverSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(56, 189, 248, .12)";
+      theme.roundRect(ctx, x + 20, y + 18, coverSize, coverSize, 12);
+      ctx.fill();
+      text(ctx, "🎵", x + 20 + coverSize / 2, y + 18 + coverSize / 2 + 14, { font: "40px JT", color: PALETTE.accent, align: "center" });
+    }
 
-  for (let i = 0; i < tracks.length; i++) {
-    const track = tracks[i];
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = padX + col * (cardW + gap);
-    const y = headerH + row * (cardH + gap);
-
-    ctx.fillStyle = "#101a20";
-    rr(ctx, x, y, cardW, cardH, 14);
+    // số thứ tự (nổi trên ảnh bìa)
+    ctx.fillStyle = "rgba(7, 10, 20, .8)";
+    theme.roundRect(ctx, x + 30, y + 28, 46, 34, 8);
     ctx.fill();
-    ctx.strokeStyle = "#1fd6a0";
-    ctx.lineWidth = 1.5;
+    text(ctx, String(index + 1), x + 53, y + 53, { font: "bold 22px JT-Bold", color: PALETTE.accent, align: "center" });
+
+    // tên bài
+    text(ctx, track.title, x + 20, y + 250, { font: "bold 20px JT-Bold", color: PALETTE.ink, maxWidth: cardW - 40 });
+    // ca sĩ + thời lượng
+    text(ctx, `${track.artist} • ${formatDuration(track.duration)}`, x + 20, y + 280, {
+      font: "17px JT", color: PALETTE.mute, maxWidth: cardW - 40
+    });
+    // lượt nghe + like
+    text(
+      ctx,
+      `👤 ${shortPlays(track.plays)} nghe • ❤️ ${shortPlays(track.likes)}`,
+      x + 20, y + 308,
+      { font: "bold 16px JT-Bold", color: PALETTE.green }
+    );
+  }
+
+  // ===== Footer điều hướng =====
+  const footY = 1080;
+  button(ctx, 40, footY, 300, 52, "◀  PREV", PALETTE.gold);
+  text(ctx, `Trang ${page} / ${totalPages}`, W / 2, footY + 34, { font: "bold 28px JT-Bold", color: PALETTE.ink, align: "center" });
+  button(ctx, W - 340, footY, 300, 52, "NEXT  ▶", PALETTE.green);
+  text(
+    ctx,
+    `Gõ ${global.config.prefix}scl <số> để tải bài • next / prev / out (không cần prefix)`,
+    W / 2, footY + 92,
+    { font: "19px JT", color: PALETTE.ink2, align: "center" }
+  );
+
+  return theme.save(canvas, "music_grid");
+}
+
+// ===== Thẻ ĐANG PHÁT =====
+async function renderNowPlaying(track, sourceLabel) {
+  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 700);
+  const W = theme.WIDTH;
+  const { PALETTE, panel, text } = theme;
+
+  await theme.paintBackground(ctx, W, 700);
+
+  text(ctx, "🎶", 44, 80, { font: "42px JT", color: PALETTE.accent });
+  text(ctx, "ĐANG PHÁT", W / 2, 80, { font: "bold 46px JT-Bold", color: PALETTE.ink, align: "center" });
+
+  const cover = await fetchThumb(track.thumbnail);
+  const coverSize = 420;
+  const cx = 80;
+  const cy = 140;
+  if (cover) {
+    ctx.save();
+    theme.roundRect(ctx, cx, cy, coverSize, coverSize, 20);
+    ctx.clip();
+    ctx.drawImage(cover, cx, cy, coverSize, coverSize);
+    ctx.restore();
+    ctx.strokeStyle = PALETTE.accent;
+    ctx.lineWidth = 3;
+    theme.roundRect(ctx, cx, cy, coverSize, coverSize, 20);
     ctx.stroke();
-
-    // thumbnail
-    const thumbH = 130;
-    const img = await loadThumb(track.thumbnail);
-    drawThumbFill(ctx, img, x + 8, y + 8, cardW - 16, thumbH, 10);
-
-    // badge số thứ tự
-    ctx.fillStyle = BADGE_COLORS[i % BADGE_COLORS.length];
-    ctx.beginPath();
-    ctx.arc(x + 26, y + 26, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 18px Arial-Bold";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(String(i + 1), x + 26, y + 26);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-
-    // tiêu đề
-    ctx.font = "bold 17px Arial-Bold";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(truncate(ctx, track.title, cardW - 24), x + 12, y + thumbH + 34);
-
-    // dòng thông tin
-    ctx.font = "14px Arial";
-    ctx.fillStyle = "#8b98ad";
-    ctx.fillText(`♫ ${truncate(ctx, track.artist, cardW - 60)}`, x + 12, y + thumbH + 56);
-    ctx.fillStyle = "#f59e0b";
-    ctx.fillText(`▣ ${formatDuration(track.duration)}`, x + 12, y + thumbH + 76);
-
-    // equalizer
-    drawEqualizer(ctx, x + 12, y + thumbH + 88, cardW - 24, 16, i + 1);
+  } else {
+    panel(ctx, cx, cy, coverSize, coverSize, 20);
+    text(ctx, "🎵", cx + coverSize / 2, cy + coverSize / 2 + 20, { font: "80px JT", color: PALETTE.accent, align: "center" });
   }
 
-  const filePath = path.join(os.tmpdir(), `jt_grid_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
-  fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
-  return filePath;
+  const infoX = cx + coverSize + 60;
+  const infoW = W - infoX - 60;
+  text(ctx, track.title, infoX, cy + 70, { font: "bold 40px JT-Bold", color: PALETTE.ink, maxWidth: infoW });
+  text(ctx, `♫ ${track.artist}`, infoX, cy + 130, { font: "26px JT", color: PALETTE.ink2, maxWidth: infoW });
+  text(ctx, `📡 ${sourceLabel || track.source}`, infoX, cy + 190, { font: "22px JT", color: PALETTE.accent2 });
+  text(ctx, `⏱ ${formatDuration(track.duration)}`, infoX, cy + 240, { font: "22px JT", color: PALETTE.mute });
+  if (track.plays) text(ctx, `👤 ${shortPlays(track.plays)} lượt nghe • ❤️ ${shortPlays(track.likes)}`, infoX, cy + 290, { font: "bold 22px JT-Bold", color: PALETTE.green });
+
+  text(ctx, "➜ Đang tải file nhạc, vui lòng chờ...", W / 2, 660, { font: "20px JT", color: PALETTE.ink2, align: "center" });
+
+  return theme.save(canvas, "music_now");
 }
 
-/* ================= THẺ NOW PLAYING ================= */
-async function renderNowPlaying(track, source) {
-  initFonts();
-  const W = 1160;
-  const H = 420;
-  const canvas = createCanvas(W, H);
-  const ctx = canvas.getContext("2d");
-
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, "#0b1220");
-  bg.addColorStop(1, "#101a2e");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  const sourceLabel = String(source || track.source || "MUSIC").toUpperCase();
-
-  // ảnh bìa
-  const img = await loadThumb(track.thumbnail);
-  const artSize = 300;
-  drawThumbFill(ctx, img, 50, (H - artSize) / 2, artSize, artSize, 20);
-
-  // nhãn nguồn góc phải
-  ctx.font = "bold 22px Arial-Bold";
-  const labelW = ctx.measureText(sourceLabel).width + 44;
-  ctx.fillStyle = "rgba(255,255,255,.08)";
-  rr(ctx, W - labelW - 40, 44, labelW, 44, 10);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.fillText(sourceLabel, W - labelW / 2 - 40, 71);
-  ctx.textAlign = "left";
-
-  // tiêu đề
-  ctx.font = "bold 56px Arial-Bold";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(truncate(ctx, track.title, 640), 400, 150);
-
-  // nghệ sĩ
-  ctx.font = "34px Arial";
-  ctx.fillStyle = "#f97316";
-  ctx.fillText(truncate(ctx, track.artist, 560), 400, 210);
-
-  // now playing
-  ctx.font = "bold 24px Arial-Bold";
-  ctx.fillStyle = "#f97316";
-  ctx.fillText("NOW PLAYING", 400, 272);
-
-  // tổng thời lượng bên phải
-  ctx.font = "22px Arial";
-  ctx.fillStyle = "#94a3b8";
-  ctx.textAlign = "right";
-  ctx.fillText(formatDuration(track.duration), W - 40, 272);
-  ctx.textAlign = "left";
-
-  // thanh tiến trình
-  const barY = 320;
-  const barX = 400;
-  const barW = W - 40 - barX;
-  ctx.fillStyle = "rgba(255,255,255,.15)";
-  rr(ctx, barX, barY, barW, 6, 3);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(barX, barY, barW, 6);
-  ctx.beginPath();
-  ctx.arc(barX, barY + 3, 9, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.font = "18px Arial";
-  ctx.fillStyle = "#94a3b8";
-  ctx.fillText("0:00", barX, barY + 34);
-
-  // chân thẻ
-  ctx.font = "bold 20px Arial-Bold";
-  ctx.fillStyle = "#f97316";
-  ctx.fillText("♫", barX, barY + 74);
-  ctx.font = "19px Arial";
-  ctx.fillStyle = "#cbd5e1";
-  ctx.fillText(`AUTODOWN • ${sourceLabel} • VOICE`, barX + 30, barY + 74);
-
-  const filePath = path.join(os.tmpdir(), `jt_playing_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
-  fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
-  return filePath;
-}
-
-/* ================= THẺ PLAYER (waveform) ================= */
-async function renderPlayerCard(track, source, plays) {
-  initFonts();
-  const W = 1160;
-  const H = 300;
-  const canvas = createCanvas(W, H);
-  const ctx = canvas.getContext("2d");
-
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, "#191527");
-  bg.addColorStop(1, "#221d38");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // viền hồng
-  ctx.strokeStyle = "#ec4899";
-  ctx.lineWidth = 3;
-  rr(ctx, 10, 10, W - 20, H - 20, 24);
-  ctx.stroke();
-
-  const sourceLabel = String(source || track.source || "MUSIC").toUpperCase();
-
-  // ảnh bìa
-  const img = await loadThumb(track.thumbnail);
-  const artSize = 220;
-  drawThumbFill(ctx, img, 40, (H - artSize) / 2, artSize, artSize, 16);
-
-  // nguồn
-  ctx.font = "20px Arial";
-  ctx.fillStyle = "#f97316";
-  ctx.fillText("▣ " + sourceLabel, 300, 58);
-
-  // tiêu đề
-  ctx.font = "bold 44px Arial-Bold";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(truncate(ctx, track.title, 700), 300, 122);
-
-  // nghệ sĩ
-  ctx.font = "26px Arial";
-  ctx.fillStyle = "#e879f9";
-  ctx.fillText(`♪ ${truncate(ctx, track.artist, 500)}`, 300, 168);
-
-  // thông tin: thời lượng + lượt nghe
-  ctx.font = "19px Arial";
-  ctx.fillStyle = "#a1a1aa";
-  ctx.fillText(`▣ ${formatDuration(track.duration)}`, 300, 208);
-  if (plays !== undefined && plays !== null) {
-    ctx.fillText(`▣ ${formatPlays(plays)}`, 430, 208);
-  }
-
-  // waveform
-  ctx.fillStyle = "#f472b6";
-  const bars = 40;
-  const barW = 8;
-  const gap = 4;
-  const startX = 300;
-  const y = 240;
-  for (let i = 0; i < bars; i++) {
-    const pseudo = Math.abs(Math.sin(i * 78.233 + Math.cos(i) * 43.5455) * 43758.5453) % 1;
-    const h = 10 + pseudo * 30;
-    ctx.globalAlpha = 0.5 + pseudo * 0.5;
-    ctx.fillRect(startX + i * (barW + gap), y + (40 - h) / 2, barW, h);
-  }
-  ctx.globalAlpha = 1;
-
-  const filePath = path.join(os.tmpdir(), `jt_player_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
-  fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
-  return filePath;
-}
-
-module.exports = { renderSearchGrid, renderNowPlaying, renderPlayerCard, formatDuration, formatPlays };
+module.exports = { renderSearchGrid, renderNowPlaying };

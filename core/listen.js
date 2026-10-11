@@ -86,15 +86,19 @@ function startListening(api) {
       return;
     }
 
-    // Gõ số trần (vd "2") → chọn bài trong kết quả tìm nhạc gần nhất, không cần /zing 2
-    if (canRunCommand && /^\d{1,2}$/.test(content)) {
+    // Gõ "next"/"prev"/"out" hoặc số trần (vd "2") → điều hướng kết quả nhạc
+    // gần nhất, không cần /scl ... Nhạc được ưu tiên trước menu phân trang.
+    const MUSIC_NAV = ["next", "prev", "previous", "back", "out", "exit", "close"];
+    if (canRunCommand && (MUSIC_NAV.includes(content) || /^\d{1,2}$/.test(content))) {
       const music = require("./music");
       const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
       if (pending) {
         const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
         Promise.resolve()
-          .then(() => require("./music/command").select(pending.providerName, Number(content), { api: wrapped, event, reply: wrapped.__reply }))
-          .catch((err) => logger.log(`Lỗi chọn bài: ${err.message}`, "error"));
+          .then(() => require("./music/command").runMusic(pending.providerName, {
+            api: wrapped, event, args: MUSIC_NAV.includes(content) ? [content] : [String(Number(content))], reply: wrapped.__reply
+          }))
+          .catch((err) => logger.log(`Lỗi điều hướng nhạc: ${err.message}`, "error"));
         return;
       }
     }

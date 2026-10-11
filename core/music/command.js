@@ -14,14 +14,15 @@ function usage(provider, reply) {
   return reply.card({
     theme: "music",
     title: `Nhạc • ${provider.label}`,
-    subtitle: "Tìm kiếm và tải nhạc nhanh",
+    subtitle: "Bài nhiều người nghe nhất lên đầu",
     rows: [{
       icon: "list",
       label: "Cách dùng",
       lines: [
         `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
         `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
-        `${global.config.prefix}${provider.name} next — trang kết quả sau`
+        `${global.config.prefix}${provider.name} next | prev — chuyển trang`,
+        `${global.config.prefix}${provider.name} out — đóng danh sách`
       ]
     }],
     footer: models.BRAND
@@ -52,10 +53,10 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
     // Thẻ NOW PLAYING
     try {
       cardPath = await cards.renderNowPlaying(track, provider.label.toUpperCase());
-      await api.sendMessage({ msg: "", attachments: cardPath, ttl: 120000 }, threadId, type);
+      await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "music" }, threadId, type);
     } catch { /* hỏng thẻ thì thôi */ }
 
-    await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
+    await api.sendVoice({ voiceUrl, ttlKind: "media" }, threadId, type);
     await reply.done();
   } catch (error) {
     logger.log(`[music:${providerName}] ${error.message}`, "error");
@@ -80,7 +81,7 @@ async function showResults(api, threadId, type, provider, query, tracks, page) {
   let gridPath = null;
   try {
     gridPath = await cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() });
-    await api.sendMessage({ msg: "", attachments: gridPath, ttl: 120000 }, threadId, type);
+    await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "music" }, threadId, type);
     if (fs.existsSync(gridPath)) fs.unlinkSync(gridPath);
   } catch {
     // Fallback: thẻ text nếu canvas lỗi
@@ -123,16 +124,29 @@ async function runMusic(providerName, { api, event, args, reply }) {
     return sendTrack(reply, threadId, type, track, providerName, api, options.quality);
   }
 
-  // Trang tiếp theo
-  if ((args[0] || "").toLowerCase() === "next") {
+  // Điều hướng kết quả: next / prev / out
+  const nav = (args[0] || "").toLowerCase();
+  if (["next", "prev", "previous", "back", "out", "exit", "close"].includes(nav)) {
     const pending = music.getPending(key);
     if (!pending || pending.providerName !== providerName) {
-      return reply.error(`Bạn chưa tìm kiếm trên ${provider.label} gần đây.`);
+      return reply.error(`Bạn chưa tìm nhạc trên ${provider.label}. Gõ ${global.config.prefix}${provider.name} <từ khóa> trước.`);
     }
-    const nextPage = (pending.page || 1) + 1;
-    const pageTracks = await music.search(providerName, pending.query, 40);
-    music.setPending(key, providerName, pageTracks, pending.query, nextPage);
-    return showResults(api, threadId, type, provider, pending.query, pageTracks, nextPage);
+
+    // Thoát: xoá danh sách đang chọn
+    if (["out", "exit", "close"].includes(nav)) {
+      music.clearPending(key);
+      return reply.success(`Đã đóng danh sách nhạc "${pending.query || ""}". Gõ ${global.config.prefix}${provider.name} <từ khóa> để tìm lại.`);
+    }
+
+    const perPage = 8;
+    const totalPages = Math.max(1, Math.ceil(pending.tracks.length / perPage));
+    const current = pending.page || 1;
+    const page = nav === "next"
+      ? (current >= totalPages ? 1 : current + 1)
+      : (current <= 1 ? totalPages : current - 1);
+
+    music.setPending(key, providerName, pending.tracks, pending.query, page);
+    return showResults(api, threadId, type, provider, pending.query, pending.tracks, page);
   }
 
   if (!options.queryArgs.length) {

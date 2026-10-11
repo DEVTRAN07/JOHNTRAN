@@ -182,7 +182,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
           await api.sendMessage({
             msg: msg,
             ...(hasGif ? { attachments: filePath } : {}),
-            ttl: 300000
+            ttlKind: "media"
           }, Thread.threadId, ThreadType.Group);
           sentCount++;
         } catch (err) {

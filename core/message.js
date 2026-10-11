@@ -1,25 +1,22 @@
-const canvasLib = require("./canvas");
 const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
+const logger = require("../utils/logger");
+const ttlSystem = require("./ttl");
 
-const MIN_TTL = 60000; // Zalo chỉ tự xóa tin nhắn khi ttl >= 60s
+const MIN_TTL = ttlSystem.MIN_TTL_MS; // Zalo chỉ tự xóa tin nhắn khi ttl >= 60s
 
 function ttlConfig() {
-  const ttl = global.config?.ttl || {};
-  return {
-    message: ttl.message || MIN_TTL,
-    error: ttl.error || MIN_TTL,
-    media: ttl.media || MIN_TTL,
-    card: ttl.card || 120000
-  };
+  // Giữ API cũ (một số plugin gọi ttlConfig()) — nay trả về ms đã kẹp an toàn
+  const kinds = {};
+  for (const kind of ["message", "error", "media", "card", "info", "menu", "music", "spam", "sticker"]) {
+    kinds[kind] = ttlSystem.ms(kind);
+  }
+  return kinds;
 }
 
 function normalizeTtl(value, fallback = "message") {
-  const config = ttlConfig();
-  const base = config[fallback] || MIN_TTL;
-  if (!Number.isFinite(Number(value)) || Number(value) <= 0) return base;
-  return Math.max(Number(value), MIN_TTL);
+  return ttlSystem.normalize(value, fallback);
 }
 
 class Reply {
@@ -29,6 +26,7 @@ class Reply {
     this.type = type;
     this.commandName = commandName || "bot";
     this.event = event;
+    this.reacted = false; // đã thả reaction cho tin này → handleCommand không thả lại
   }
 
   async text(msg, options = {}) {
@@ -54,6 +52,17 @@ class Reply {
       ...options,
       theme: "success",
       title: options.title || "Hoàn thành",
+      subtitle: options.subtitle || msg,
+      rows: options.rows
+    });
+  }
+
+  // Thẻ thông tin / hướng dẫn (TTL dài hơn tin thường vì người ta cần đọc kỹ)
+  async info(msg, options = {}) {
+    return this._sendCard(null, normalizeTtl(options.ttl, "info"), {
+      ...options,
+      theme: options.theme || "info",
+      title: options.title || "Thông tin",
       subtitle: options.subtitle || msg,
       rows: options.rows
     });
@@ -85,8 +94,9 @@ class Reply {
     }, this.threadId, this.type);
   }
 
-  // ===== Reaction trạng thái: 🙏 (đang xử lý) → ✅ (xong) / 😢 (lỗi) =====
+  // ===== Reaction trạng thái: 👀 (đang xử lý) → ✅ (xong) / 😢 (lỗi) =====
   async react(reaction) {
+    this.reacted = true; // đánh dấu để handleCommand không tự thả thêm
     if (!this.event?.data?.msgId || !this.api?.addReaction) return false;
     try {
       await this.api.addReaction(reaction, {
@@ -108,27 +118,14 @@ class Reply {
     let filePath = null;
     try {
       filePath = await renderVipCard({ ttl, ...(spec || {}) });
-    } catch {
+    } catch (error) {
+      logger.log(`Lỗi render thẻ: ${error.message}`, "warn");
       filePath = null;
     }
 
+    // Không render được ảnh → gửi TEXT thuần (không dùng 2 kiểu ảnh khác nhau)
     if (!filePath) {
-      // fallback: renderer cơ bản
-      try {
-        const basicSpec = spec || {
-          theme: options.theme,
-          title: options.title,
-          subtitle: options.subtitle || options.msg,
-          sections: (options.rows || []).map((row) => ({ title: row.label, lines: row.lines }))
-        };
-        filePath = canvasLib.renderCardToFile(basicSpec);
-      } catch {
-        filePath = null;
-      }
-    }
-
-    if (!filePath) {
-      const plainMsg = options.subtitle || options.title || "";
+      const plainMsg = options.subtitle || options.title || String(options.msg || "");
       return this.api.sendMessage({ msg: plainMsg, ttl }, this.threadId, this.type);
     }
 
@@ -167,10 +164,11 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
 
-    // Gửi TEXT + chuẩn hoá TTL. Muốn thẻ ảnh đẹp thì dùng reply.card() tường minh
-    // (menu, nhạc, gpt, stats...) — tránh biến mọi thông báo trạng thái thành ảnh.
+    // Loại tin quyết định TTL mặc định: ảnh/video → media; lệnh tự chọn → ttlKind
+    const ttlKind = content.ttlKind || (content.attachments ? "media" : "message");
+    delete content.ttlKind;
     if (content.plain) delete content.plain;
-    content.ttl = normalizeTtl(content.ttl, content.attachments ? "media" : "message");
+    content.ttl = normalizeTtl(content.ttl, ttlKind);
     return api.sendMessage(content, targetThreadId, targetType);
   });
 

@@ -1,7 +1,10 @@
-// Kho sticker "hiệu ứng vào màn hình" (Zalo: effectId != 0).
+// Kho sticker "hiệu ứng vào màn hình" (Zalo: effectId > 0).
 // Nguồn danh mục: https://stickers.zaloapp.com/sticker (public, không cần login)
 // Chi tiết từng sticker (kèm effectId): api.getStickerCategoryDetail(cateId)
-// Sticker hiệu ứng là loại nặng nhất — gây lag/đứng máy khí gửi liên tiếp.
+// Sticker hiệu ứng là loại nặng nhất — gửi liên tiếp sẽ lag điện thoại.
+//
+// LƯU Ý: API Zalo có thể trả shape khác nhau tuỳ phiên bản nên code ở đây
+// chấp nhận NHIỀU dạng dữ liệu và có nhiều lớp dự phòng (xem extractStickers).
 const http = require("./http");
 const logger = require("../utils/logger");
 
@@ -12,6 +15,7 @@ const MAX_CATES = 24; // số bộ sticker quét mỗi lần nạp (quét hết 
 let pool = [];
 let builtAt = 0;
 let building = null;
+let lastBuildLog = []; // log chi tiết lần nạp gần nhất (để user báo lỗi)
 
 function shuffle(list) {
   for (let i = list.length - 1; i > 0; i--) {
@@ -30,8 +34,37 @@ async function fetchCateIds() {
 }
 
 // effectId > 0 = sticker có hiệu ứng full màn hình (bắn confetti, chữ to...)
+// Không có field effectId (API đổi shape) → fallback theo type: sticker động
+// (type >= 1) cũng là loại nặng, vẫn gây lag.
 function isEffectSticker(sticker) {
-  return sticker && sticker.id && Number(sticker.effectId) > 0;
+  if (!sticker || !sticker.id) return false;
+  if (sticker.effectId !== undefined && sticker.effectId !== null) return Number(sticker.effectId) > 0;
+  return Number(sticker.type) >= 1;
+}
+
+// Nhận diện danh sách sticker từ nhiều shape trả về khác nhau của API
+function extractStickers(response, cateId) {
+  if (Array.isArray(response)) return response;
+  if (!response || typeof response !== "object") return [];
+  for (const key of ["stickers", "items", "data", "list", "result"]) {
+    const value = response[key];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object" && Array.isArray(value.items)) return value.items;
+  }
+  return [];
+}
+
+async function loadCategory(api, cateId) {
+  // Zalo nhận cateId dạng chuỗi (hash) hoặc số tuỳ phiên bản — thử cả hai
+  const attempts = [cateId, Number(cateId)].filter((v, i, arr) => arr.indexOf(v) === i);
+  for (const cid of attempts) {
+    try {
+      const response = await api.getStickerCategoryDetail(cid);
+      const stickers = extractStickers(response, cid);
+      if (stickers.length) return stickers.map((sticker) => ({ ...sticker, cateId: sticker.cateId ?? cateId }));
+    } catch { /* thử dạng tiếp theo */ }
+  }
+  return [];
 }
 
 async function build(api) {
@@ -40,27 +73,33 @@ async function build(api) {
     const cateIds = shuffle(await fetchCateIds());
     const limit = Math.min(MAX_CATES, cateIds.length);
     const picked = [];
+    const log = [];
 
     for (const cateId of cateIds.slice(0, limit)) {
       try {
-        const stickers = await api.getStickerCategoryDetail(cateId);
-        if (!Array.isArray(stickers)) continue;
-        for (const st of stickers) {
-          if (isEffectSticker(st)) {
-            picked.push({
-              id: st.id,
-              cateId: st.cateId ?? cateId,
-              type: Number(st.type) || 1,
-              effectId: Number(st.effectId)
-            });
-          }
+        const stickers = await loadCategory(api, cateId);
+        const effects = stickers.filter(isEffectSticker);
+        log.push(`${cateId}: ${stickers.length} sticker${effects.length ? `, ${effects.length} hiệu ứng` : ""}`);
+        for (const st of effects) {
+          picked.push({
+            id: st.id,
+            cateId: st.cateId ?? cateId,
+            type: Number(st.type) || 1,
+            effectId: Number(st.effectId) || 0
+          });
         }
       } catch (error) {
-        logger.log(`[sticker] Bỏ qua bộ ${cateId}: ${error.message}`, "warn");
+        log.push(`${cateId}: LỖI ${error.message.slice(0, 60)}`);
       }
     }
 
-    if (!picked.length) throw new Error("Không có sticker hiệu ứng nào trong các bộ đã quét");
+    lastBuildLog = log;
+    if (!picked.length) {
+      throw new Error(
+        `Không tìm thấy sticker hiệu ứng (đã quét ${limit} bộ). ` +
+        `Chi tiết: ${log.slice(0, 3).join(" | ")}${log.length > 3 ? " ..." : ""}`
+      );
+    }
     pool = picked;
     builtAt = Date.now();
     logger.log(`[sticker] Đã nạp ${pool.length} sticker hiệu ứng (quét ${limit} bộ)`, "info");
@@ -88,7 +127,7 @@ function pick() {
 }
 
 function stats() {
-  return { total: pool.length, ageMs: builtAt ? Date.now() - builtAt : null, fresh: isFresh() };
+  return { total: pool.length, ageMs: builtAt ? Date.now() - builtAt : null, fresh: isFresh(), log: lastBuildLog.slice(0, 5) };
 }
 
 module.exports = { build, ensure, pick, stats, isFresh, STORE_URL };

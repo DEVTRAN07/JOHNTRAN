@@ -5,7 +5,7 @@ const metrics = require("../metrics");
 const Users = require("../controller/controllerUsers");
 const Threads = require("../controller/controllerThreads");
 
-const { ThreadType } = require("zalo-client");
+const { ThreadType, Reactions } = require("zalo-client");
 
 const SPAM_WINDOW_MS = 10000;
 const SPAM_MAX_COMMANDS = 12;
@@ -132,11 +132,11 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   }
 
   const cdTime = (command.config.cooldowns || 0) * 1000;
-  // Điều hướng menu (/menu next, /menu out, /menu 2) không bị cooldown chặn
-  const { isMenuNav } = require("./handleCommand-nav");
-  const isNavigation = isMenuNav(commandName, messageText, prefix);
+  // Điều hướng (/menu next, /scl next, /menu out...) không bị cooldown chặn
+  const { isNavigation, isCommandNav } = require("./handleCommand-nav");
+  const isNav = isNavigation(commandName, messageText, prefix) || isCommandNav(commandName, messageText, prefix);
 
-  if (cdTime > 0 && !isNavigation) {
+  if (cdTime > 0 && !isNav) {
     if (!global.client.cooldowns.has(commandName)) {
       global.client.cooldowns.set(commandName, new Map());
     }
@@ -166,15 +166,34 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
     };
     const wrappedApi = wrapApi(api, threadId, type, commandName, event);
     metrics.track("command", { command: commandName });
-    await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply: wrappedApi.__reply });
-  } catch (err) {
-    logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");
-    metrics.track("error", { command: commandName });
+
+    // MỌI lệnh đều có reaction trạng thái: 👍 đang xử lý → ✅ xong / 😢 lỗi.
+    // Lệnh TỰ thả reaction (nhạc, autodown...) thì hệ thống giữ im lặng.
+    const reply = wrappedApi.__reply;
+    let autoReacted = false; // hệ thống đã thả
+    const reactAuto = async (icon) => {
+      if (reply.reacted && !autoReacted) return;
+      autoReacted = true;
+      try { await reply.react(icon); } catch { /* khỏi cần */ }
+    };
+
+    await reactAuto(Reactions.LIKE);
     try {
-      await wrapApi(api, threadId, type, commandName, event).__reply.error("❌ Đã xảy ra lỗi khi xử lý lệnh!");
-    } catch {
-      // bỏ qua nếu không gửi được thông báo lỗi
+      await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply });
+      await reactAuto(Reactions.OK);
+    } catch (err) {
+      logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");
+      metrics.track("error", { command: commandName });
+      await reactAuto(Reactions.CRY);
+      try {
+        await reply.error("❌ Đã xảy ra lỗi khi xử lý lệnh!");
+      } catch {
+        // bỏ qua nếu không gửi được thông báo lỗi
+      }
     }
+  } catch (err) {
+    // Lỗi ngoài cùng (wrapApi hỏng, event thiếu dữ liệu...) — khỏi làm sập listener
+    logger.log(`Lỗi pipeline lệnh '${commandName}': ${err.message}`, "error");
   }
 }
 

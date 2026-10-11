@@ -258,7 +258,7 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
                 duration: videoData.metadata.duration,
                 width: videoData.metadata.width,
                 height: videoData.metadata.height,
-                ttl: 300000
+                ttlKind: "media"
             }, threadId, type);
             await setReactions([Reactions.HEART]);
             return;
@@ -270,11 +270,11 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
             for (const image of images) {
                 attachments.push(await downloadToFile(image.url, `image_${Date.now()}_${attachments.length}.jpg`));
             }
-            await api.sendMessage({ msg: messageBody, attachments, ttl: 300000 }, threadId, type);
+            await api.sendMessage({ msg: messageBody, attachments, ttlKind: "media" }, threadId, type);
             if (audioToSend) {
                 const audioPath = await downloadToFile(audioToSend.url, `audio_${Date.now()}.mp3`);
                 const voiceUrl = await processAudio(audioPath, threadId, type, api);
-                await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
+                await api.sendVoice({ voiceUrl, ttlKind: "media" }, threadId, type);
             }
             attachments.forEach((filePath) => { try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ } });
             await setReactions([Reactions.HEART]);
@@ -285,8 +285,8 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
         if (audioToSend) {
             const audioPath = await downloadToFile(audioToSend.url, `audio_${Date.now()}.mp3`);
             const voiceUrl = await processAudio(audioPath, threadId, type, api);
-            await api.sendMessage({ msg: `${messageBody}\n\n🎵 Audio:`, ttl: 300000 }, threadId, type);
-            await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
+            await api.sendMessage({ msg: `${messageBody}\n\n🎵 Audio:`, ttlKind: "media" }, threadId, type);
+            await api.sendVoice({ voiceUrl, ttlKind: "media" }, threadId, type);
             await setReactions([Reactions.HEART]);
             return;
         }
@@ -312,7 +312,7 @@ async function downloadTikTok(url, api, threadId, type, setReactions) {
         duration: videoData.metadata.duration,
         width: videoData.metadata.width,
         height: videoData.metadata.height,
-        ttl: 300000
+        ttlKind: "media"
     }, threadId, type);
     await setReactions([Reactions.HEART]);
     return;
@@ -330,8 +330,8 @@ async function downloadWithYtDlp(url, api, threadId, type, setReactions) {
         const audioPath = path.join(tempDir(), `audio_${Date.now()}.mp3`);
         await ytdlp.downloadAudio(url, audioPath);
         const voiceUrl = await processAudio(audioPath, threadId, type, api);
-        await api.sendMessage({ msg: messageBody, ttl: 300000 }, threadId, type);
-        await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
+        await api.sendMessage({ msg: messageBody, ttlKind: "media" }, threadId, type);
+        await api.sendVoice({ voiceUrl, ttlKind: "media" }, threadId, type);
         await setReactions([Reactions.HEART]);
         return;
     }
@@ -347,7 +347,7 @@ async function downloadWithYtDlp(url, api, threadId, type, setReactions) {
         duration: videoData.metadata.duration,
         width: videoData.metadata.width,
         height: videoData.metadata.height,
-        ttl: 300000
+        ttlKind: "media"
     }, threadId, type);
     await setReactions([Reactions.HEART]);
     return;

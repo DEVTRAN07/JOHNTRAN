@@ -2,16 +2,17 @@ const fs = require("fs");
 const menuCard = require("../../core/canvas/menu");
 
 const PAGE_SIZE = 9;
+const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 
 module.exports.config = {
     name: "menu",
     aliases: ["help", "menu2"],
-    version: "3.0.0",
+    version: "3.1.0",
     role: 0,
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
     description: "Xem danh sách lệnh và info",
     category: "Tiện ích",
-    usage: "[tên lệnh/all/next/out] [text/canvas]",
+    usage: "[tên lệnh/all/next/prev/out] [text/canvas]",
     cooldowns: 1,
     dependencies: {
         "string-similarity": "",
@@ -44,6 +45,97 @@ function collectCommands(userId) {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ===== Điều hướng phân trang: "next"/"prev"/"out"/số — GHÉP CHUNG cho cả lệnh lẫn handleEvent =====
+async function navigate({ api, event, Threads, action, senderId }) {
+    const { threadId, type } = event;
+    const prefix = global.config.prefix;
+    const commands = collectCommands(senderId);
+    const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
+
+    const threadData = (await Threads.getData(threadId)).data || {};
+
+    // Đóng menu: xoá trạng thái phân trang + thông báo (không hiện lại danh sách)
+    if (action === "out" || action === "exit" || action === "close") {
+        delete threadData.menu_page;
+        await Threads.setData(threadId, threadData);
+        return api.sendMessage({
+            msg: "✅ Đã đóng menu. Gõ /menu để mở lại.",
+            ttl: 30000
+        }, threadId, type);
+    }
+
+    const current = Number(threadData.menu_page) || 1;
+    let page = current;
+
+    if (action === "next") {
+        page = current >= totalPages ? 1 : current + 1;   // hết trang → về trang 1
+    } else if (action === "prev" || action === "previous" || action === "back") {
+        page = current <= 1 ? totalPages : current - 1;    // đầu danh sách → về trang cuối
+    } else if (/^\d{1,2}$/.test(action)) {
+        page = parseInt(action, 10);
+    }
+
+    page = Math.min(Math.max(page, 1), totalPages);
+    threadData.menu_page = page;
+    await Threads.setData(threadId, threadData);
+
+    return renderPage({ api, event, Threads, commands, page, totalPages, threadData, senderId });
+}
+
+async function renderPage({ api, event, Threads, commands, page, totalPages, threadData, senderId }) {
+    const { threadId, type, data } = event;
+    const prefix = global.config.prefix;
+
+    if (threadData.menu_mode === "text") {
+        return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
+    }
+
+    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    let gridPath = null;
+    try {
+        gridPath = await menuCard.renderMenuGrid({
+            botName: global.config.name_bot,
+            avatarUrl: data.avatar,
+            prefix,
+            page,
+            totalPages,
+            commands: { total: commands.length, page: slice },
+            uptimeText: getUptimeText()
+        });
+        await api.sendMessage({ msg: "", attachments: gridPath, ttlKind: "menu" }, threadId, type);
+    } catch (error) {
+        console.error("Lỗi render menu:", error.message);
+        await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
+    } finally {
+        if (gridPath && fs.existsSync(gridPath)) {
+            try { fs.unlinkSync(gridPath); } catch { /* bỏ qua */ }
+        }
+    }
+}
+
+// ===== Gõ "next"/"prev"/"out" KHÔNG CẦN PREFIX (nút trên ảnh chỉ là hình vẽ) =====
+// Chỉ chạy khi menu đã mở (nhóm có menu_page) để khỏi phản hồi linh tinh trong hội thoại.
+module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
+    if (isSelf) return;
+    if (event.type !== 1) return; // chỉ nhóm
+    const content = String(event?.data?.content || "").trim().toLowerCase();
+    if (!content) return;
+    // Không phải dạng điều hướng (nhiều từ, dính link, tag...) → bỏ qua
+    if (!NAV_WORDS.includes(content) && !/^\d{1,2}$/.test(content)) return;
+
+    // Đang có kết quả nhạc chờ chọn → để listen.js xử lý cho nhạc (tránh 2 phản hồi)
+    try {
+      const music = require("../../core/music");
+      if (music.getPending && music.getPending(music.pickKey(event.threadId, event.data.uidFrom))) return;
+    } catch { /* không nạp được music thì thôi */ }
+
+    const threadData = (await Threads.getData(event.threadId)).data || {};
+    if (!threadData.menu_page) return; // menu chưa mở trong nhóm này
+
+    const senderId = event.data.uidFrom;
+    await navigate({ api, event, Threads, action: content, senderId });
+};
+
 module.exports.run = async function ({ api, event, args, Threads, reply }) {
     const { threadId, type, data } = event;
     const senderId = data.uidFrom;
@@ -65,73 +157,24 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         return reply.success("Đã chuyển menu sang chế độ canvas.");
     }
 
-    // Thoát menu (nút OUT trong ảnh chỉ là minh hoạ — gõ /menu out để đóng)
-    if (argType === "out" || argType === "exit" || argType === "close") {
-        const thread = (await Threads.getData(threadId)).data || {};
-        delete thread.menu_page;
-        await Threads.setData(threadId, thread);
-        return reply.card({
-            theme: "brand",
-            title: "Đã đóng menu",
-            subtitle: `Gõ ${global.config.prefix}menu để mở lại bất cứ lúc nào`,
-            rows: [{ icon: "list", label: "Gợi ý", lines: [
-                `${global.config.prefix}menu next — trang sau`,
-                `${global.config.prefix}menu <số> — nhảy tới trang`,
-                `${global.config.prefix}menu <tên lệnh> — xem chi tiết`
-            ]}],
-            footer: `ᴶᴼᴴᴺ ᵀᴿᴬᴺ`
-        });
+    // Điều hướng: next / prev / out / số trang
+    if (NAV_WORDS.includes(argType) || /^\d{1,2}$/.test(argType)) {
+        return navigate({ api, event, Threads, action: argType, senderId });
     }
 
     // Xem chi tiết 1 lệnh
-    if (argType === "all" || (argType && !["next", "out", "exit", "close"].includes(argType) && !/^\d{1,2}$/.test(argType))) {
+    if (argType === "all" || (argType && !NAV_WORDS.includes(argType) && !/^\d{1,2}$/.test(argType))) {
         return showCommandInfo(argType, senderId, prefix, api, threadId, type);
     }
 
+    // Không tham số → mở trang 1
     const commands = collectCommands(senderId);
     const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
-
-    // Nhớ trang hiện tại theo nhóm để next đi tiếp đúng
     const threadData = (await Threads.getData(threadId)).data || {};
-    let page = 1;
-    if (argType === "next") {
-        page = (Number(threadData.menu_page) || 1) + 1;
-        if (page > totalPages) page = 1; // hết trang thì quay về đầu
-    } else if (/^\d{1,2}$/.test(argType)) {
-        page = parseInt(argType, 10);
-    }
-    page = Math.min(Math.max(page, 1), totalPages);
-    if (page !== Number(threadData.menu_page)) {
-        threadData.menu_page = page;
-        await Threads.setData(threadId, threadData);
-    }
+    threadData.menu_page = 1;
+    await Threads.setData(threadId, threadData);
 
-    if (threadData.menu_mode === "text") {
-        return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
-    }
-
-    // Canvas menu
-    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    let gridPath = null;
-    try {
-        gridPath = await menuCard.renderMenuGrid({
-            botName: global.config.name_bot,
-            avatarUrl: data.avatar,
-            prefix,
-            page,
-            totalPages,
-            commands: { total: commands.length, page: slice },
-            uptimeText: getUptimeText()
-        });
-        await api.sendMessage({ msg: "", attachments: gridPath, ttl: 120000 }, threadId, type);
-    } catch (error) {
-        console.error("Lỗi render menu:", error.message);
-        await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
-    } finally {
-        if (gridPath && fs.existsSync(gridPath)) {
-            try { fs.unlinkSync(gridPath); } catch { /* bỏ qua */ }
-        }
-    }
+    return renderPage({ api, event, Threads, commands, page: 1, totalPages, threadData, senderId });
 };
 
 function showTextMenu(commands, page, totalPages, prefix, api, threadId, type) {
@@ -145,8 +188,8 @@ function showTextMenu(commands, page, totalPages, prefix, api, threadId, type) {
         .map(([cat, names]) => `【 ${cat.toUpperCase()} 】\n${names.map((n) => `${prefix}${n}`).join(" • ")}`)
         .join("\n\n");
     return api.sendMessage({
-        msg: `╭─「 ${global.config.name_bot} 」\n│ Trang ${page}/${totalPages} • ${commands.length} lệnh\n${sections}\n╰── ${prefix}menu <trang|next> để xem thêm`,
-        ttl: 120000
+        msg: `╭─「 ${global.config.name_bot} 」\n│ 🔖 Trang ${page}/${totalPages} • ${commands.length} lệnh\n${sections}\n╰── ${prefix}menu <trang|next|prev|out>`,
+        ttlKind: "menu"
     }, threadId, type);
 }
 

@@ -1,65 +1,80 @@
 // Spam tin nhắn + tag người dùng (admin bot).
-// Nội dung lấy từ folder assets/spam/*.txt (mỗi dòng 1 câu) — không ghi cứng trong code.
-// Dùng: /spam <@tag|uid> [tin nhắn] [-t số lần] [-d giây] | /spam off | reload | list
+// Nội dung lấy từ folder assets/spam/*.txt — MỖI FILE = MỘT NGÔN NGỮ.
+// Dùng: /spam <@tag|uid> [vi|en|zh|ja|ko|th|mix...] [tin nhắn tự gõ]
+//      [-t số lần] [-d giây] | /spam off | reload | list | lang
 const fs = require("fs");
 const path = require("path");
 
 const SPAM_DIR = path.join(__dirname, "..", "..", "assets", "spam");
-const DEFAULT_TIMES = 20; // lần spam mặc định
+const DEFAULT_TIMES = 20;
 const MAX_TIMES = 500;
-const DEFAULT_DELAY_MS = 1500; // 1.5s/lần
+const DEFAULT_DELAY_MS = 1500;
 
-let words = [];
+// ===== Nạp ngôn ngữ từ folder =====
+let languages = {}; // { vi: [câu...], en: [...], mix: [...] }
 
 function loadWords() {
-  const loaded = [];
+  const loaded = {};
   try {
     if (fs.existsSync(SPAM_DIR)) {
       for (const file of fs.readdirSync(SPAM_DIR).filter((f) => f.endsWith(".txt"))) {
+        const name = file.replace(/\.txt$/, "").toLowerCase();
         const content = fs.readFileSync(path.join(SPAM_DIR, file), "utf8");
+        const lines = [];
         for (const line of content.split(/\r?\n/)) {
           const text = line.trim();
-          if (!text || text.startsWith("#")) continue; // bỏ dòng trống + chú thích
-          loaded.push(text);
+          if (!text || text.startsWith("#")) continue; // bỏ trống + chú thích
+          lines.push(text);
         }
+        if (lines.length) loaded[name] = lines;
       }
     }
   } catch (error) {
     console.error("Lỗi nạp ngôn từ spam:", error.message);
   }
-  words = loaded;
-  return words;
-}
-
-function randomWord() {
-  if (!words.length) return null;
-  return words[Math.floor(Math.random() * words.length)];
+  languages = loaded;
+  return loaded;
 }
 
 loadWords(); // nạp sẵn khi khởi động
 
+function langNames() {
+  return Object.keys(languages);
+}
+
+function pickSentence(langs) {
+  // Chọn 1 câu ngẫu nhiên trong (các) ngôn ngữ được chọn
+  const chosen = langs.length ? langs.filter((l) => languages[l]) : langNames();
+  if (!chosen.length) return null;
+  // Chọn ngôn ngữ trước rồi chọn câu → đều nhau
+  const pool = languages[chosen[Math.floor(Math.random() * chosen.length)]];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 module.exports.config = {
   name: "spam",
   aliases: ["sp", "chui", "tag"],
-  version: "3.0.0",
+  version: "4.0.0",
   role: 2,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Spam tin nhắn có tag người dùng (admin bot)",
+  description: "Spam tin nhắn có tag người dùng, nhiều ngôn ngữ (admin bot)",
   category: "Hệ thống",
-  usage: "spam <@tag|uid> [tin nhắn] [-t số lần] [-d giây] | spam off | reload | list",
+  usage: "spam <@tag|uid> [ngôn ngữ] [tin nhắn] [-t số lần] [-d giây] | spam off | reload | list | lang",
   cooldowns: 5,
   dependencies: {}
 };
 
 const running = new Map(); // threadId -> job
 
+// ===== Tách tham số: @tag/uid | ngôn ngữ | nội dung | -t | -d =====
 function parseArgs(args) {
-  const result = { targets: [], message: "", times: DEFAULT_TIMES, delay: DEFAULT_DELAY_MS };
+  const result = { targets: [], langs: [], message: "", times: DEFAULT_TIMES, delay: DEFAULT_DELAY_MS };
   const rest = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const lower = arg.toLowerCase();
+
     if (lower === "-t" && args[i + 1] !== undefined) {
       // 0 = spam không giới hạn (dừng bằng /spam off)
       const t = parseInt(args[++i], 10);
@@ -68,15 +83,22 @@ function parseArgs(args) {
     }
     if (lower === "-d" && args[i + 1] !== undefined) {
       const d = parseFloat(args[++i]);
-      result.delay = Math.min(Math.max(Number.isFinite(d) && d > 0 ? d : DEFAULT_DELAY_MS, 0.3), 30) * 1000;
+      result.delay = Math.min(Math.max(Number.isFinite(d) && d > 0 ? d : DEFAULT_DELAY_MS / 1000, 0.3), 30) * 1000;
+      continue;
+    }
+    // UID (10-15 số) hoặc ngôn ngữ (tên file tồn tại)
+    if (/^\d{10,}$/.test(arg)) {
+      if (!result.targets.includes(arg)) result.targets.push(arg);
+      continue;
+    }
+    if (langNames().includes(lower)) {
+      if (!result.langs.includes(lower)) result.langs.push(lower);
       continue;
     }
     rest.push(arg);
   }
 
-  result.targets = rest.filter((a) => /^\d{6,}$/.test(a));
-  const textParts = rest.filter((a) => !/^\d{6,}$/.test(a));
-  result.message = textParts.join(" ").trim();
+  result.message = rest.join(" ").trim();
   return result;
 }
 
@@ -87,26 +109,34 @@ module.exports.run = async function ({ api, event, args }) {
   // ===== TẮT =====
   if (sub === "off" || sub === "stop") {
     const job = running.get(threadId);
-    if (!job) {
-      return api.sendMessage({ msg: "❌ Không có spam nào đang chạy.", ttl: 60000 }, threadId, type);
-    }
+    if (!job) return api.sendMessage({ msg: "❌ Không có spam nào đang chạy.", ttlKind: "spam" }, threadId, type);
     clearInterval(job.timer);
     running.delete(threadId);
-    return api.sendMessage({ msg: `✅ Đã dừng spam (đã gửi ${job.count}/${job.timesText}).`, ttl: 60000 }, threadId, type);
+    return api.sendMessage({ msg: `✅ Đã dừng spam (đã gửi ${job.count}/${job.timesText}).`, ttlKind: "spam" }, threadId, type);
   }
 
-  // ===== NẠP LẠI NGÔN TỪ =====
+  // ===== NẠP LẠI NGÔN NGỮ =====
   if (sub === "reload" || sub === "load") {
-    const n = loadWords().length;
-    return api.sendMessage({ msg: n ? `✅ Đã nạp ${n} câu spam từ assets/spam/.` : "❌ Không đọc được câu nào trong assets/spam/ — kiểm tra folder.", ttl: 60000 }, threadId, type);
+    loadWords();
+    const total = Object.values(languages).reduce((sum, list) => sum + list.length, 0);
+    return api.sendMessage({
+      msg: total
+        ? `✅ Đã nạp ${total} câu / ${langNames().length} ngôn ngữ: ${langNames().map((l) => l.toUpperCase()).join(", ")}`
+        : "❌ Không đọc được câu nào trong assets/spam/ — kiểm tra folder.",
+      ttlKind: "spam"
+    }, threadId, type);
   }
 
-  // ===== XEM SỐ NGÔN TỪ =====
-  if (sub === "list" || sub === "info" || sub === "stats") {
+  // ===== XEM NGÔN NGỮ =====
+  if (sub === "list" || sub === "lang" || sub === "langs" || sub === "info") {
+    const detail = langNames().map((l) => `• ${l.toUpperCase()}: ${languages[l].length} câu`).join("\n");
+    const total = Object.values(languages).reduce((sum, list) => sum + list.length, 0);
     return api.sendMessage({
-      msg: `📦 Ngôn từ spam: ${words.length} câu (thư mục assets/spam/)` +
-           (words.length ? `\nVí dụ: "${words[0]}"` : ""),
-      ttl: 60000
+      msg: `📚 NGÔN NGỮ SPAM (${total} câu)\n${detail}\n\n` +
+           `Cách dùng: ${global.config.prefix}spam @bạn en (chỉ tiếng Anh)\n` +
+           `Hoặc: ${global.config.prefix}spam @bạn vi en zh (nhiều ngôn ngữ)\n` +
+           `Không gõ ngôn ngữ = lấy ngẫu nhiên tất cả.`,
+      ttlKind: "spam"
     }, threadId, type);
   }
 
@@ -115,32 +145,41 @@ module.exports.run = async function ({ api, event, args }) {
   if (data?.mentions && Object.keys(data.mentions).length > 0) {
     for (const uid of Object.keys(data.mentions)) targets.push(uid);
   }
-  const opts = parseArgs(args);
+  const opts = parseArgs(args.filter((a) => a.toLowerCase() !== sub || targets.length > 0));
   for (const t of opts.targets) if (!targets.includes(t)) targets.push(t);
 
   if (targets.length === 0) {
+    const langList = langNames().join(" | ");
     return api.sendMessage({
       msg: `⚠️ Cách dùng:\n` +
-           `${global.config.prefix}spam <@tag|uid> [tin nhắn] [-t số lần] [-d giây]\n` +
+           `${global.config.prefix}spam <@tag|uid> [ngôn ngữ] [tin nhắn] [-t n] [-d s]\n` +
            `${global.config.prefix}spam off — dừng\n` +
-           `${global.config.prefix}spam reload — nạp lại ngôn từ\n` +
-           `${global.config.prefix}spam list — xem số ngôn từ\n\n` +
-           "Không gõ tin nhắn = lấy câu ngẫu nhiên từ assets/spam/\n" +
-           "Ví dụ: /spam @bạn (20 lần, câu ngẫu nhiên)\n" +
-           "Ví dụ: /spam 12345678 Xin chào -t 5 -d 1\n" +
-           "Ví dụ: /spam @bạn -t 0 (không giới hạn → /spam off để dừng)",
-      ttl: 60000
+           `${global.config.prefix}spam reload — nạp lại ngôn ngữ\n` +
+           `${global.config.prefix}spam list — xem ngôn ngữ\n\n` +
+           `🌐 Ngôn ngữ: ${langList} (bỏ trống = tất cả)\n` +
+           `📌 Ví dụ:\n` +
+           `• /spam @bạn → 20 lần, câu ngẫu nhiên mọi ngôn ngữ\n` +
+           `• /spam @bạn en → chỉ tiếng Anh\n` +
+           `• /spam @bạn vi en → pha tiếng Việt + Anh\n` +
+           `• /spam @bạn Xin chào -t 5 -d 1 → nội dung tự gõ\n` +
+           `• /spam @bạn -t 0 → không giới hạn (dừng bằng /spam off)`,
+      ttlKind: "spam"
     }, threadId, type);
   }
 
   if (running.has(threadId)) {
-    return api.sendMessage({ msg: "⚠️ Spam đang chạy. Gõ /spam off để dừng.", ttl: 60000 }, threadId, type);
+    return api.sendMessage({ msg: "⚠️ Spam đang chạy. Gõ /spam off để dừng.", ttlKind: "spam" }, threadId, type);
+  }
+
+  const usingFolder = !opts.message;
+  if (usingFolder && !langNames().length) {
+    return api.sendMessage({ msg: "❌ Không có câu spam nào trong assets/spam/.", ttlKind: "spam" }, threadId, type);
   }
 
   const timesText = opts.times === 0 ? "∞" : String(opts.times);
   const job = { count: 0, times: opts.times, timesText, timer: null };
 
-  // Xây dựng tin nhắn có mention (Zalo yêu cầu pos/uid/len)
+  // Tin nhắn có mention (Zalo yêu cầu pos/uid/len)
   const buildText = (message) => {
     let text = "";
     const mentions = [];
@@ -158,14 +197,13 @@ module.exports.run = async function ({ api, event, args }) {
     if (opts.times !== 0 && job.count >= opts.times) {
       clearInterval(job.timer);
       running.delete(threadId);
-      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} lần.`, ttl: 60000 }, threadId, type);
+      return api.sendMessage({ msg: `✅ Đã spam xong ${job.count} lần.`, ttlKind: "spam" }, threadId, type);
     }
 
-    // Không gõ tay → lấy câu ngẫu nhiên từ folder; hết câu trong folder thì dùng câu mặc định
-    const message = opts.message || randomWord() || "Hello";
+    const message = opts.message || pickSentence(opts.langs) || "Hello";
     try {
       const { text, mentions } = buildText(message);
-      await api.sendMessage({ msg: text, mentions, ttl: 60000 }, threadId, type);
+      await api.sendMessage({ msg: text, mentions, ttlKind: "spam" }, threadId, type);
       job.count++;
     } catch (error) {
       console.error("Lỗi gửi spam:", error.message);
@@ -176,11 +214,14 @@ module.exports.run = async function ({ api, event, args }) {
   }, opts.delay);
 
   running.set(threadId, job);
-  const usingFolder = !opts.message && words.length > 0;
+  const langText = opts.langs.length
+    ? `ngôn ngữ: ${opts.langs.join(", ").toUpperCase()} (${opts.langs.reduce((s, l) => s + (languages[l]?.length || 0), 0)} câu)`
+    : `câu ngẫu nhiên tất cả ${langNames().length} ngôn ngữ (${Object.values(languages).reduce((s, l) => s + l.length, 0)} câu)`;
+
   return api.sendMessage({
     msg: `▶️ Bắt đầu spam ${timesText} lần • mỗi ${opts.delay / 1000}s\n` +
-         `👥 ${targets.length} người • ${usingFolder ? `câu ngẫu nhiên từ assets/spam/ (${words.length} câu)` : `nội dung: ${opts.message}`}\n` +
+         `👥 ${targets.length} người • ${usingFolder ? langText : `nội dung: ${opts.message}`}\n` +
          `Dừng: ${global.config.prefix}spam off`,
-    ttl: 60000
+    ttlKind: "spam"
   }, threadId, type);
 };

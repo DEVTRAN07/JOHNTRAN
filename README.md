@@ -210,7 +210,8 @@ core/
 ├── ai/            # tts (đọc giọng nói Google TTS cho /noi)
 ├── music/         # registry nhạc: model Track + provider SoundCloud + lyric + cache chọn bài
 ├── stickerStore.js # kho sticker hiệu ứng màn hình (stickers.zaloapp.com → lọc effectId)
-├── message.js     # TTL chuẩn (>= 60s vì Zalo bỏ qua TTL nhỏ hơn) + reply helper + wrap api (auto TTL + auto card + reaction)
+├── ttl.js         # TTL tự xoá tin: hiểu 60s/2m/1h, kẹp [60s, 7 ngày], TTL theo loại tin
+├── message.js     # reply helper (thẻ/card) + wrap api (auto TTL + reaction cho mọi lệnh)
 ├── canvas/        # render thẻ: vip.js (glassmorphism, icon vector, avatar, progress) + icons.js
 ├── cache.js       # LRU cache TTL cho group/user info + kết quả nhạc
 ├── storage/       # JSON store atomic (local/dev) + Supabase adapter (deploy Koyeb)
@@ -234,9 +235,9 @@ assets/
 ```
 
 **Tính năng nổi bật v3:**
-- **Canvas VIP cho mọi lệnh**: `reply.card()` render thẻ ảnh cao cấp (glassmorphism, glow, icon vector vẽ tay không cần font emoji, avatar tròn, progress bar, 6 theme) — gọi tự động qua api wrapper cho cả lệnh cũ.
-- **Reaction trạng thái**: 🙏 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (thay text chờ).
-- **Menu phân trang**: `/menu`, `/menu 2`, ... mỗi trang 5 nhóm lệnh. Điều hướng `/menu next` `/menu out` không bị cooldown chặn.
+- **Mọi ảnh MỘT KIỂU**: `core/canvas/theme.js` giữ nền (`assets/bg/theme.jpg` + gradient + glow), font, bo góc — menu, thẻ lệnh, nhạc (kết quả + đang phát), thẻ VIP đều dùng chung, muốn đổi chỉ sửa 1 file.
+- **Mọi lệnh đều thả icon**: 👍 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (lệnh tự thả reaction — nhạc, autodown — thì bot không thả thêm).
+- **Menu phân trang thật sự**: `/menu next` / `/menu prev` / `/menu <số>` / `/menu out`; khi menu đang mở thì gõ trần `next` / `prev` / `out` (khỏi prefix) cũng chuyển trang được — không bị cooldown chặn. Nhạc (`/scl next`) cũng vậy.
 - **TTL chuẩn hoá**: mọi tin nhắn TTL ≥ 60.000ms (Zalo chỉ tự xóa tin từ 1 phút) — `ttl.message/error/media/card` trong config.yml.
 - **Đổi storage**: bỏ better-sqlite3 (native), dùng JSON store atomic ghi `data/store.json`, mỗi bot con một file riêng.
 - **Web panel + bot con**: bật `panel.enabled: true` rồi chạy `npm start`, mở `http://localhost:3000` — tạo/dừng/xoá bot con, log realtime, QR đăng nhập, metrics bar, auto-restart, watchdog crash loop.
@@ -259,8 +260,26 @@ assets/
 |---|---|
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
+| `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |
 | `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
 
+**Điều hướng menu & nhạc (không cần nhớ lệnh dài):**
+- Menu: `/menu` → trang 1, `/menu next` / `/menu prev`, `/menu <số>`, `/menu out` (đóng).
+- Khi menu đang mở, gõ trần **`next`** / **`prev`** / **`out`** (không cần prefix) cũng chuyển trang được.
+- Nhạc: `/scl <từ khóa>` → `/scl next` / `/scl prev` / `/scl out`, hoặc gõ trần **`next`** / số thứ tự khi đang có kết quả.
+- Kết quả nhạc **xếp bài nhiều người nghe & thích nhất lên đầu** (20 bài/trang, mỗi trang 8 bài).
+
+**Bộ sự kiện tự động** (`/events <tên> on|off`, mặc định **tắt**):
+| Sự kiện | Làm gì |
+|---|---|
+| `welcome` | 👋 Có thành viên mới → thẻ chào mừng + mention + reaction |
+| `bye` | 🚪 Có thành viên rời/bị kick → thẻ tạm biệt |
+| `rank` | 🏆 Chat để nhận EXP (30s/lần), lên level → thẻ chúc mừng |
+| `guard` | 🚨 Canh link lạ & từ cấm (`assets/spam/badwords.txt`): cảnh cáo 3 lần → kick |
+
+**Lệnh spam (chỉ admin bot):**
+| Lệnh | Chức năng |
+|---|---|
 **Autodown — tự tải link trong nhóm (sau `/autodown on`):**
 - Nhận **mọi dạng Zalo gửi link**: gõ tay, link kèm chú thích, tin chia sẻ (`href`/`url`/`link`), link gợi ý, object lồng object — bot tự quét tìm URL.
 - Tải bằng **yt-dlp chạy local** (link không qua bên thứ 3). yt-dlp bản mới được chạy với `--impersonate chrome` (giả TLS fingerprint trình duyệt) — thiếu cờ này thì Facebook/Vimeo... báo *"Cannot parse data"*. Bản yt-dlp cũ không có cờ thì bot tự bỏ cờ chạy lại.
@@ -282,16 +301,17 @@ assets/
 **Lệnh spam (chỉ admin bot):**
 | Lệnh | Chức năng |
 |---|---|
-| `/spam @bạn` | Spam tin nhắn + tag người kia, nội dung lấy **ngẫu nhiên từ `assets/spam/*.txt`** |
+| `/spam @bạn` | Spam tin nhắn + tag người kia, nội dung **ngẫu nhiên mọi ngôn ngữ trong `assets/spam/*.txt`** |
 | `/spam @bạn -t 50 -d 1` | 50 lần, mỗi 1 giây (`-t 0` = không giới hạn) |
 | `/spam @bạn Xin chào` | Dùng câu tự gõ thay vì câu trong folder |
+| `/spam @bạn en` | Chỉ dùng câu tiếng Anh (`vi\|en\|zh\|ja\|ko\|th\|mix`) |
+| `/spam list` / `reload` | Xem ngôn ngữ & số câu / nạp lại sau khi sửa file |
 | `/spam off` | Dừng job spam đang chạy trong nhóm |
-| `/spam reload` / `/spam list` | Nạp lại / xem số câu trong folder |
-| `/spamsticker on [số lần]` | Spam sticker **hiệu ứng màn hình** (gây lag) — nguồn `stickers.zaloapp.com`, bot tự lọc sticker có `effectId` |
+| `/spamsticker on [số lần]` | Spam sticker **hiệu ứng màn hình** (gây lag) — nguồn `stickers.zaloapp.com`, bot tự lọc sticker `effectId > 0` |
 | `/spamsticker off` | Dừng spam sticker |
-| `/spamsticker list` / `reload` | Xem kho sticker hiệu ứng / nạp lại |
+| `/spamsticker list` / `reload` / `test` | Xem kho / nạp lại / kiểm tra nguồn (không spam) |
 
-- Folder ngôn từ spam: `assets/spam/` — mỗi dòng một câu, dòng `#` là chú thích. Sửa file xong gõ `/spam reload`, **không cần sửa code**.
+- Folder ngôn từ spam: `assets/spam/*.txt` — MỖI FILE = MỘT NGÔN NGỮ (`vi`, `en`, `zh`, `ja`, `ko`, `th`, `mix`). Mỗi dòng một câu, dòng `#` là chú thích. Sửa file xong gõ `/spam reload`, **không cần sửa code**.
 - Kho sticker hiệu ứng nạp 1 lần rồi nhớ 30 phút; mỗi lần `reload` xáo trộn và quét 24 bộ sticker mới.
 - `core/stickerStore.js`: catalog từ `stickers.zaloapp.com/sticker` → `getStickerCategoryDetail` → giữ sticker `effectId > 0`.
 
