@@ -1,19 +1,30 @@
 const fs = require("fs");
 const music = require("./index");
 const models = require("./models");
+const cards = require("../canvas/music");
 const logger = require("../../utils/logger");
-const metrics = require("../metrics");
+
+let nextPageCursor = null; // "zing|2"
+
+function send(api, threadId, type, msg, ttl = 300000) {
+  return api.sendMessage({ msg, ttl }, threadId, type);
+}
 
 function usage(provider, reply) {
   return reply.card({
     theme: "music",
     title: `Nhạc • ${provider.label}`,
     subtitle: "Tìm kiếm và tải nhạc nhanh",
-    sections: [{ title: "Cách dùng", lines: [
-      `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
-      `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
-      ...(provider.name === "spt" ? [`${global.config.prefix}spt <link spotify> — lấy thông tin bài hát`] : [])
-    ]}],
+    rows: [{
+      icon: "list",
+      label: "Cách dùng",
+      lines: [
+        `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
+        `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
+        `${global.config.prefix}${provider.name} next — trang kết quả sau`,
+        ...(provider.name === "spt" ? [`${global.config.prefix}spt <link spotify> — lấy thông tin bài hát`] : [])
+      ]
+    }],
     footer: models.BRAND
   });
 }
@@ -28,26 +39,24 @@ function friendlyError(error, reply) {
   return reply.error(`Lỗi khi xử lý nhạc: ${error.message || error}`);
 }
 
-async function sendTrack(reply, threadId, type, track, providerName, api, options = {}) {
+async function sendTrack(reply, threadId, type, track, providerName, api) {
   const provider = music.getProvider(providerName);
   await reply.working();
-  await reply.text(`Đang tải 「${track.title}」${options.quality ? ` (${options.quality}kbps)` : ""} từ ${provider.label}...`, { plain: true });
 
   let filePath = null;
+  let cardPath = null;
   try {
-    const streamUrl = await provider.resolve(track, { quality: options.quality });
+    const streamUrl = await provider.resolve(track);
     filePath = await music.downloadToFile(streamUrl, "mp3");
     const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
-    await reply.card({
-      theme: "music",
-      title: track.title,
-      subtitle: `${track.artist} • ${models.formatDuration(track.duration)} • ${options.quality || "128"}kbps`,
-      avatar: track.thumbnail,
-      rows: [{ icon: "music", label: "Nguồn phát", lines: [provider.label] }],
-      footer: `${models.BRAND}\nTrả lời tiếp số thứ tự để tải bài khác`
-    });
-    await reply.voice({ voiceUrl });
-    metrics.track("musicDownload", { command: providerName });
+
+    // Thẻ NOW PLAYING
+    try {
+      cardPath = await cards.renderNowPlaying(track, provider.label.toUpperCase());
+      await api.sendMessage({ msg: "", attachments: cardPath, ttl: 120000 }, threadId, type);
+    } catch { /* hỏng thẻ thì thôi */ }
+
+    await api.sendVoice({ voiceUrl, ttl: 300000 }, threadId, type);
     await reply.done();
   } catch (error) {
     logger.log(`[music:${providerName}] ${error.message}`, "error");
@@ -57,6 +66,27 @@ async function sendTrack(reply, threadId, type, track, providerName, api, option
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
     }
+    if (cardPath && fs.existsSync(cardPath)) {
+      try { fs.unlinkSync(cardPath); } catch { /* bỏ qua */ }
+    }
+  }
+}
+
+async function showResults(api, threadId, type, provider, query, tracks, page) {
+  const perPage = 8;
+  const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const slice = tracks.slice((safePage - 1) * perPage, safePage * perPage);
+
+  let gridPath = null;
+  try {
+    gridPath = await cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() });
+    await api.sendMessage({ msg: "", attachments: gridPath, ttl: 120000 }, threadId, type);
+    if (fs.existsSync(gridPath)) fs.unlinkSync(gridPath);
+  } catch {
+    // Fallback: thẻ text nếu canvas lỗi
+    await send(api, threadId, type, `🎵 ${provider.label} — "${query}"\n` +
+      slice.map((t, i) => `${i + 1}. ${t.title} — ${t.artist} (${models.formatDuration(t.duration)})`).join("\n"));
   }
 }
 
@@ -68,7 +98,6 @@ function parseOptions(args) {
     else if (/^(-q|--quality)$/i.test(arg)) options.qualityFlag = true;
     else rest.push(arg);
   }
-  // dạng: zing <từ khóa> -q 320
   const qIdx = args.findIndex((a) => /^(-q|--quality)$/i.test(a));
   if (qIdx !== -1 && /^(128|320)$/.test(args[qIdx + 1])) options.quality = Number(args[qIdx + 1]);
   options.queryArgs = rest;
@@ -81,7 +110,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
   const key = music.pickKey(threadId, data.uidFrom);
   const options = parseOptions(args);
 
-  // Chọn bài theo số thứ tự từ kết quả tìm kiếm gần nhất
+  // Chọn bài theo số thứ tự
   if (/^\d{1,2}$/.test(args[0] || "")) {
     const pending = music.getPending(key);
     if (!pending || pending.providerName !== providerName) {
@@ -92,17 +121,23 @@ async function runMusic(providerName, { api, event, args, reply }) {
     if (!track) {
       return reply.error(`Số thứ tự không hợp lệ (1 - ${pending.tracks.length}).`);
     }
-    return sendTrack(reply, threadId, type, track, providerName, api, {
-      quality: options.quality || pending.quality
-    });
+    return sendTrack(reply, threadId, type, track, providerName, api, options.quality);
   }
 
-  if (!options.queryArgs.length) {
-    return usage(provider, reply);
+  // Trang tiếp theo
+  if ((args[0] || "").toLowerCase() === "next") {
+    const pending = music.getPending(key);
+    if (!pending || pending.providerName !== providerName) {
+      return reply.error(`Bạn chưa tìm kiếm trên ${provider.label} gần đây.`);
+    }
+    const nextPage = (pending.page || 1) + 1;
+    const pageTracks = await music.search(providerName, pending.query, 40);
+    music.setPending(key, providerName, pageTracks, pending.query, nextPage);
+    return showResults(api, threadId, type, provider, pending.query, pageTracks, nextPage);
   }
 
   // Spotify: nhận link bài hát
-  if (providerName === "spt" && typeof provider.fromUrl === "function" && /open\.spotify\.com\/(track|album)\/[A-Za-z0-9]+/.test(args[0])) {
+  if (providerName === "spt" && typeof provider.fromUrl === "function" && /open\.spotify\.com\/(track|album)\/[A-Za-z0-9]+/.test(args[0] || "")) {
     try {
       const track = await provider.fromUrl(args[0]);
       music.clearPending(key);
@@ -110,6 +145,10 @@ async function runMusic(providerName, { api, event, args, reply }) {
     } catch (error) {
       return friendlyError(error, reply);
     }
+  }
+
+  if (!options.queryArgs.length) {
+    return usage(provider, reply);
   }
 
   const query = options.queryArgs.join(" ");
@@ -120,35 +159,24 @@ async function runMusic(providerName, { api, event, args, reply }) {
     return friendlyError(error, reply);
   }
 
-  music.setPending(key, providerName, tracks);
-  metrics.track("musicSearch", { command: providerName });
+  music.setPending(key, providerName, tracks, query, 1);
   if (options.quality) {
     const entry = music.getPending(key);
     if (entry) entry.quality = options.quality;
   }
-  return reply.card({
-    theme: "music",
-    title: query,
-    subtitle: `Nguồn: ${provider.label} • ${tracks.length} kết quả${options.quality ? ` • ${options.quality}kbps` : ""}`,
-    rows: [{
-      icon: "list",
-      label: "Danh sách bài hát",
-      lines: tracks.map((track, index) => `${String(index + 1).padStart(2, " ")}. ${track.title} — ${track.artist} (${models.formatDuration(track.duration)})`)
-    }],
-    footer: `${models.BRAND}\nTrả lời số thứ tự để tải • thêm "320" hoặc "-q 320" để lấy chất lượng cao`
-  });
+  return showResults(api, threadId, type, provider, query, tracks, 1);
 }
 
 function createMusicCommand(providerName, meta = {}) {
   return {
     config: {
       name: providerName,
-      version: "2.0.0",
+      version: "3.0.0",
       role: 0,
       author: models.BRAND,
       description: `Tìm và tải nhạc từ ${providerName === "scl" ? "SoundCloud" : providerName === "spt" ? "Spotify" : providerName === "zing" ? "Zing MP3" : "NhacCuaTui"}`,
       category: "Nhạc",
-      usage: `${providerName} <từ khóa | số thứ tự>`,
+      usage: `${providerName} <từ khóa | số thứ tự | next>`,
       cooldowns: 5,
       dependencies: meta.dependencies || {}
     },
@@ -156,7 +184,7 @@ function createMusicCommand(providerName, meta = {}) {
   };
 }
 
-// Chọn bài bằng số trần (vd gõ "2" không cần /zing 2)
+// Chọn bài bằng số trần (không cần prefix + tên lệnh)
 async function select(providerName, number, context) {
   return runMusic(providerName, { ...context, args: [String(number)] });
 }

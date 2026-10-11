@@ -39,9 +39,9 @@ async function resolve(providerName, track, options = {}) {
   return provider.resolve(track, options);
 }
 
-function setPending(key, providerName, tracks) {
+function setPending(key, providerName, tracks, query = "", page = 1) {
   const ttl = global.config?.music?.cache_ttl || 300000;
-  pendingPicks.set(key, { providerName, tracks, expiresAt: Date.now() + ttl });
+  pendingPicks.set(key, { providerName, tracks, query, page, expiresAt: Date.now() + ttl });
   sweepPending();
 }
 

@@ -80,7 +80,8 @@ function toTrack(item) {
     duration: Math.round((item.duration || item.full_duration || 0) / 1000),
     thumbnail: (item.artwork_url || "").replace("-large.", "-t500x500."),
     source: SOURCE,
-    sourceUrl: item.permalink_url
+    sourceUrl: item.permalink_url,
+    plays: item.playback_count || 0
   });
 }
 

@@ -62,7 +62,14 @@ class SupabaseStore {
         const { data, error } = await this.client
           .from(dbTable)
           .select("id, data, updated_at");
-        if (error) throw new Error(`Supabase ${dbTable}: ${error.message}`);
+        if (error) {
+          // Bảng chưa tạo (thiếu schema) → coi như rỗng, không làm sập cả sync
+          if (/Could not find the table/i.test(error.message)) {
+            this.mirror[storeTable] = {};
+            continue;
+          }
+          throw new Error(`Supabase ${dbTable}: ${error.message}`);
+        }
         const next = {};
         for (const row of data || []) {
           next[String(row.id)] = { ...row, data: row.data || {} };
@@ -70,6 +77,7 @@ class SupabaseStore {
         this.mirror[storeTable] = next;
       }
       this.lastSyncAt = Date.now();
+      this.syncError = null;
       return true;
     })().finally(() => { this.syncing = null; });
     return this.syncing;

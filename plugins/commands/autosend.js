@@ -125,6 +125,9 @@ module.exports.onLoad = async function ({ api, Threads }) {
   let lastFiredSlot = '';
 
   async function autosend() {
+    // Phòng thủ: api mất kết nối thì bỏ qua tick này (không crash interval)
+    if (!api || typeof api.getAllGroups !== "function") return;
+
     const hm = currentHm();
     const matched = setting.find(item => timerToHm(item.timer) === hm);
     if (!matched) return;

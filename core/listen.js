@@ -73,7 +73,7 @@ function startListening(api) {
       const music = require("./music");
       const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
       if (pending) {
-        const wrapped = require("./message").wrapApi(api, event.threadId, event.type, "music", event);
+        const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
         Promise.resolve()
           .then(() => require("./music/command").select(pending.providerName, Number(content), { api: wrapped, event, reply: wrapped.__reply }))
           .catch((err) => logger.log(`Lỗi chọn bài: ${err.message}`, "error"));
