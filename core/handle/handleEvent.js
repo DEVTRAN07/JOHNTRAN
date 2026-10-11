@@ -17,7 +17,9 @@ function buildContext(api, eventData, name) {
 
 function handleEvent(eventType, eventData, api, isSelf = false) {
   for (const [name, eventModule] of global.client.events) {
-    const targetEvents = eventModule.config.event_type;
+    // Plugin thiếu config/event_type không được làm throw đồng bộ
+    // (ném lỗi đồng bộ sẽ chặn toàn bộ luồng xử lý tin nhắn → bot im lặng)
+    const targetEvents = eventModule?.config?.event_type;
     if (Array.isArray(targetEvents) && targetEvents.includes(eventType)) {
       if (typeof eventModule.run === "function") {
         const { api: wrapped, reply } = buildContext(api, eventData, name);

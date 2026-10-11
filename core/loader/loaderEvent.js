@@ -21,7 +21,9 @@ function extractDependencies(filePath) {
 }
 
 function loadEvents(dir = path.join(__dirname, "../..", "plugins", "events")) {
-  const files = fs.readdirSync(dir).filter(file => file.endsWith(".js"));
+  // Bot thuần lệnh: thư mục events có thể không tồn tại (git không theo dõi
+  // thư mục rỗng → clone mới trên Render không có dir này). Thiếu dir = 0 event, không lỗi.
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(file => file.endsWith(".js")) : [];
   let shouldRestart = false;
 
   for (const file of files) {

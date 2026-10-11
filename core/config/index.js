@@ -80,7 +80,7 @@ function getNestedValue(target, pathSegments) {
 }
 
 function parseEnvValue(rawValue, isArrayTarget) {
-  // Đích là mảng (vd gemini_keys) → luôn tách theo dấu phẩy
+  // Đích là mảng hoặc giá trị có dấu phẩy → tách theo dấu phẩy
   if (rawValue === "true") return true;
   if (rawValue === "false") return false;
   if (rawValue === "") return "";
@@ -95,7 +95,7 @@ function applyEnvOverrides(config) {
   // JT_MUSIC__MAX_RESULTS=5 → music.max_results
   // JT_SERVICES__MEDIA_DOWNLOADER_URL=... → services.media_downloader_url
   // JT_PREFIX=/ → prefix
-  // JT_AI__GEMINI_KEYS=k1,k2 → ai.gemini_keys (mảng)
+  // JT_MUSIC__MAX_RESULTS=5 → music.max_results
   const applied = [];
   for (const [envKey, rawValue] of Object.entries(process.env)) {
     const match = envKey.match(/^JT_([A-Z0-9_]+)$/);
@@ -149,27 +149,19 @@ const DEFAULTS = {
   privacy: {
     allow_all_hosts: false,
     allowed_hosts: [
-      // Nhạc (first-party)
-      "zingmp3.vn",
-      "zmdcdn.me",
-      "graph.nhaccuatui.com",
-      "nct.vn",
+      // Nhạc (SoundCloud — /scl)
       "soundcloud.com",
       "sndcdn.com",
       "api-v2.soundcloud.com",
-      "api.spotify.com",
-      "accounts.spotify.com",
-      "open.spotify.com",
-      "scdn.co",
-      // AI (first-party Google)
-      "generativelanguage.googleapis.com",
+      // Đọc giọng nói (/noi — Google TTS)
       "translate.google.com",
+      // CDN/media cần cho các tính năng có sẵn
       "files.catbox.moe",
       "catbox.moe",
       "tikwm.com",
+      "www.tikwm.com",
       "tiktokcdn.com",
       "tiktokcdn-us.com",
-      // CDN/media cần cho các tính năng có sẵn
       "imgur.com",
       "i.imgur.com",
       "postimg.cc",
@@ -177,49 +169,27 @@ const DEFAULTS = {
       "pinimg.com",
       "i.pinimg.com",
       "drive.google.com",
-      "whois.inet.vn",
       "dpaste.com",
-      "graph.facebook.com",
-      "facebook.com",
-      "tiktokcdn.com",
-      "tiktokcdn-us.com",
-      "tiktokcdn-us.com.edgesuite.net",
-      "fbcdn.net",
       "googleusercontent.com",
       "zalo.ai",
       "zadn.vn",
       "zdn.vn",
-      "api.elevenlabs.io",
-      "api.checkphatnguoi.vn",
-      "tikwm.com"
+      "api.checkphatnguoi.vn"
     ]
   },
   services: {
     media_downloader_url: "",
-    media_generator_url: "",
-    image_generator_url: "",
     tiktok_api_url: "",
-    bantho_bg_url: "https://i.imgur.com/brK0Hbb.jpg",
-    facebook_api_url: "",
-    facebook_access_token: "",
     phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi",
-    whois_url: "https://whois.inet.vn/api/whois/domainspecify/",
     dpaste_url: "https://dpaste.com/api/v2/"
   },
   ai: {
-    gemini_keys: [],
-    gemini_model: "gemini-2.5-flash",
-    tts_enabled: true,
-    max_history: 8,
-    max_prompt_length: 340,
-    elevenlabs_key: ""
+    tts_enabled: true
   },
   music: {
     max_results: 5,
     cache_ttl: 300000,
-    soundcloud_client_id: "",
-    spotify_client_id: "",
-    spotify_client_secret: ""
+    soundcloud_client_id: ""
   }
 };
 
@@ -243,7 +213,6 @@ function validate(config) {
   if (config.privacy && typeof config.privacy.allow_all_hosts !== "boolean") {
     errors.push("privacy.allow_all_hosts phải là boolean");
   }
-  if (config.ai && !Array.isArray(config.ai.gemini_keys)) errors.push("ai.gemini_keys phải là mảng");
   if (config.music && (!Number.isFinite(config.music.max_results) || config.music.max_results < 1)) {
     errors.push("music.max_results phải là số >= 1");
   }
@@ -280,8 +249,6 @@ function load() {
 
   config.admin_bot = (config.admin_bot || []).map(String);
   config.support_bot = (config.support_bot || []).map(String);
-  if (!Array.isArray(config.ai?.gemini_keys)) config.ai.gemini_keys = [];
-  config.ai.gemini_keys = config.ai.gemini_keys.map(String).filter(Boolean);
 
   return deepFreeze(config);
 }

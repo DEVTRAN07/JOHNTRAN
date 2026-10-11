@@ -21,8 +21,7 @@ function usage(provider, reply) {
       lines: [
         `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
         `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
-        `${global.config.prefix}${provider.name} next — trang kết quả sau`,
-        ...(provider.name === "spt" ? [`${global.config.prefix}spt <link spotify> — lấy thông tin bài hát`] : [])
+        `${global.config.prefix}${provider.name} next — trang kết quả sau`
       ]
     }],
     footer: models.BRAND
@@ -136,17 +135,6 @@ async function runMusic(providerName, { api, event, args, reply }) {
     return showResults(api, threadId, type, provider, pending.query, pageTracks, nextPage);
   }
 
-  // Spotify: nhận link bài hát
-  if (providerName === "spt" && typeof provider.fromUrl === "function" && /open\.spotify\.com\/(track|album)\/[A-Za-z0-9]+/.test(args[0] || "")) {
-    try {
-      const track = await provider.fromUrl(args[0]);
-      music.clearPending(key);
-      return sendTrack(reply, threadId, type, track, providerName, api);
-    } catch (error) {
-      return friendlyError(error, reply);
-    }
-  }
-
   if (!options.queryArgs.length) {
     return usage(provider, reply);
   }
@@ -168,13 +156,15 @@ async function runMusic(providerName, { api, event, args, reply }) {
 }
 
 function createMusicCommand(providerName, meta = {}) {
+  let label = providerName;
+  try { label = music.getProvider(providerName).label; } catch { /* provider chưa đăng ký */ }
   return {
     config: {
       name: providerName,
       version: "3.0.0",
       role: 0,
       author: models.BRAND,
-      description: `Tìm và tải nhạc từ ${providerName === "scl" ? "SoundCloud" : providerName === "spt" ? "Spotify" : providerName === "zing" ? "Zing MP3" : "NhacCuaTui"}`,
+      description: `Tìm và tải nhạc từ ${label}`,
       category: "Nhạc",
       usage: `${providerName} <từ khóa | số thứ tự | next>`,
       cooldowns: 5,

@@ -1,5 +1,5 @@
 // Kiểm tra lệnh còn thiếu API key / endpoint / config nào.
-// Mỗi lệnh khai báo config.requires = [{ key: "ai.gemini_keys", label: "Key Gemini", optional: true }]
+// Mỗi lệnh khai báo config.requires = [{ key: "services.media_downloader_url", label: "Endpoint", optional: true }]
 // key là đường dẫn trong config (vd "services.media_downloader_url").
 
 function getPathValue(config, keyPath) {

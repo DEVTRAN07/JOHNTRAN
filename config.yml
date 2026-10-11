@@ -53,19 +53,10 @@ zalo_client_config:
 # Mọi request ra host lạ sẽ bị CHẶN và ghi log cảnh báo.
 privacy:
   allow_all_hosts: false # true = tắt bộ lọc (không khuyến nghị)
-  allowed_hosts: # host/suffix được phép (vd: zingmp3.vn khớp cả zingmp3.vn lẫn api.zingmp3.vn)
-    - zingmp3.vn
-    - zmdcdn.me
-    - graph.nhaccuatui.com
-    - nct.vn
+  allowed_hosts: # host/suffix được phép (vd: soundcloud.com khớp cả api-v2.soundcloud.com)
     - soundcloud.com
     - sndcdn.com
     - api-v2.soundcloud.com
-    - api.spotify.com
-    - accounts.spotify.com
-    - open.spotify.com
-    - scdn.co
-    - generativelanguage.googleapis.com
     - translate.google.com
     - files.catbox.moe
     - catbox.moe
@@ -82,62 +73,33 @@ privacy:
     - pinimg.com
     - i.pinimg.com
     - drive.google.com
-    - whois.inet.vn
     - dpaste.com
-    - graph.facebook.com
-    - facebook.com
-    - tiktokcdn.com
-    - tiktokcdn-us.com
-    - fbcdn.net
     - googleusercontent.com
     - zalo.ai
     - zadn.vn
     - zdn.vn
-    - api.elevenlabs.io
     - api.checkphatnguoi.vn
-    - tikwm.com
 
 # ===== DỊCH VỤ NGOÀI (chỉ chạy khi admin tự cấu hình endpoint) =====
 # Để trống = tính năng tắt hoàn toàn, bot KHÔNG gửi dữ liệu đi đâu cả.
 services:
   # --- Tải media (autodown) ---
   media_downloader_url: "" # endpoint tải media genergic (autodown)
-  media_generator_url: "" # endpoint video ngẫu nhiên (girltt)
-  image_generator_url: "" # endpoint tạo ảnh/qr (qrheart)
   # --- TikTok/Douyin ---
   tiktok_api_url: "" # endpoint lấy VIDEO tiktok/douyin (autodown). ĐỂ TRỐNG = dùng tikwm.com mặc định
-  bantho_bg_url: "https://i.imgur.com/brK0Hbb.jpg" # ảnh nền lệnh bantho (đổi được)
-  # --- Facebook ---
-  facebook_api_url: "" # endpoint lấy uid facebook
-  facebook_access_token: "" # token Graph API facebook của bạn (fbin4)
   # --- Tiện ích ---
   phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi" # kiểm tra phạt nguội (phatnguoi)
-  whois_url: "https://whois.inet.vn/api/whois/domainspecify/" # tra whois domain (cdm)
   dpaste_url: "https://dpaste.com/api/v2/" # paste text trực tuyến (adc)
 
-# ===== AI =====
-# Key Gemini: https://aistudio.google.com/apikey
-# Key ElevenLabs (TTS /say): https://elevenlabs.io → API Keys
-# ⚠️ KHÔNG để key trực tiếp trong file này (sẽ bị lên git và bị leak).
-# Đặt key vào file .env ở thư mục gốc (file này đã được .gitignore):
-#   JT_AI__GEMINI_KEYS=key1,key2
-#   JT_AI__ELEVENLABS_KEY=sk_xxx
-# Hoặc set biến môi trường trực tiếp khi deploy trên Render/Koyeb.
+# ===== ĐỌC GIỌNG NÓI (/noi — Google TTS miễn phí) =====
 ai:
-  gemini_keys: []
-  gemini_model: "gemini-2.5-flash"
-  max_prompt_length: 340 # giới hạn ký tự prompt gửi đi
-  max_history: 8 # số tin nhắn AI nhớ trong hội thoại với mỗi user
-  elevenlabs_key: "" # key ElevenLabs cho lệnh /say (đặt trong .env)
   tts_enabled: true # bật lệnh /noi đọc giọng nói bằng Google TTS (miễn phí)
 
-# ===== NHẠC =====    
+# ===== NHẠC (/scl — SoundCloud) =====
 music:
   max_results: 5 # số kết quả hiển thị mỗi lần tìm
   cache_ttl: 300000 # thời gian nhớ danh sách chọn bài (ms)
   soundcloud_client_id: "" # để trống = bot tự lấy client_id từ asset chính chủ SoundCloud
-  spotify_client_id: "" # tạo app tại https://developer.spotify.com/dashboard
-  spotify_client_secret: "" # có 2 field này mới tìm kiếm được spotify theo từ khóa
 
 # ===== TẢI MEDIA (autodown) =====
 # YouTube đang chặn bot → dùng nightly yt-dlp đã fix đa số trường hợp.

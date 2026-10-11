@@ -79,7 +79,7 @@ async function downloadToFile(streamUrl, extension) {
   return filePath;
 }
 
-for (const provider of [require("./zing"), require("./nct"), require("./soundcloud"), require("./spotify")]) {
+for (const provider of [require("./soundcloud")]) {
   registerProvider(provider);
 }
 

@@ -59,7 +59,8 @@ function start() {
   if (watcher) return watcher;
   try {
     watcher = fs.watch(COMMANDS_DIR, handleChange(COMMANDS_DIR, "command"));
-    fs.watch(EVENTS_DIR, handleChange(EVENTS_DIR, "event"));
+    // Thư mục events có thể không tồn tại (bot thuần lệnh) → bỏ qua, không chết watcher
+    if (fs.existsSync(EVENTS_DIR)) fs.watch(EVENTS_DIR, handleChange(EVENTS_DIR, "event"));
     logger.log("[hot-reload] Đang theo dõi thay đổi plugin (sửa file là tự nạp lại)", "info");
   } catch (error) {
     logger.log(`[hot-reload] Không thể bật: ${error.message}`, "error");
@@ -79,11 +80,14 @@ function stop() {
 
 function reloadAll() {
   let count = 0;
+  if (!fs.existsSync(COMMANDS_DIR)) return count;
   for (const file of fs.readdirSync(COMMANDS_DIR)) {
     if (file.endsWith(".js") && registerCommand(path.join(COMMANDS_DIR, file))) count++;
   }
-  for (const file of fs.readdirSync(EVENTS_DIR)) {
-    if (file.endsWith(".js") && registerEvent(path.join(EVENTS_DIR, file))) count++;
+  if (fs.existsSync(EVENTS_DIR)) {
+    for (const file of fs.readdirSync(EVENTS_DIR)) {
+      if (file.endsWith(".js") && registerEvent(path.join(EVENTS_DIR, file))) count++;
+    }
   }
   return count;
 }

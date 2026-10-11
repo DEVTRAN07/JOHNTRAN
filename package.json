@@ -33,7 +33,6 @@
     "cheerio": "^1.1.2",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3",
-    "fs-extra": "^11.3.0",
     "jimp": "^0.16.1",
     "jsqr": "^1.4.0",
     "luxon": "^3.7.1",
@@ -43,8 +42,7 @@
     "semver": "^7.7.2",
     "string-similarity": "^4.0.4",
     "yaml": "^2.8.0",
-    "zalo-client": "file:vendor/zalo-client",
-    "zingmp3-api-full": "^1.0.14"
+    "zalo-client": "file:vendor/zalo-client"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

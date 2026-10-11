@@ -41,15 +41,33 @@ function startListening(api) {
     }
 
     // Tin do chính bot gửi: bỏ qua cache (không cần undo) nhưng vẫn xử lý lệnh
-    if (!event.isSelf) updateMessageCache(event);
+    // Mọi bước dưới đây đều phải cô lập lỗi: 1 plugin/module hỏng không được
+    // chặn việc xử lý lệnh (complaint: "bot không phản hồi")
+    try {
+      if (!event.isSelf) updateMessageCache(event);
+    } catch (err) {
+      logger.log(`Lỗi updateMessageCache (bỏ qua): ${err.message}`, "warn");
+    }
 
-    const threadData = await Threads.getData(event.threadId);
+    let threadData = null;
+    try {
+      threadData = await Threads.getData(event.threadId);
+    } catch (err) {
+      // DB (Supabase) hỏng / timeout → vẫn chạy lệnh với threadInfo rỗng
+      logger.log(`Lỗi đọc dữ liệu nhóm ${event.threadId} (bỏ qua): ${err.message}`, "warn");
+    }
 
     const threadInfo = threadData?.data || {};
     const prefix = threadInfo.prefix ? threadInfo.prefix : global.config.prefix;
 
-    // Auto-reply event: module tự quyết (goibot/gemini bỏ qua tin self, log.js log hết)
-    handleEvent("message", event, api, event.isSelf === true);
+    // Bot thuần lệnh: không còn event tự động — handleEvent giữ lại làm khung
+    // cho command có handleEvent (anti/autokick/autodown) và tương lai mở rộng.
+    // handleEvent throw đồng bộ (plugin thiếu config...) phải không làm chết luồng lệnh.
+    try {
+      handleEvent("message", event, api, event.isSelf === true);
+    } catch (err) {
+      logger.log(`Lỗi handleEvent message (bỏ qua): ${err.message}`, "warn");
+    }
 
     const { data } = event;
     const content = typeof data?.content === "object" && data?.content !== null

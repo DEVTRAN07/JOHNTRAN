@@ -183,23 +183,18 @@ await Users.setData("user_id", datauser);
 
 ## 🚀 Cài đặt
 
-### 🎵 Lệnh nhạc (scl • zing • nct • spt)
+### 🎵 Lệnh nhạc (`/scl`)
 
-Bot có sẵn 4 lệnh tải nhạc, tất cả đều gọi **trực tiếp API của nền tảng** (hoặc endpoint do admin tự cấu hình), không qua proxy trung gian nên không rò rỉ dữ liệu:
+Bot gọi **trực tiếp API của nền tảng** (hoặc endpoint do admin tự cấu hình), không qua proxy trung gian nên không rò rỉ dữ liệu:
 
 | Lệnh | Nguồn | Cần cấu hình? |
 |------|-------|---------------|
-| `/zing <từ khóa>` | Zing MP3 | Không |
-| `/nct <từ khóa>` | NhacCuaTui (có ký số WASM tự động) | Không |
 | `/scl <từ khóa>` | SoundCloud | Không (tự lấy client_id từ asset chính chủ) |
-| `/spt <link spotify>` | Spotify (oEmbed) | Không |
-| `/spt <từ khóa>` | Spotify (tìm kiếm) | Cần `spotify_client_id` + `spotify_client_secret` trong config.yml |
 
 **Cách dùng:**
 ```
-/zing Sơn Tùng MTP      → hiện danh sách 5 bài
-/zing 2                 → tải bài số 2 về dạng voice
-/spt https://open.spotify.com/track/xxx  → lấy thông tin bài hát
+/scl Sơn Tùng MTP      → hiện danh sách 5 bài
+/scl 2                 → tải bài số 2 về dạng voice
 ```
 Danh sách kết quả được nhớ 5 phút; trả lời bằng số thứ tự để tải bài.
 
@@ -212,8 +207,8 @@ core/
 ├── config/        # nạp config.yml + override env JT_* → validate → đóng băng (immutable)
 ├── http/          # HTTP client: timeout, retry/backoff, redirect, PRIVACY GUARD chặn host lạ
 ├── services.js    # endpoint do admin cấu hình (trống = tính năng TẮT, không gửi data đi đâu)
-├── ai/            # gemini (nhớ hội thoại) + tts (đọc giọng nói)
-├── music/         # registry nhạc: model Track + 4 provider + lyric + chart + cache chọn bài
+├── ai/            # tts (đọc giọng nói Google TTS cho /noi)
+├── music/         # registry nhạc: model Track + provider SoundCloud + lyric + cache chọn bài
 ├── message.js     # TTL chuẩn (>= 60s vì Zalo bỏ qua TTL nhỏ hơn) + reply helper + wrap api (auto TTL + auto card + reaction)
 ├── canvas/        # render thẻ: vip.js (glassmorphism, icon vector, avatar, progress) + icons.js
 ├── cache.js       # LRU cache TTL cho group/user info + kết quả nhạc
@@ -230,15 +225,14 @@ panel/
 └── server.js      # panel API zero-dependency (không cần express)
 docs/             # panel UI tĩnh cho GitHub Pages
 plugins/
-├── commands/      # 36 lệnh (gồm scl, zing, nct, spt, bxh, lyric, noi, stats)
-└── events/        # 6 event module
+├── commands/      # 24 lệnh (gồm scl, lyric, noi, stats, menu)
+└── events/        # (đã bỏ — bot thuần lệnh, mọi hành vi qua lệnh /xxx)
 ```
 
 **Tính năng nổi bật v3:**
 - **Canvas VIP cho mọi lệnh**: `reply.card()` render thẻ ảnh cao cấp (glassmorphism, glow, icon vector vẽ tay không cần font emoji, avatar tròn, progress bar, 6 theme) — gọi tự động qua api wrapper cho cả lệnh cũ.
 - **Reaction trạng thái**: 🙏 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (thay text chờ).
-- **Welcome card ảnh** khi có thành viên mới vào nhóm.
-- **Menu phân trang**: `/menu`, `/menu 2`, ... mỗi trang 5 nhóm lệnh.
+- **Menu phân trang**: `/menu`, `/menu 2`, ... mỗi trang 5 nhóm lệnh. Điều hướng `/menu next` `/menu out` không bị cooldown chặn.
 - **TTL chuẩn hoá**: mọi tin nhắn TTL ≥ 60.000ms (Zalo chỉ tự xóa tin từ 1 phút) — `ttl.message/error/media/card` trong config.yml.
 - **Đổi storage**: bỏ better-sqlite3 (native), dùng JSON store atomic ghi `data/store.json`, mỗi bot con một file riêng.
 - **Web panel + bot con**: bật `panel.enabled: true` rồi chạy `npm start`, mở `http://localhost:3000` — tạo/dừng/xoá bot con, log realtime, QR đăng nhập, metrics bar, auto-restart, watchdog crash loop.
@@ -246,31 +240,28 @@ plugins/
 
 **Nguyên tắc bảo mật:**
 - `privacy.allowed_hosts`: chỉ các host được liệt kê mới được phép gửi request (kiểm tra ở cả `core/http` và interceptor axios toàn cục).
-- Endpoint dịch vụ ngoài (autodown, qrheart, itik, girltt, fbin4, ai proxy...) **không hardcode** — admin đặt trong `config.yml → services`, để trống là tắt hoàn toàn.
+- Endpoint dịch vụ ngoài (autodown, tải media...) **không hardcode** — admin đặt trong `config.yml → services`, để trống là tắt hoàn toàn.
 - Secret (token, key, cookie, URL ký...) tự động che `***` trong log.
 - Config đóng băng sau khi nạp; không thể bị sửa lúc chạy.
 
 **Lệnh nhạc VIP:**
 | Lệnh | Chức năng |
 |---|---|
-| `/zing`, `/nct`, `/scl`, `/spt` | Tìm nhạc → trả lời số → tải voice; thêm `320` hoặc `-q 320` để lấy chất lượng cao |
-| `/bxh` | Bảng xếp hạng Top 20 Zing → trả lời số để tải |
+| `/scl <từ khóa>` | Tìm nhạc SoundCloud → trả lời số → tải voice; thêm `320` hoặc `-q 320` để lấy chất lượng cao |
 | `/lyric <từ khóa>` | Lời bài hát (thẻ AI) — không nhập = bài tìm gần nhất |
-| `/spt <link spotify>` | Lấy preview 30s chính chủ từ trang embed Spotify (không cần key) |
 
-**Lệnh AI VIP:**
+**Lệnh tiện ích:**
 | Lệnh | Chức năng |
 |---|---|
-| `/gpt <câu hỏi>` | AI nhớ ngữ cảnh hội thoại (8 tin nhắn gần nhất theo user) |
-| `/gpt reset` | Xoá lịch sử hội thoại |
-| `/noi <văn bản>` | Bot đọc thành giọng nói (viếng `ai.tts_enabled: true`) |
+| `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
+| `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
 
 **Kiến trúc + vận hành:**
-- `/stats` — thẻ thống kê ngày (lệnh, nhạc, AI, lỗi, top lệnh, cache hit rate).
+- `/stats` — thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate).
 - **Hot-reload**: sửa file plugin là tự nạp lại (`hot_reload: true`).
 - **LRU cache** cho group/user info + kết quả nhạc (ít gọi API Zalo hơn).
 - **Audit log**: mọi hành động admin ghi vào `data/audit.log`, xem qua panel `/api/metrics`.
-- Test harness: `node scripts/test-commands.js` — **78/78 PASS** (cấu hình + chạy pipeline mọi lệnh).
+- Test harness: `node scripts/test-commands.js` (cấu hình + chạy pipeline mọi lệnh) và `node scripts/test-all.js` (kiểm tra chi tiết từng chức năng).
 
 ---
 
