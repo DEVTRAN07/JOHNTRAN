@@ -105,6 +105,11 @@ services:
 ai:
   tts_enabled: true # bật lệnh /noi đọc giọng nói bằng Google TTS (miễn phí)
 
+# ===== CANVAS (ảnh menu/thẻ/nhạc) =====
+canvas:
+  width: 1280 # cỡ ảnh render. 1280 = lớn rõ; 750 = Zalo gửi NGUYÊN BẢN không resize
+  quality: 100 # chất lượng PNG lossless (giữ original, không nén)
+
 # ===== NHẠC (/scl — SoundCloud) =====
 music:
   max_results: 5 # số kết quả hiển thị mỗi lần tìm

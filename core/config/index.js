@@ -194,6 +194,11 @@ const DEFAULTS = {
   ai: {
     tts_enabled: true
   },
+  // Cỡ ảnh canvas: 1280 = lớn rõ, 750 = Zalo gửi nguyên bản (không resize)
+  canvas: {
+    width: 1280,
+    quality: 100
+  },
   music: {
     max_results: 5,
     cache_ttl: 300000,

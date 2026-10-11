@@ -23,31 +23,56 @@ const PALETTE = {
   gold: "#fbbf24"
 };
 
-// ===== CỠ ẢNH "ORIGINAL" =====
-// Zalo resize + nén JPEG mọi ảnh rộng hơn ~720px → chữ bị mờ, nét bị vỡ.
-// Render ĐÚNG CỠ 750px để Zalo giữ nguyên PNG (lossless) → chữ sắc như thiết kế.
-const WIDTH = 750;
+// ===== CỠ ẢNH =====
+// Mặc định 1280px (kích cỡ cũ, ảnh lớn rõ). Muốn Zalo gửi NGUYÊN BẢN không
+// resize thì set canvas.width: 750 trong config.yml (Zalo resize ảnh > ~720px).
+// Mọi kích thước trong canvas đều scale theo cỡ này nên đổi 1 chỗ là đổi hết.
+const WIDTH = Number(global.config?.canvas?.width) || 1280;
+const DESIGN_WIDTH = 750; // mọi số trong canvas viết cho cỡ 750
+const S = (px) => Math.round((px * WIDTH) / DESIGN_WIDTH);
+const font = (px, family = "JT") => `${S(px)}px ${family}`;
 
-// Hệ số scale từ bản thiết kế 1280px (giữ lại để port nhanh nếu cần)
-const DESIGN_WIDTH = 1280;
-const scale = (px) => Math.round((px * WIDTH) / DESIGN_WIDTH);
+// ===== Font (một kiểu cho mọi ảnh — nhưng NHIỀU family để chọn) =====
+// JT / JT-Bold  : chữ chính (sans)
+// JT-Display   : tiêu đề (serif/trang trọng)
+// JT-Round     : bo tròn thân thiện
+// JT-Mono      : số liệu, thời gian
+const FONT_FAMILIES = ["JT", "JT-Bold", "JT-Display", "JT-Display-Bold", "JT-Round", "JT-Round-Bold", "JT-Mono", "JT-Mono-Bold"];
 
-// ===== Font (một kiểu cho mọi ảnh) =====
-const fontsReady = { done: false };
+let fontsReady = false;
 function initFonts() {
-  if (fontsReady.done) return;
-  fontsReady.done = true;
+  if (fontsReady) return;
+  fontsReady = true;
   const register = (p, family) => { try { if (fs.existsSync(p)) registerFont(p, { family }); } catch { /* bỏ qua */ } };
-  if (process.platform === "darwin") {
+  const platform = process.platform;
+
+  if (platform === "darwin") {
     register("/System/Library/Fonts/Supplemental/Arial.ttf", "JT");
     register("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "JT-Bold");
-    register("/System/Library/Fonts/Avenir.ttc", "JT");
-  } else if (process.platform === "win32") {
+    register("/System/Library/Fonts/Supplemental/Georgia.ttf", "JT-Display");
+    register("/System/Library/Fonts/Supplemental/Georgia Bold.ttf", "JT-Display-Bold");
+    register("/System/Library/Fonts/Avenir.ttc", "JT-Round");
+    register("/System/Library/Fonts/Avenir Next.ttc", "JT-Round-Bold");
+    register("/System/Library/Fonts/Menlo.ttc", "JT-Mono");
+    register("/System/Library/Fonts/Courier New Bold.ttf", "JT-Mono-Bold");
+  } else if (platform === "win32") {
     register("C:\\Windows\\Fonts\\arial.ttf", "JT");
     register("C:\\Windows\\Fonts\\arialbd.ttf", "JT-Bold");
+    register("C:\\Windows\\Fonts\\georgia.ttf", "JT-Display");
+    register("C:\\Windows\\Fonts\\georgiab.ttf", "JT-Display-Bold");
+    register("C:\\Windows\\Fonts\\segoeui.ttf", "JT-Round");
+    register("C:\\Windows\\Fonts\\segoeuib.ttf", "JT-Round-Bold");
+    register("C:\\Windows\\Fonts\\consola.ttf", "JT-Mono");
+    register("C:\\Windows\\Fonts\\consolab.ttf", "JT-Mono-Bold");
   } else {
     register("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "JT");
     register("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "JT-Bold");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "JT-Display");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", "JT-Display-Bold");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "JT-Round");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "JT-Round-Bold");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "JT-Mono");
+    register("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", "JT-Mono-Bold");
   }
 }
 
@@ -127,22 +152,22 @@ function panel(ctx, x, y, w, h, r = 16, accent = PALETTE.accent) {
 // Nút dùng chung (PREV / NEXT / OUT...)
 function button(ctx, x, y, w, h, label, color) {
   ctx.fillStyle = `${color}2e`; // ~18% alpha
-  roundRect(ctx, x, y, w, h, 14);
+  roundRect(ctx, x, y, w, h, S(14));
   ctx.fill();
   ctx.strokeStyle = color;
   ctx.globalAlpha = 0.6;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = S(1.5);
   ctx.stroke();
   ctx.globalAlpha = 1;
-  ctx.font = "bold 22px JT-Bold";
+  ctx.font = font(22, "JT-Bold");
   ctx.fillStyle = color;
   ctx.textAlign = "center";
-  ctx.fillText(label, x + w / 2, y + h / 2 + 8);
+  ctx.fillText(label, x + w / 2, y + h / 2 + S(8));
   ctx.textAlign = "left";
 }
 
-function text(ctx, str, x, y, { font = "20px JT", color = PALETTE.ink2, align = "left", maxWidth } = {}) {
-  ctx.font = font;
+function text(ctx, str, x, y, { size = 20, family = "JT", color = PALETTE.ink2, align = "left", maxWidth } = {}) {
+  ctx.font = font(size, family);
   ctx.fillStyle = color;
   ctx.textAlign = align;
   if (maxWidth) ctx.fillText(truncate(ctx, str, maxWidth), x, y);
@@ -161,4 +186,4 @@ function save(canvas, prefix) {
   return filePath;
 }
 
-module.exports = { PALETTE, WIDTH, scale, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save };
+module.exports = { PALETTE, WIDTH, S, font, FONT_FAMILIES, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save };

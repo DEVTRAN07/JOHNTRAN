@@ -1,7 +1,8 @@
 const fs = require("fs");
+const logger = require("../../utils/logger");
 const menuCard = require("../../core/canvas/menu");
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 8; // khớp canvas 8 lệnh/trang
 const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 
 module.exports.config = {
@@ -117,30 +118,33 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
 // ===== Gõ "next"/"prev"/"out" KHÔNG CẦN PREFIX (nút trên ảnh chỉ là hình vẽ) =====
 // Chỉ chạy khi menu đã mở (nhóm có menu_page) để khỏi phản hồi linh tinh trong hội thoại.
 module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
+    const { threadId, type } = event;          // ← thiếu dòng này gây ReferenceError
     if (isSelf) return;
-    if (event.type !== 1) return; // chỉ nhóm
+    if (type !== 1) return; // chỉ nhóm
     const content = String(event?.data?.content || "").trim().toLowerCase();
     if (!content) return;
     // Không phải dạng điều hướng (nhiều từ, dính link, tag...) → bỏ qua
     if (!NAV_WORDS.includes(content) && !/^\d{1,2}$/.test(content)) return;
 
-    // Đang có kết quả nhạc chờ chọn → để listen.js xử lý cho nhạc (tránh 2 phản hồi)
-    try {
-      const music = require("../../core/music");
-      if (music.getPending && music.getPending(music.pickKey(event.threadId, event.data.uidFrom))) return;
-    } catch { /* không nạy được music thì thôi */ }
+    const threadData = (await Threads.getData(threadId)).data || {};
 
-    const threadData = (await Threads.getData(event.threadId)).data || {};
-    if (!threadData.menu_page) {
-      // Chưa mở menu → nhắc 1 câu ngắn (không tự mở để khỏi nhiễu nhóm)
-      return api.sendMessage({
-        msg: `📋 Gõ ${global.config.prefix}menu trước đã, rồi gõ next / prev / out để điều hướng.`,
-        ttl: 60000
-      }, threadId, type);
+    // MENU ĐANG MỞ → menu được ưu tiên (vừa mở menu thì người dùng muốn lật trang)
+    if (threadData.menu_page) {
+        logger.log(`[menu] nhóm ${threadId} điều hướng "${content}" (người ${event.data.uidFrom})`, "info");
+        return navigate({ api, event, Threads, action: content, senderId: event.data.uidFrom });
     }
 
-    const senderId = event.data.uidFrom;
-    await navigate({ api, event, Threads, action: content, senderId });
+    // Menu chưa mở: nếu đang có kết quả NHẠC thì nhường cho nhạc (listen.js xử lý)
+    try {
+      const music = require("../../core/music");
+      if (music.getPending && music.getPending(music.pickKey(threadId, event.data.uidFrom))) return;
+    } catch { /* không nạy được music thì thôi */ }
+
+    // Không có gì đang mở → nhắc 1 câu ngắn (không tự mở để khỏi nhiễu nhóm)
+    return api.sendMessage({
+        msg: `📋 Gõ ${global.config.prefix}menu trước đã, rồi gõ next / prev / out để điều hướng.`,
+        ttl: 60000
+    }, threadId, type);
 };
 
 module.exports.run = async function ({ api, event, args, Threads, reply }) {

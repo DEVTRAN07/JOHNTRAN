@@ -87,11 +87,13 @@ function startListening(api) {
     }
 
     // Gõ "next"/"prev"/"out" hoặc số trần (vd "2") → điều hướng kết quả nhạc
-    // gần nhất, không cần /scl ... Nhạc được ưu tiên trước menu phân trang.
+    // gần nhất, không cần /scl ... MENU ĐANG MỞ thì menu ưu tiên (menu.handleEvent
+    // đã xử lý trước đó rồi) nên đây chỉ chạy khi không có menu nào đang mở.
     const MUSIC_NAV = ["next", "prev", "previous", "back", "out", "exit", "close"];
     if (canRunCommand && (MUSIC_NAV.includes(content) || /^\d{1,2}$/.test(content))) {
+      const menuOpen = Boolean(threadInfo?.menu_page);
       const music = require("./music");
-      const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
+      const pending = menuOpen ? null : music.getPending(music.pickKey(event.threadId, data.uidFrom));
       if (pending) {
         const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
         Promise.resolve()

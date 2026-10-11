@@ -1,38 +1,39 @@
-// ===== Menu dạng lưới thẻ — cỡ 750px (Zalo giữ nguyên PNG, chữ sắc) =====
-// Dùng theme chung (core/canvas/theme.js) cho nền/font/bo góc.
+// ===== Menu dạng lưới thẻ — dùng theme chung (core/canvas/theme.js) =====
+// Mọi kích thước viết theo cỡ 750 rồi scale theo theme.WIDTH (config canvas.width).
+const fs = require("fs");
 const theme = require("./theme");
 
 // Ảnh trong Zalo KHÔNG có nút bấm được nên footer ghi rõ lệnh để gõ.
 // Đồng thời menu.js có handleEvent bắt "next"/"prev"/"out" (khỏi cần prefix).
 async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, commands, uptimeText }) {
   theme.initFonts();
+  const S = theme.S;
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text } = theme;
+  const { PALETTE, panel, button, text, font } = theme;
 
-  // ===== Bố cục 2 cột × 4 hàng = 8 lệnh/trang, thẻ vừa đủ chữ đọc trên điện thoại =====
+  // ===== Bố cục: 8 lệnh/trang, 2 cột =====
   const perPage = 8;
   const cols = 2;
   const rows = Math.ceil(Math.min(commands.page.length, perPage) / cols);
-  const cardW = (W - 36 - 18) / cols; // 36px lề + 18px khe giữa 2 cột
-  const cardH = 148;
-  const gapX = 18;
-  const gapY = 14;
-  const headerH = 118;
-  const footerH = 132;
+  const cardW = (W - S(36) - S(18)) / cols;
+  const cardH = S(148);
+  const gapX = S(18);
+  const gapY = S(14);
+  const headerH = S(118);
+  const footerH = S(132);
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
 
-  // ===== Header =====
-  text(ctx, "⚡", 22, 56, { font: "34px JT", color: PALETTE.accent });
-  text(ctx, botName, W / 2, 56, { font: "bold 38px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 150 });
-  text(
-    ctx,
-    `🕐 ${uptimeText}  •  🔑 ${prefix}  •  📋 ${commands.total} lệnh`,
-    W / 2, 92,
-    { font: "17px JT", color: PALETTE.ink2, align: "center" }
-  );
+  // ===== Header: icon + tên bot (font Display) + info (font Mono) =====
+  text(ctx, "⚡", S(22), S(56), { size: 34, color: PALETTE.accent });
+  text(ctx, botName, W / 2, S(56), { size: 38, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
+  ctx.font = font(17, "JT-Mono");
+  ctx.fillStyle = PALETTE.ink2;
+  ctx.textAlign = "center";
+  ctx.fillText(`🕐 ${uptimeText}  •  🔑 ${prefix}  •  📋 ${commands.total} lệnh`, W / 2, S(92));
+  ctx.textAlign = "left";
 
   // avatar tròn góc phải
   if (avatarUrl) {
@@ -40,18 +41,18 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
       const { buffer } = await require("../http").getBuffer(avatarUrl, { timeout: 12000, retries: 1 });
       const { loadImage } = require("canvas");
       const img = await loadImage(buffer);
-      const size = 78;
-      const ax = W - 22 - size;
+      const size = S(78);
+      const ax = W - S(22) - size;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(ax + size / 2, 20 + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.arc(ax + size / 2, S(20) + size / 2, size / 2, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(img, ax, 20, size, size);
+      ctx.drawImage(img, ax, S(20), size, size);
       ctx.restore();
       ctx.strokeStyle = PALETTE.accent;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = S(2.5);
       ctx.beginPath();
-      ctx.arc(ax + size / 2, 20 + size / 2, size / 2 + 2, 0, Math.PI * 2);
+      ctx.arc(ax + size / 2, S(20) + size / 2, size / 2 + 2, 0, Math.PI * 2);
       ctx.stroke();
     } catch { /* bỏ qua */ }
   }
@@ -61,41 +62,41 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   shown.forEach((cmd, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
-    const x = 22 + col * (cardW + gapX);
+    const x = S(22) + col * (cardW + gapX);
     const y = headerH + row * (cardH + gapY);
 
-    panel(ctx, x, y, cardW, cardH, 14);
+    panel(ctx, x, y, cardW, cardH, S(14));
 
-    // emoji + tên lệnh
-    text(ctx, commandEmoji(cmd.name), x + 16, y + 44, { font: "26px JT" });
-    text(ctx, cmd.name, x + 56, y + 42, { font: "bold 25px JT-Bold", color: PALETTE.ink, maxWidth: cardW - 80 });
+    // emoji + tên lệnh (font Round cho thân thiện)
+    text(ctx, commandEmoji(cmd.name), x + S(16), y + S(44), { size: 26 });
+    text(ctx, cmd.name, x + S(56), y + S(42), { size: 25, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(80) });
 
-    // cách dùng
-    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + 16, y + 84, { font: "16px JT", color: PALETTE.mute, maxWidth: cardW - 32 });
+    // cách dùng (font Mono cho rõ prefix)
+    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + S(16), y + S(84), { size: 16, family: "JT-Mono", color: PALETTE.mute, maxWidth: cardW - S(32) });
 
     // nhóm lệnh
-    text(ctx, cmd.category.toUpperCase(), x + 16, y + 118, { font: "bold 13px JT-Bold", color: PALETTE.accent2, maxWidth: cardW - 32 });
+    text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(118), { size: 13, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
   });
 
-  // ===== Footer điều hướng =====
-  const footY = H - footerH + 16;
-  const btnW = (W - 44 - 20) / 3;
-  button(ctx, 22, footY, btnW, 46, "⬅ PREV", PALETTE.gold);
-  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + 30, { font: "bold 22px JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, 22 + btnW * 2 + 20, footY, btnW, 46, "NEXT ➡", PALETTE.green);
-  button(ctx, 22 + btnW + 10, footY, btnW - 10, 46, "❌ OUT", PALETTE.red);
+  // ===== Footer điều hướng: 3 nút emoji =====
+  const footY = H - footerH + S(16);
+  const btnW = (W - S(44) - S(20)) / 3;
+  button(ctx, S(22), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
+  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(30), { size: 22, family: "JT-Bold", color: PALETTE.ink, align: "center" });
+  button(ctx, S(22) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
+  button(ctx, S(22) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
 
   text(
     ctx,
     `⌨️ ${prefix}menu next • prev • <số> • out  (hoặc gõ trần next/prev/out)`,
-    W / 2, footY + 86,
-    { font: "15px JT", color: PALETTE.ink2, align: "center" }
+    W / 2, footY + S(86),
+    { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
   text(
     ctx,
-    `💡 Gõ trần next / prev / out (khỏi prefix) — nhớ gõ /menu trước đã nhé`,
-    W / 2, footY + 110,
-    { font: "14px JT", color: PALETTE.mute, align: "center" }
+    `💡 Gõ trần next / prev / out (khỏi prefix) — nhớ gõ ${prefix}menu trước đã nhé`,
+    W / 2, footY + S(110),
+    { size: 14, color: PALETTE.mute, align: "center" }
   );
 
   return theme.save(canvas, "menu");
