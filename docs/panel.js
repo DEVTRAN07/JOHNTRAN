@@ -82,6 +82,7 @@ async function refresh() {
     const data = await api("/api/bots");
     render(data);
     loadMetrics();
+    loadBotStats();
     setConn(true, `đã kết nối • ${data.bots.length} bot con`);
     if (autoRefresh) clearInterval(autoRefresh);
     autoRefresh = setInterval(() => { if (!$("modal").classList.contains("open")) refresh(); }, 10000);
@@ -168,6 +169,55 @@ async function loadMetrics() {
     if (audit) {
       audit.textContent = m.audit?.length ? m.audit.join("\n") : "(chưa có hành động admin nào)";
     }
+  } catch { /* bỏ qua */ }
+}
+
+/* ---------- thống kê bot con (hồ sơ, bạn bè, nhóm) ---------- */
+async function loadBotStats() {
+  try {
+    const { stats } = await api("/api/stats");
+    const entries = Object.entries(stats || {});
+    if (entries.length === 0) {
+      $("profileInfo").innerHTML = '<tr><td colspan="2" style="color:var(--sub)">(chưa có — bot con sẽ gửi sau 30s)</td></tr>';
+      return;
+    }
+    // lấy bot con mới cập nhật nhất
+    entries.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+    const [botName, s] = entries[0];
+    const p = s.profile || {};
+
+    $("botAvatar").src = p.avatar || "";
+    const online = s.status === "online" && (s.updatedAt || 0) > Date.now() - 90000;
+    $("botStateBadge").textContent = online ? "online" : "offline";
+    $("botStateBadge").className = "badge " + (online ? "on" : "off");
+
+    $("profileInfo").innerHTML = [
+      ["Bot con", `<code>${escapeHtml(botName)}</code>`],
+      ["Tên Zalo", escapeHtml(p.displayName || "—")],
+      ["UID", `<code>${escapeHtml(p.uid || "—")}</code>`],
+      ["Số điện thoại", `<code>${escapeHtml(p.phoneNumber || "—")}</code>`],
+      ["Bạn bè", `<b>${s.friends?.total ?? 0}</b>`],
+      ["Nhóm", `<b>${s.groups?.total ?? 0}</b>`],
+      ["Uptime bot", uptime(s.process?.uptimeMs || 0)],
+      ["RAM bot", (s.process?.memoryMb ?? "—") + " MB"],
+      ["Cập nhật", new Date(s.updatedAt || Date.now()).toLocaleTimeString("vi-VN")]
+    ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+
+    // danh sách bạn bè
+    $("friendCount").textContent = s.friends?.total ?? 0;
+    $("friendList").innerHTML = (s.friends?.list || []).map(f => `
+      <div class="list-item">
+        <img src="${escapeAttr(f.avatar || "")}" alt="" loading="lazy">
+        <div class="meta"><div class="name">${escapeHtml(f.displayName || f.uid)}</div><div class="sub2">${escapeHtml(f.uid)}</div></div>
+      </div>`).join("") || '<div class="empty">(không có bạn bè)</div>';
+
+    // danh sách nhóm
+    $("groupCount").textContent = s.groups?.total ?? 0;
+    $("groupList").innerHTML = (s.groups?.list || []).map(g => `
+      <div class="list-item">
+        <img src="${escapeAttr(g.avatar || "")}" alt="" loading="lazy">
+        <div class="meta"><div class="name">${escapeHtml(g.name || g.gid)}</div><div class="sub2">${g.totalMember} thành viên</div></div>
+      </div>`).join("") || '<div class="empty">(bot chưa vào nhóm nào)</div>';
   } catch { /* bỏ qua */ }
 }
 

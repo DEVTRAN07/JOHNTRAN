@@ -12,6 +12,7 @@ const hotReload = require("./core/hotReload");
 const { startHealthServer } = require("./core/health");
 const { bootstrapFiles } = require("./core/bootstrap");
 const db = require("./utils/db");
+const stats = require("./core/stats");
 const schedule = require("node-schedule");
 const { cleanOldMessages } = require("./utils/index");
 
@@ -114,6 +115,24 @@ await loaderEvent();
 if (global.config.hot_reload) {
   hotReload.start();
 }
+
+// Gửi thống kê (hồ sơ, bạn bè, nhóm) lên store để panel hiển thị
+const STATS_INTERVAL = 30000;
+const sendStats = async () => {
+  if (!global.api) return;
+  try {
+    const data = await stats.collectStats(global.api);
+    db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
+      ...data,
+      status: "online",
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    logger.log(`Không gửi được thống kê: ${error.message}`, "warn");
+  }
+};
+sendStats();
+setInterval(sendStats, STATS_INTERVAL).unref();
 
 listener(api);
 

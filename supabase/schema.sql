@@ -31,3 +31,11 @@ create index if not exists bot_users_updated_idx on bot_users (updated_at desc);
 alter table bot_threads enable row level security;
 alter table bot_users enable row level security;
 alter table bot_metrics enable row level security;
+
+-- Bảng thống kê bot con (panel quản lý đọc)
+create table if not exists bot_stats (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table bot_stats enable row level security;

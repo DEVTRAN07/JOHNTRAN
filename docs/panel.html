@@ -45,6 +45,31 @@
   <!-- Metrics tổng -->
   <section class="metrics" id="metricsBar"></section>
 
+  <!-- Hồ sơ bot -->
+  <section class="card profile-card">
+    <div class="row" style="gap:20px;align-items:flex-start">
+      <img id="botAvatar" class="avatar" alt="avatar" src="data:image/svg+xml,%3Csvg xmlns=\x27http://www.w3.org/2000/svg\x27 width=\x2780\x27 height=\x2780\x27%3E%3Crect width=\x2780\x27 height=\x2780\x27 fill=\x27%23121826\x27/%3E%3C/svg%3E">
+      <div style="flex:1;min-width:220px">
+        <h2 style="margin-bottom:8px">Hồ sơ bot <span class="badge on" id="botStateBadge">—</span></h2>
+        <table class="info" id="profileInfo">
+          <tr><td colspan="2" style="color:var(--sub)">(chưa tải — cần bot con gửi thống kê)</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bạn bè & Nhóm -->
+  <section class="two-col">
+    <div class="card">
+      <h2>Bạn bè <span class="badge-count" id="friendCount">0</span></h2>
+      <div class="list" id="friendList"><div class="empty">(chưa tải)</div></div>
+    </div>
+    <div class="card">
+      <h2>Nhóm bot đang ở <span class="badge-count" id="groupCount">0</span></h2>
+      <div class="list" id="groupList"><div class="empty">(chưa tải)</div></div>
+    </div>
+  </section>
+
   <!-- Quản lý bot con -->
   <section class="card">
     <div class="row between">

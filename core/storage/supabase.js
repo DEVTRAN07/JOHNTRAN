@@ -9,7 +9,8 @@ const { createClient } = require("@supabase/supabase-js");
 const TABLE_MAP = {
   Users: "bot_users",
   Threads: "bot_threads",
-  Metrics: "bot_metrics"
+  Metrics: "bot_metrics",
+  BotStats: "bot_stats"
 };
 
 const SYNC_INTERVAL = Number(process.env.SUPABASE_SYNC_MS) || 30000;

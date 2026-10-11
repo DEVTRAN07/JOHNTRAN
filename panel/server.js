@@ -300,6 +300,18 @@ function startPanel({ manager, config }) {
         }
       }
 
+      if (pathname === "/api/stats" && req.method === "GET") {
+        try {
+          const db = require("../utils/db");
+          const rows = db.allData("BotStats");
+          const stats = {};
+          for (const row of rows) stats[row.name] = row.data;
+          return sendJson(res, 200, { stats });
+        } catch (error) {
+          return sendJson(res, 500, { error: error.message });
+        }
+      }
+
       if (pathname === "/api/master" && req.method === "GET") {
         return sendJson(res, 200, {
           botCount: manager.list().length,

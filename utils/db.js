@@ -15,7 +15,7 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 } else {
   // Local/dev: JSON store atomic trên đĩa
   const dbFile = process.env.JT_DB_FILE || path.join(__dirname, "..", "data", "store.json");
-  db = new JsonStore(dbFile, ["Users", "Threads", "Metrics"]);
+  db = new JsonStore(dbFile, ["Users", "Threads", "Metrics", "BotStats"]);
   logger.log(`Database: JSON store (${path.basename(dbFile)})`, "info");
 }
 
