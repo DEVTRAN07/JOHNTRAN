@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# copy package.json + vendor TRƯỚC để npm ci tìm thấy zalo-client (file:vendor/zalo-client)
 COPY package*.json ./
+COPY vendor ./vendor
 RUN npm ci --omit=dev || npm install --omit=dev
 COPY . .
 

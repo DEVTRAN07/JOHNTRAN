@@ -1,0 +1,67 @@
+{
+    "name": "zalo-client",
+    "version": "3.0.0",
+    "description": "Modern Zalo API client for JavaScript and TypeScript",
+    "main": "dist/index.js",
+    "type": "module",
+    "exports": {
+        ".": {
+            "require": "./dist/cjs/index.cjs",
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "prebuild": "node scripts/buildAPI.js",
+        "build": "tsdown",
+        "build:types": "tsc --noEmit --emitDeclarationOnly",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "prettier": "prettier --write .",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "typecheck": "tsc --noEmit",
+        "prepare": "husky"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "keywords": [
+        "zalo",
+        "zalo-client",
+        "zalo-api",
+        "chatbot",
+        "api",
+        "client"
+    ],
+    "author": "RFS-ADRENO, truong9c2208, JustKemForFun",
+    "license": "MIT",
+    "dependencies": {
+        "form-data": "^4.0.4",
+        "json-bigint": "^1.0.0",
+        "pako": "^2.1.0",
+        "tough-cookie": "^5.0.0",
+        "ws": "^8.18.0"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.17.0",
+        "@types/json-bigint": "^1.0.4",
+        "@types/node": "^22.10.0",
+        "@types/pako": "^2.0.3",
+        "@types/ws": "^8.5.13",
+        "@vitest/coverage-v8": "^2.1.8",
+        "eslint": "^9.17.0",
+        "globals": "^15.14.0",
+        "husky": "^9.1.7",
+        "lint-staged": "^15.2.11",
+        "prettier": "^3.4.2",
+        "tsdown": "^0.11.3",
+        "typescript": "^5.7.2",
+        "typescript-eslint": "^8.18.0",
+        "vitest": "^2.1.8"
+    },
+    "lint-staged": {
+        "*.{js,ts}": "eslint --fix"
+    }
+}

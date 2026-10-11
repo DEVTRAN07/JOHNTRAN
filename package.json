@@ -43,7 +43,7 @@
     "semver": "^7.7.2",
     "string-similarity": "^4.0.4",
     "yaml": "^2.8.0",
-    "zalo-client": "file:../Zalo-Client",
+    "zalo-client": "file:vendor/zalo-client",
     "zingmp3-api-full": "^1.0.14"
   },
   "devDependencies": {
