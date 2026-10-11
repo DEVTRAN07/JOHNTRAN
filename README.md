@@ -336,6 +336,18 @@ plugins/
 
 Panel có: danh sách bot con (pid, uptime, restart, crash-loop) • chạy/dừng/khởi động lại/xoá • xem log realtime (tạm dừng/tiếp tục) • xem QR đăng nhập • bật/tắt auto-restart • metrics (lệnh, nhạc, AI, cache, RAM) • top lệnh • audit log admin • trang trạng thái tổng.
 
+### ⚠️ Vì sao KHÔNG dùng SnapDeploy free cho bot này
+
+SnapDeploy free (4 container, 100h/tháng, không cần thẻ) có 3 giới hạn chặn bot Zalo:
+
+| Giới hạn SnapDeploy free | Hệ quả với bot |
+|---|---|
+| **Không có WebSocket** (WebSocket chỉ ở Always-On $12/tháng) | Listener Zalo không kết nối được → không nhận tin |
+| **Ngủ sau 15 phút** không có truy cập, chỉ browser mới đánh thức (~60s) | Bot ngủ là mất kết nối Zalo; script/cron không đánh thức được |
+| **100 giờ/tháng** (24/7 cần ~730 giờ) | Chỉ chạy được ~4 ngày/tháng |
+
+→ SnapDeploy chỉ dùng được nữa mua **Always-On $12/tháng** (có WebSocket, không ngủ).
+
 ### Phương án dự phòng: Render + UptimeRobot
 
 Render free (750h/tháng) **ngủ sau 15 phút** không có request. Nếu dùng Render: tạo Web Service (Docker) + UptimeRobot ping `https://xxx.onrender.com/health` mỗi 5 phút để giữ thức. Bot sẽ trễ ~1 phút mỗi lần thức dậy — Northflank không có vấn đề này.
