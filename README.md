@@ -294,6 +294,10 @@ plugins/
 
 ### Bước 2 — Deploy Koyeb
 
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=docker&repository=github.com/DEVTRAN07/JOHNTRAN&branch=main&name=johntran-bot)
+
+> ⚠️ Repo phải để **Public** (GitHub → Settings → Danger Zone → Change visibility → Public) thì Koyeb mới deploy được và GitHub Pages mới chạy. Repo không chứa secret nào — toàn bộ key nằm trong biến môi trường trên Koyeb.
+
 1. Đăng nhập [koyeb.com](https://koyeb.com) → **Create Service** → deploy từ GitHub repo này
 2. Builder: **Docker** (repo có sẵn `Dockerfile`: yt-dlp + ffmpeg + canvas deps)
 3. **Environment variables**:
