@@ -275,9 +275,8 @@ function startPanel({ manager, config }) {
         }
       }
 
-      if (pathname === "/" || pathname === "/index.html") {
-        return sendHtml(res, DASHBOARD_HTML);
-      }
+      // Panel UI tĩnh (docs/) — xử lý trước mọi route API
+      if (!pathname.startsWith("/api") && serveStatic(pathname, res)) return;
 
       if (pathname === "/api/bots" && req.method === "GET") {
         return sendJson(res, 200, { bots: manager.list(), master: { botCount: manager.list().length, uptimeMs: process.uptime() * 1000 } });
@@ -407,6 +406,27 @@ function sendJson(res, status, data) {
 function sendHtml(res, html) {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(html);
+}
+
+// Serve panel UI (docs/) trực tiếp từ host bot — không cần GitHub Pages
+const STATIC_FILES = { "/": "index.html", "/panel": "panel.html", "/panel.html": "panel.html" };
+function serveStatic(pathname, res) {
+  const docDir = path.resolve(__dirname, "..", "docs");
+  let filePath = null;
+  if (STATIC_FILES[pathname]) filePath = path.join(docDir, STATIC_FILES[pathname]);
+  else if (/^\/(panel\.(css|js)|index\.html)$/.test(pathname)) filePath = path.join(docDir, pathname.slice(1));
+  if (!filePath) return false;
+  fs.readFile(filePath, (error, content) => {
+    if (error) {
+      res.writeHead(404);
+      return res.end("Not found");
+    }
+    const ext = path.extname(filePath);
+    const types = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8" };
+    res.writeHead(200, { "Content-Type": types[ext] || "application/octet-stream", "Cache-Control": "no-store" });
+    res.end(content);
+  });
+  return true;
 }
 
 module.exports = { startPanel };

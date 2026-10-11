@@ -13,5 +13,4 @@ qr.png
 .env.*
 *.log
 .DS_Store
-docs
 scripts

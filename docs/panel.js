@@ -1,4 +1,4 @@
-/* ===== ᴶᴼᴴᴺ ᵀᴿᴬᴺ Panel — logic kết nối tới API host bot (Koyeb) ===== */
+/* ===== ᴶᴼᴴᴺ ᵀᴿᴬᴺ Panel — logic kết nối tới API host bot ===== */
 const LS_URL = "jt_panel_url";
 const LS_TOKEN = "jt_panel_token";
 
@@ -19,6 +19,13 @@ function toast(msg) {
 }
 
 /* ---------- kết nối ---------- */
+// Nếu panel được serve TRỰC TIẾP từ host bot (Render/Koyeb...), API mặc định = chính origin đó.
+// Nếu panel chạy trên GitHub Pages, nhập URL host bot vào ô REMOTE PANEL URL.
+function defaultApi() {
+  if (localStorage.getItem(LS_URL)) return localStorage.getItem(LS_URL);
+  return location.origin;
+}
+
 function saveConfig() {
   API = $("remoteUrl").value.trim().replace(/\/+$/, "");
   TOKEN = $("token").value.trim();
@@ -29,7 +36,7 @@ function saveConfig() {
 }
 
 function loadConfig() {
-  API = localStorage.getItem(LS_URL) || "";
+  API = defaultApi();
   TOKEN = localStorage.getItem(LS_TOKEN) || "";
   $("remoteUrl").value = API;
   $("token").value = TOKEN;
