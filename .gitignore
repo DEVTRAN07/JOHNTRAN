@@ -10,8 +10,6 @@ bots/
 # PM2 (không dùng nữa)
 ecosystem.config.cjs
 
-# Deploy artifacts
-.vercel
 .DS_Store
 *.log
 

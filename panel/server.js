@@ -259,7 +259,7 @@ function startPanel({ manager, config }) {
 
       // ===== CORS: cho phép dashboard tĩnh (Vercel) gọi API panel từ origin khác =====
       res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
       if (req.method === "OPTIONS") {
         res.writeHead(204);
@@ -300,6 +300,14 @@ function startPanel({ manager, config }) {
         }
       }
 
+      if (pathname === "/api/master" && req.method === "GET") {
+        return sendJson(res, 200, {
+          botCount: manager.list().length,
+          uptimeMs: process.uptime() * 1000,
+          node: process.version
+        });
+      }
+
       // health endpoint cho UptimeRobot / cloud monitor ping (luôn 200 để chống sleep)
       if (pathname === "/health" && req.method === "GET") {
         return sendJson(res, 200, {
@@ -331,6 +339,14 @@ function startPanel({ manager, config }) {
             await manager.remove(name);
             return sendJson(res, 200, { removed: name });
           }
+          if (req.method === "PATCH" || req.method === "PUT") {
+            const body = await readBody(req);
+            if (typeof body.autoRestart === "boolean") {
+              manager.setAutoRestart(name, body.autoRestart);
+              return sendJson(res, 200, { bot: manager.get(name).toJSON() });
+            }
+            return sendJson(res, 400, { error: "Thiếu trường autoRestart (boolean)" });
+          }
           return sendJson(res, 200, { bot: bot.toJSON() });
         }
 
@@ -346,8 +362,10 @@ function startPanel({ manager, config }) {
             const pid = await bot.restart();
             return sendJson(res, 200, { pid });
           }
-          case "logs":
-            return sendJson(res, 200, { logs: bot.logs.slice(-MAX_LOG) });
+          case "logs": {
+            const limit = Math.min(Number(url.searchParams.get("lines")) || MAX_LOG, 500);
+            return sendJson(res, 200, { logs: bot.logs.slice(-limit) });
+          }
           case "qr": {
             const qrFile = botPaths(name).qrFile;
             if (!fs.existsSync(qrFile)) return sendJson(res, 404, { error: "Chưa có QR (bot chưa chạy hoặc đã đăng nhập)" });

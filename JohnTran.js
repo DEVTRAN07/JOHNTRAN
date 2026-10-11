@@ -11,6 +11,7 @@ const musicSystem = require("./core/music");
 const hotReload = require("./core/hotReload");
 const { startHealthServer } = require("./core/health");
 const { bootstrapFiles } = require("./core/bootstrap");
+const db = require("./utils/db");
 const schedule = require("node-schedule");
 const { cleanOldMessages } = require("./utils/index");
 
@@ -99,6 +100,13 @@ const api = await login();
 global.api = api;
 
 logger.log("Đã đăng nhập thành công", "info");
+
+// Supabase: đợi đồng bộ mirror xong mới xử lý tin (tránh mất settings nhóm)
+try {
+  await db.ready?.();
+} catch (error) {
+  logger.log(`Chưa đồng bộ được database: ${error.message}`, "warn");
+}
 
 await loaderCommand();
 await loaderEvent();

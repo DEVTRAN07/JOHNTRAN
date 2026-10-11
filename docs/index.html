@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Trạng thái bot</title>
+<link rel="stylesheet" href="panel.css">
+<style>
+  .hero { text-align: center; padding: 40px 0 26px; }
+  .hero h1 {
+    font-size: 44px; font-weight: 900; letter-spacing: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p { color: var(--sub); margin-top: 10px; font-size: 14px; line-height: 1.8; }
+  .actions { display: flex; gap: 12px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+  .btn.big { padding: 13px 26px; font-size: 15px; }
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; max-width: 860px; margin: 30px auto 0; }
+  .status-item { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; }
+  .status-item .label { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .status-item .value { font-size: 20px; font-weight: 700; margin-top: 6px; }
+  .status-item .value.ok { color: var(--green); }
+  .status-item .value.err { color: var(--red); }
+  .foot { text-align: center; color: var(--sub); font-size: 12px; margin-top: 40px; line-height: 1.8; }
+  .foot a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="glow a"></div><div class="glow b"></div>
+<main>
+  <div class="hero">
+    <h1>ᴶᴼᴴᴺ ᵀᴿᴬᴺ</h1>
+    <p>Bot Zalo chạy 24/7 trên <b>Koyeb</b> • Database <b>Supabase</b><br>
+       Trang này chỉ là giao diện tĩnh trên GitHub Pages — điều khiển bot qua Panel.</p>
+    <div class="actions">
+      <a class="btn primary big" href="panel.html">Mở Panel quản lý</a>
+      <a class="btn ghost big" href="https://github.com/DEVTRAN07/JOHNTRAN" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+
+  <div class="status-grid">
+    <div class="status-item">
+      <div class="label">Panel UI</div>
+      <div class="value ok">GitHub Pages</div>
+    </div>
+    <div class="status-item">
+      <div class="label">Bot runtime</div>
+      <div class="value" id="runtimeState">—</div>
+    </div>
+    <div class="status-item">
+      <div class="label">Database</div>
+      <div class="value ok">Supabase</div>
+    </div>
+    <div class="status-item">
+      <div class="label">Panel API</div>
+      <div class="value" id="panelState">—</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Thiết lập: panel.html → nhập URL Koyeb + token → điều khiển bot con, xem log, QR, metrics.<br>
+    <a href="panel.html">Mở panel</a> • nhớ set <code>panel.enabled: true</code> trên host.
+  </div>
+</main>
+
+<script>
+const url = localStorage.getItem("jt_panel_url") || "";
+const token = localStorage.getItem("jt_panel_token") || "";
+async function check() {
+  if (!url) {
+    document.getElementById("runtimeState").textContent = "chưa cấu hình";
+    document.getElementById("runtimeState").className = "value err";
+    return;
+  }
+  try {
+    const res = await fetch(url + "/api/bots?token=" + encodeURIComponent(token));
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const online = data.bots.filter(b => b.status === "online").length;
+    document.getElementById("runtimeState").textContent = `${online}/${data.bots.length} bot con online`;
+    document.getElementById("runtimeState").className = "value " + (online > 0 ? "ok" : "err");
+    document.getElementById("panelState").textContent = "đã kết nối";
+    document.getElementById("panelState").className = "value ok";
+  } catch (e) {
+    document.getElementById("runtimeState").textContent = "không kết nối";
+    document.getElementById("runtimeState").className = "value err";
+    document.getElementById("panelState").textContent = "lỗi";
+    document.getElementById("panelState").className = "value err";
+  }
+}
+check();
+setInterval(check, 15000);
+</script>
+</body>
+</html>

@@ -1,8 +1,9 @@
-# Dockerfile cho Koyeb / Railway / Fly.io / bất kỳ nền tảng nào cần container
+# Dockerfile cho Koyeb (free) — deploy bot 24/7
 FROM node:20-slim
 
-# canvas + ffmpeg-static cần thư viện hệ thống
+# yt-dlp (autodown local) + ffmpeg (xử lý video/nhạc) + thư viện cho canvas
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip \
     ffmpeg \
     libcairo2 \
     libpango-1.0-0 \
@@ -12,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     librsvg2-dev \
     fonts-dejavu-core \
     ca-certificates \
+    && pip3 install --break-system-packages -U yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -19,9 +21,10 @@ COPY package*.json ./
 RUN npm ci --omit=dev || npm install --omit=dev
 COPY . .
 
-# Render/Koyeb/Heroku tự inject PORT — health server sẽ mở đúng port đó
+# Koyeb inject PORT — health server + panel tự mở đúng port đó
 ENV NODE_ENV=production
 ENV TZ=Asia/Ho_Chi_Minh
-EXPOSE 3000
+ENV YTDLP_PATH=/usr/local/bin/yt-dlp
+EXPOSE 8000
 
 CMD ["node", "index.js"]

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Panel quản lý</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div class="glow a"></div><div class="glow b"></div>
+
+<main>
+  <header class="topbar">
+    <div>
+      <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ • PANEL</div>
+      <div class="tag">Điều khiển bot Zalo + bot con từ xa • GitHub Pages (UI tĩnh) → API trên Koyeb</div>
+    </div>
+    <div class="conn">
+      <span class="dot" id="connDot"></span>
+      <span id="connText">chưa kết nối</span>
+    </div>
+  </header>
+
+  <!-- Thanh cấu hình kết nối -->
+  <section class="card config">
+    <div class="row">
+      <label>REMOTE PANEL URL
+        <input id="remoteUrl" size="36" placeholder="https://ten-service.koyeb.app">
+      </label>
+      <label>TOKEN
+        <input id="token" size="22" placeholder="panel.token trong config.yml">
+      </label>
+      <button class="primary" onclick="saveConfig()">Kết nối</button>
+      <button onclick="refresh()">Làm mới</button>
+      <span class="spacer"></span>
+      <a class="btn ghost" href="index.html">Trạng thái</a>
+    </div>
+    <div class="hint" id="hintBox">
+      Panel này chỉ là <b>giao diện</b>. API điều khiển chạy trên host bot (Koyeb): set
+      <code>panel.enabled: true</code> + <code>panel.token</code> mạnh, rồi điền URL + token ở trên.
+      Cấu hình lưu trong localStorage — lần sau tự kết nối.
+    </div>
+  </section>
+
+  <!-- Metrics tổng -->
+  <section class="metrics" id="metricsBar"></section>
+
+  <!-- Quản lý bot con -->
+  <section class="card">
+    <div class="row between">
+      <h2>Bot con <span class="badge-count" id="bot-count">0</span></h2>
+      <div class="row">
+        <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32">
+        <button class="primary" onclick="createBot()">+ Tạo bot con</button>
+      </div>
+    </div>
+    <div class="grid" id="botGrid">
+      <div class="empty">Chưa kết nối tới host bot.</div>
+    </div>
+  </section>
+
+  <!-- Master info + Audit -->
+  <section class="two-col">
+    <div class="card">
+      <h2>Thông tin host</h2>
+      <table class="info" id="masterInfo"></table>
+      <h2 style="margin-top:18px">Top lệnh hôm nay</h2>
+      <table class="info" id="topCommands"><tr><td colspan="2" style="color:var(--sub)">(chưa tải)</td></tr></table>
+    </div>
+    <div class="card">
+      <h2>Audit log (hành động admin)</h2>
+      <pre class="logs small" id="auditLog">(chưa tải)</pre>
+    </div>
+  </section>
+</main>
+
+<!-- Modal -->
+<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box">
+    <header class="row between">
+      <strong id="modalTitle">Logs</strong>
+      <div class="row">
+        <button onclick="togglePause()" id="pauseBtn">Tạm dừng</button>
+        <button onclick="closeModal()">Đóng</button>
+      </div>
+    </header>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="panel.js"></script>
+</body>
+</html>

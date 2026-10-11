@@ -18,14 +18,15 @@ function resolve(target) {
 
 function bootstrapFiles() {
   const config = global.config || {};
+  const accountFile = resolve(config.account_file || "account.json");
+  // cookie mặc định nằm CÙNG thư mục với account (bot con: bots/<tên>/cookie.json)
   const cookieFile = process.env.JT_COOKIE_FILE
-    || (typeof process.env.JT_ACCOUNT_JSON === "string" && safeJson(process.env.JT_ACCOUNT_JSON)?.cookie)
-    || "cookie.json";
+    || path.join(path.dirname(accountFile), "cookie.json");
 
   const jobs = [
     {
       env: process.env.JT_ACCOUNT_JSON,
-      target: resolve(config.account_file || "account.json"),
+      target: accountFile,
       label: "account.json"
     },
     {

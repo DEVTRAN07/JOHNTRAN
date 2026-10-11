@@ -1,10 +1,23 @@
 const path = require("path");
+const logger = require("./logger");
 const { JsonStore } = require("../core/storage");
+const { SupabaseStore } = require("../core/storage/supabase");
 
-// Mỗi bot con có thể dùng DB riêng qua biến môi trường JT_DB_FILE (panel bot con)
-const dbFile = process.env.JT_DB_FILE || path.join(__dirname, "..", "data", "store.json");
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const db = new JsonStore(dbFile, ["Users", "Threads"]);
+let db;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+  // Deploy (Koyeb): database bền vững trên Supabase — container restart không mất dữ liệu
+  db = new SupabaseStore(SUPABASE_URL, SUPABASE_KEY);
+  logger.log("Database: Supabase (bot_threads / bot_users / bot_metrics)", "info");
+} else {
+  // Local/dev: JSON store atomic trên đĩa
+  const dbFile = process.env.JT_DB_FILE || path.join(__dirname, "..", "data", "store.json");
+  db = new JsonStore(dbFile, ["Users", "Threads", "Metrics"]);
+  logger.log(`Database: JSON store (${path.basename(dbFile)})`, "info");
+}
 
 function getData(table, idField, id) {
   return db.get(table, idField, id);
@@ -33,5 +46,5 @@ module.exports = {
   delData,
   allData,
   db,
-  flush: () => db.flushSync()
+  flush: () => db.flushSync ? db.flushSync() : true
 };

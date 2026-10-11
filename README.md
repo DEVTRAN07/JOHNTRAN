@@ -217,7 +217,7 @@ core/
 ├── message.js     # TTL chuẩn (>= 60s vì Zalo bỏ qua TTL nhỏ hơn) + reply helper + wrap api (auto TTL + auto card + reaction)
 ├── canvas/        # render thẻ: vip.js (glassmorphism, icon vector, avatar, progress) + icons.js
 ├── cache.js       # LRU cache TTL cho group/user info + kết quả nhạc
-├── storage/       # JSON store atomic (write-behind + ghi khi thoát), thay sqlite
+├── storage/       # JSON store atomic (local/dev) + Supabase adapter (deploy Koyeb)
 ├── metrics.js     # thống kê ngày + audit log (data/audit.log)
 ├── hotReload.js   # theo dõi plugin thay đổi → tự nạp lại
 ├── health.js      # health server (PORT env) cho Render/Koyeb + UptimeRobot ping
@@ -227,7 +227,8 @@ core/
 └── controller/    # tầng dữ liệu (Users/Threads)
 panel/
 ├── botManager.js  # quản lý bot con: spawn/stop/restart/logs/QR/watchdog
-└── server.js      # web panel zero-dependency (không cần express)
+└── server.js      # panel API zero-dependency (không cần express)
+docs/             # panel UI tĩnh cho GitHub Pages
 plugins/
 ├── commands/      # 36 lệnh (gồm scl, zing, nct, spt, bxh, lyric, noi, stats)
 └── events/        # 6 event module
@@ -273,107 +274,56 @@ plugins/
 
 ---
 
-## 🖥️ Chạy 24/7 miễn phí
+## 🖥️ Chạy 24/7 trên Koyeb (free) + Database Supabase
 
-### ⚠️ Vì sao KHÔNG dùng được Vercel
+### Kiến trúc
 
-Bot Zalo là tiến trình **chạy liên tục**: giữ kết nối WebSocket tới Zalo 24/7, ghi file (cookie, database), xử lý ảnh bằng canvas/ffmpeg. Vercel là **serverless**:
-
-| Hạn chế Vercel | Hệ quả |
-|---|---|
-| Function chạy xong là tắt (free: tối đa 10-60s mỗi lần gọi) | WS tới Zalo bị ngắt ngay khi function kết thúc → không nhận được tin nhắn |
-| Không có ổ đĩa bền vững | cookie/database mất mỗi lần chạy → phải quét QR lại liên tục |
-| Không spawn được tiến trình con | bot con + ffmpeg không chạy được |
-| Cron free chỉ chạy ~1 lần/ngày | Không thể "gom" tin nhắn theo phiên |
-
-Nền tảng tương tự (Netlify Functions, Cloudflare Workers) cũng **không dùng được**.
-
-### 🟦 Còn Vercel thì làm được gì? (đã setup sẵn)
-
-Vercel vẫn **dùng được cho tầng giám sát** — repo đã có sẵn:
-
-| File | Vai trò |
-|---|---|
-| `public/index.html` | Trang status realtime: trạng thái edge + bot runtime |
-| `api/health.js` | JSON health của tầng giám sát (UptimeRobot ping được luôn) |
-| `api/status.js` | Proxy trạng thái bot runtime (set env `JT_STATUS_URL` = URL Render/Koyeb) |
-
-Deploy: vercel.com → Add New → Project → import repo → Deploy (không cần build).
-Sau đó set `JT_STATUS_URL` trỏ tới service bot trên Render để trang status hiện dữ liệu thật.
-
-### ✅ Cách free chạy thật: Render + UptimeRobot (khuyến nghị)
-
-Render free **không sleep** nếu có request HTTP tới trong mỗi 15 phút — bot đã có sẵn health server (`/health`) cho việc này.
-
-**Bước 1 — đăng nhập 1 lần ở máy bạn** để có cookie:
-
-```bash
-npm install
-node JohnTran.js      # quét QR, thấy "Đã đăng nhập thành công" là Ctrl+C
-```
-
-**Bước 2 — lấy nội dung cookie** (dán vào biến môi trường trên Render sau này):
-
-```bash
-cat account.json     # → JT_ACCOUNT_JSON
-cat cookie.json      # → JT_COOKIE_JSON
-cat data/store.json  # → JT_DB_JSON (tuỳ chọn)
-```
-
-**Bước 3 — push code lên GitHub** (repo private nhớ).
-
-**Bước 4 — Render Dashboard** → New → Blueprint → chọn repo (file `render.yaml` đã có sẵn) → rồi vào Settings → Environment → thêm các biến:
-
-```yaml
-JT_ACCOUNT_JSON: {"imei":"...","userAgent":"...","cookie":"cookie.json"}
-JT_COOKIE_JSON:  [ ...nội dung cookie.json... ]
-JT_AI__GEMINI_KEYS: key1,key2   # tuỳ chọn
-```
-
-Bot sẽ **tự ghi lại account.json/cookie.json từ biến môi trường** mỗi lần khởi động (`core/bootstrap.js`) nên ổ đĩa tạm mất cookie cũng không sao.
-
-**Bước 5 — UptimeRobot** (miễn phí) → New Monitor → HTTP(s) → URL: `https://<ten-service>.onrender.com/health` → mỗi **5 phút** ping một lần. Nhờ đó Render không sleep.
-
-> Khi cookie hết hạn (vài tuần), lặp lại bước 1-2 và cập nhật biến môi trường trên Render.
-
-### ✅ Cách khác
-
-| Nền tảng | Cách | Phù hợp |
+| Thành phần | Chạy ở đâu | Vai trò |
 |---|---|---|
-| **Koyeb free** | New Service → từ GitHub (có sẵn `Dockerfile`) → thêm env như trên | Ổn định, không sleep |
-| **GitHub Actions** | Cron chạy ~50 phút/lượt (xong tự khởi động lại) | Không cần đăng ký đâu, nhưng bot ngắt 2-3 phút mỗi chu kỳ |
-| **Oracle Cloud Always Free** | ARM VM miễn phí vĩnh viễn + chạy `node JohnTran.js` trong `screen` | Muốn như VPS thật (4 CPU/24GB RAM) |
-| **PM2 trên VPS/Mac** | `npm i -g pm2 && pm2 start JohnTran.js` | Chạy ở nhà 24/7 |
+| Bot + Panel API | **Koyeb** (Docker, free) | WebSocket Zalo 24/7, lệnh, nhạc, quản lý bot con |
+| Database | **Supabase** (Postgres free) | Lưu settings nhóm, user, metrics — container restart KHÔNG mất |
+| Panel UI | **GitHub Pages** | Giao diện điều khiển từ xa, gọi API Koyeb |
 
----
-## 🎛️ Panel quản lý (2 cách)
+### Bước 1 — Supabase (5 phút)
 
-### Cách 1 — Panel điều khiển từ xa trên Vercel (đã deploy)
+1. Tạo project miễn phí tại [supabase.com](https://supabase.com) (region Singapore)
+2. Vào **SQL Editor** → dán nội dung file `supabase/schema.sql` → Run
+3. Vào **Project Settings → API** → copy:
+   - **Project URL** → biến môi trường `SUPABASE_URL`
+   - **service_role key** → biến môi trường `SUPABASE_SERVICE_KEY` (giữ bí mật, không commit)
 
-**https://johntran-monitor.vercel.app/panel** — UI tĩnh, chỉ cần trỏ tới host bot:
+### Bước 2 — Deploy Koyeb
 
-| Bước | Làm gì |
+1. Đăng nhập [koyeb.com](https://koyeb.com) → **Create Service** → deploy từ GitHub repo này
+2. Builder: **Docker** (repo có sẵn `Dockerfile`: yt-dlp + ffmpeg + canvas deps)
+3. **Environment variables**:
+
+| Biến | Giá trị |
 |---|---|
-| 1 | Trên host chạy bot: set `panel.enabled: true` + `panel.token` mạnh trong config.yml |
-| 2 | Chạy panel API: `npm run panel` (chạy song song với bot) hoặc `npm start` (panel mode — bot chính thành bot con) |
-| 3 | Mở trang panel → điền **REMOTE PANEL URL** (vd `https://ten-service.onrender.com`) + **TOKEN** → bấm Kết nối |
+| `SUPABASE_URL` | URL project Supabase |
+| `SUPABASE_SERVICE_KEY` | service_role key |
+| `JT_PANEL__ENABLED` | `1` (bật panel API) |
+| `JT_PANEL__TOKEN` | mật khẩu panel (bắt buộc khi public) |
+| `JT_ACCOUNT_JSON` | nội dung file `account.json` (sau khi login QR local) |
+| `JT_COOKIE_JSON` | nội dung file `cookie.json` |
+| `JT_AI__GEMINI_KEYS` | key Gemini (tuỳ chọn) |
 
-Cấu hình lưu trong localStorage của trình duyệt — lần sau mở lại là tự kết nối.
-> Nếu host bot là máy đang chạy bot local (Mac/PC): điền `http://localhost:3000` — dùng được trên cùng máy.
+4. Instance: **Free** (1 instance, 512MB) → Deploy
+5. Koyeb cấp URL dạng `https://<ten>.koyeb.app` — health check tự động qua `PORT`
 
-### Cách 2 — Panel local trên host
+> Login 1 lần ở máy: chạy `node JohnTran.js`, quét QR, thấy "Đã đăng nhập thành công" rồi lấy nội dung `account.json` + `cookie.json` điền vào env. Cookie hết hạn (vài tuần) thì làm lại.
 
-```bash
-npm run panel      # hoặc: panel.enabled: true rồi npm start
-```
+### Bước 3 — Panel trên GitHub Pages
 
-Mở **http://localhost:3000** (VPS: **http://IP-VPS:3000** — nhớ mở port trong firewall / security-list).
+1. Repo → **Settings → Pages** → Source: `main` branch, thư mục `/docs` → Save
+2. Mở `https://<user>.github.io/JOHNTRAN/panel.html`
+3. Nhập **REMOTE PANEL URL** = URL Koyeb + **TOKEN** = `JT_PANEL__TOKEN` → Bấm **Kết nối**
 
-### Tính năng panel
-Tạo bot con • bắt đầu/dừng/khởi động lại • log realtime (4s) • xem QR đăng nhập từng bot • metrics bar (lệnh / nhạc / AI / lỗi / cache / RAM) • cảnh báo crash loop • auto-restart bot con.
+Panel có: danh sách bot con (pid, uptime, restart, crash-loop) • chạy/dừng/khởi động lại/xoá • xem log realtime (tạm dừng/tiếp tục) • xem QR đăng nhập • bật/tắt auto-restart • metrics (lệnh, nhạc, AI, cache, RAM) • top lệnh • audit log admin • trang trạng thái tổng.
 
-> Mỗi bot con có **account/cookie/database riêng** (`bots/<tên>/`) nên đăng nhập QR riêng — không đụng tới session bot chính.
-> Bảo mật: `panel.token` BẮT BUỘC khi mở panel ra internet (panel có quyền spawn tiến trình = điều khiển cả máy).
+### Không dùng Vercel nữa
+
+Vercel là serverless — không giữ được WebSocket Zalo và không có ổ đĩa bền, nên bot không thể chạy ở đó. Toàn bộ file Vercel (`vercel.json`, `api/`, `public/`) đã được xoá khỏi repo.
 
 ---
 

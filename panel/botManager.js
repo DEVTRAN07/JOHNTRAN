@@ -86,7 +86,10 @@ class BotInstance {
       JT_DB_FILE: paths.dbFile,
       JT_ACCOUNT_FILE: paths.accountFile,
       JT_QRCODE_PATH: paths.qrFile,
-      JT_PANEL_CHILD: "1"
+      JT_PANEL_CHILD: "1",
+      // Chuẩn bị sẵn phiên đăng nhập cho bot con (nếu host set sẵn qua env)
+      ...(process.env.JT_ACCOUNT_JSON ? { JT_ACCOUNT_JSON: process.env.JT_ACCOUNT_JSON } : {}),
+      ...(process.env.JT_COOKIE_JSON ? { JT_COOKIE_JSON: process.env.JT_COOKIE_JSON } : {})
     };
 
     const child = spawn(process.execPath, [path.join(ROOT, "JohnTran.js")], {

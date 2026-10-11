@@ -22,7 +22,7 @@ const configSystem = require("./core/config");
     }
 
     if (config.panel?.enabled) {
-        // ===== CHẾ ĐỘ PANEL: master chỉ quản lý, bot con chạy riêng từng tiến trình =====
+        // ===== CHẾ ĐỘ PANEL: master quản lý, bot con chạy riêng từng tiến trình =====
         const { BotManager } = require("./panel/botManager");
         const { startPanel } = require("./panel/server");
 
@@ -31,6 +31,17 @@ const configSystem = require("./core/config");
 
         logger.log("Panel mode: dùng web panel để tạo và quản lý bot con", "info");
         console.log(`Bot con đã lưu: ${manager.list().map((b) => b.name).join(", ") || "(chưa có)"}`);
+
+        // Deploy (Koyeb): tự tạo + chạy bot chính nếu chưa có bot con nào
+        if (manager.list().length === 0) {
+            try {
+                const bot = manager.create("main");
+                bot.start();
+                logger.log("Đã tự khởi động bot con 'main' (xem QR trên panel hoặc qr.png)", "info");
+            } catch (error) {
+                logger.log(`Không thể tự khởi động bot main: ${error.message}`, "error");
+            }
+        }
 
         const shutdown = async () => {
             logger.log("Đang dừng tất cả bot con...", "warn");
