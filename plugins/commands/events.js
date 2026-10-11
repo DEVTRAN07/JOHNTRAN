@@ -10,6 +10,7 @@ const EVENTS = [
   { key: "welcome", label: "👋 Chào thành viên mới", field: "event_welcome" },
   { key: "bye", label: "🚪 Tạm biệt thành viên rời nhóm", field: "event_bye" },
   { key: "rank", label: "🏆 Level/EXP theo tin nhắn", field: "event_rank" },
+  { key: "react", label: "😍 Thả icon/emoji cho tin thành viên", field: "event_react" },
   { key: "guard", label: "🚨 Cảnh cáo link lạ & từ cấm", field: "event_guard" }
 ];
 

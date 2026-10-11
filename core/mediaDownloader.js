@@ -205,30 +205,68 @@ function isAudioOnly(info) {
   return info.vcodec === "none";
 }
 
-// Tải video ra file local (mp4 ưu tiên, cap 720p để vừa Zalo)
-async function downloadVideo(url, outputPath) {
-  const format = "bv*[height<=720]+ba/b[height<=720]/b";
-  const withOutput = (extra) => [...extra, "-o", outputPath, url];
-  const mainExtra = ["-f", format, "--merge-output-format", "mp4", "--concurrent-fragments", "4"];
+// Tải video ra file local. Mặc định lấy CHẤT LƯỢNG GỐC (cao nhất có thể),
+// nếu file quá lớn cho Zalo thì tự hạ dần 1080p → 720p → bản có sẵn.
+const MAX_VIDEO_BYTES = Number(process.env.JT_MAX_VIDEO_MB || 200) * 1024 * 1024;
+const QUALITY_LADDER = [
+  { label: "gốc (cao nhất)", format: "bv*+ba/b" },
+  { label: "1080p", format: "bv*[height<=1080]+ba/b[height<=1080]/b[height<=1080]" },
+  { label: "720p", format: "bv*[height<=720]+ba/b[height<=720]/b[height<=720]" },
+  { label: "bản có sẵn", format: "b/best" }
+];
 
+function videoTooBig(filePath) {
   try {
-    await runTryAll(await argVariants(withOutput(mainExtra)));
-    return outputPath;
-  } catch (error) {
-    // YouTube chặn bot → thử các player_client khác
-    if (isYoutube(url)) {
-      for (const client of YT_PLAYER_CLIENTS) {
-        try {
-          const extra = [...mainExtra, "--extractor-args", `youtube:player_client=${client}`];
-          await runTryAll(await argVariants(withOutput(extra)));
-          return outputPath;
-        } catch { /* thử client tiếp */ }
-      }
-    }
-    // fallback: best có sẵn (một số site không cho merge)
-    await runTryAll(await argVariants(withOutput(["-f", "b/best"])));
-    return outputPath;
+    return fs.existsSync(filePath) && fs.statSync(filePath).size > MAX_VIDEO_BYTES;
+  } catch {
+    return false;
   }
+}
+
+function removeQuietly(filePath) {
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
+}
+
+async function downloadVideo(url, outputPath) {
+  let sizeBlocked = false;
+  const withOutput = (extra) => [...extra, "-o", outputPath, url];
+  const yt = isYoutube(url);
+
+  for (let i = 0; i < QUALITY_LADDER.length; i++) {
+    const step = QUALITY_LADDER[i];
+    const extra = ["-f", step.format, "--concurrent-fragments", "4"];
+    if (step.label !== "bản có sẵn") extra.push("--merge-output-format", "mp4");
+    const playerClients = yt && i === 0 ? [null, ...YT_PLAYER_CLIENTS] : [null]; // bậc đầu thử nhiều client
+
+    for (const client of playerClients) {
+      try {
+        const args = extra.slice();
+        if (client) args.push("--extractor-args", `youtube:player_client=${client}`);
+        await runTryAll(await argVariants(withOutput(args)));
+        if (fs.existsSync(outputPath)) {
+          // Quá lớn cho Zalo → bỏ, hạ bậc chất lượng
+          if (videoTooBig(outputPath)) {
+            sizeBlocked = true;
+            logger.log(`[yt-dlp] Video vượt ${MAX_VIDEO_BYTES / 1048576}MB → hạ xuống ${QUALITY_LADDER[i + 1]?.label || "bản thấp hơn"}`, "info");
+            removeQuietly(outputPath);
+            break;
+          }
+          return outputPath;
+        }
+      } catch { /* thử cách tiếp */ }
+    }
+  }
+
+  // Không bậc nào có ảnh nổi → thử lấy bất cứ thứ gì (âm thanh cũng chấp nhận)
+  if (sizeBlocked) {
+    throw new Error(`Video quá lớn (mọi chất lượng đều vượt ${MAX_VIDEO_BYTES / 1048576}MB — Zalo giới hạn dung lượng). Hãy thử video ngắn hơn hoặc tên JT_MAX_VIDEO_MB cao hơn.`);
+  }
+  try {
+    await runTryAll(await argVariants(withOutput(["-f", "b/best"])));
+    if (fs.existsSync(outputPath)) return outputPath;
+  } catch { /* bỏ qua */ }
+
+  throw new Error("Không tải được video (link có thể bị xoá hoặc bị chặn)");
 }
 
 // Tải audio (mp3)

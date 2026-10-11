@@ -6,7 +6,7 @@ const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 
 module.exports.config = {
     name: "menu",
-    aliases: ["help", "menu2"],
+    aliases: ["help"],
     version: "3.1.0",
     role: 0,
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",

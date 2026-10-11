@@ -264,6 +264,7 @@ assets/
 | `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
 
 **Điều hướng menu & nhạc (không cần nhớ lệnh dài):**
+- Menu chỉ có `/menu` (bỏ alias `/menu2` vì gõ `/menu2` bị hiểu là mở lại trang 1, gây nhầm) — muốn tới trang 2 thì gõ `/menu 2`.
 - Menu: `/menu` → trang 1, `/menu next` / `/menu prev`, `/menu <số>`, `/menu out` (đóng).
 - Khi menu đang mở, gõ trần **`next`** / **`prev`** / **`out`** (không cần prefix) cũng chuyển trang được.
 - Nhạc: `/scl <từ khóa>` → `/scl next` / `/scl prev` / `/scl out`, hoặc gõ trần **`next`** / số thứ tự khi đang có kết quả.
@@ -275,6 +276,7 @@ assets/
 | `/events welcome on` | 👋 Có thành viên mới → thẻ chào mừng + mention + reaction |
 | `/events bye on` | 🚪 Có thành viên rời/bị kick → thẻ tạm biệt |
 | `/events rank on` | 🏆 Chat để nhận EXP (30s/lần), lên level → thẻ chúc mừng |
+| `/events react on` | 😍 Thả icon/emoji cho **mọi tin nhắn** của thành viên (10s/người, bỏ qua lệnh) |
 | `/events guard on` | 🚨 Canh link lạ & từ cấm (`assets/spam/badwords.txt`): cảnh cáo 3 lần → kick |
 | `/events` | Xem trạng thái tất cả + hướng dẫn bật/tắt |
 | `/events guard allow <host>` / `guard allowed` | Thêm / xem host được phép (mặc định: youtube, facebook, tiktok, instagram...) |
@@ -287,6 +289,7 @@ assets/
 - Tải bằng **yt-dlp chạy local** (link không qua bên thứ 3). yt-dlp bản mới được chạy với `--impersonate chrome` (giả TLS fingerprint trình duyệt) — thiếu cờ này thì Facebook/Vimeo... báo *"Cannot parse data"*. Bản yt-dlp cũ không có cờ thì bot tự bỏ cờ chạy lại.
 - **YouTube** có sẵn chuỗi player_client dự phòng để qua bước *"Sign in to confirm you're not a bot"*.
 - Video → gửi video; chỉ có tiếng → tải mp3 gửi voice.
+- **Chất lượng GỐC**: tải bản cao nhất có thể; nếu file quá lớn cho Zalo thì tự hạ dần 1080p → 720p → bản có sẵn (giới hạn mặc định 200MB, đổi bằng biến `JT_MAX_VIDEO_MB`).
 - **Khi YouTube báo "Sign in to confirm you're not a bot"** (IP bị chặn) thì cấu hình cookie, chọn 1 trong 2 cách trong `config.yml → media`:
   - Bot chạy **trên máy bạn** (có trình duyệt đã đăng nhập YouTube):
     ```yaml
