@@ -150,22 +150,31 @@ const DEFAULTS = {
       "googleusercontent.com",
       "zalo.ai",
       "zadn.vn",
-      "zdn.vn"
+      "zdn.vn",
+      "api.elevenlabs.io",
+      "api.checkphatnguoi.vn",
+      "tikwm.com"
     ]
   },
   services: {
     media_downloader_url: "",
-    ai_proxy_url: "",
+    media_generator_url: "",
+    image_generator_url: "",
     tiktok_api_url: "",
+    bantho_bg_url: "https://i.imgur.com/brK0Hbb.jpg",
     facebook_api_url: "",
-    image_generator_url: ""
+    facebook_access_token: "",
+    phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi",
+    whois_url: "https://whois.inet.vn/api/whois/domainspecify/",
+    dpaste_url: "https://dpaste.com/api/v2/"
   },
   ai: {
     gemini_keys: [],
     gemini_model: "gemini-2.5-flash",
-    tts_enabled: false,
+    tts_enabled: true,
     max_history: 8,
-    max_prompt_length: 340
+    max_prompt_length: 340,
+    elevenlabs_key: ""
   },
   music: {
     max_results: 5,

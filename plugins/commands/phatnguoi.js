@@ -1,6 +1,8 @@
 const axios = require("axios");
 
-const API_URL = "https://api.checkphatnguoi.vn/phatnguoi";
+function apiUrl() {
+  return global.config?.services?.phatnguoi_url || "https://api.checkphatnguoi.vn/phatnguoi";
+}
 
 module.exports.config = {
   name: "phatnguoi",
@@ -17,7 +19,7 @@ module.exports.config = {
 async function processCheckRequest(api, event, bienSo) {
   const { threadId, type } = event;
   try {
-    const response = await axios.post(API_URL, { bienso: bienSo }, {
+    const response = await axios.post(apiUrl(), { bienso: bienSo }, {
       headers: { "Content-Type": "application/json" },
       timeout: 30000
     });

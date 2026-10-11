@@ -5,7 +5,7 @@ const { createCanvas, loadImage } = require("canvas");
 const http = require("../../core/http");
 const { getUserInfo } = require("../../core/userInfo");
 
-const BG_URL = "https://i.imgur.com/brK0Hbb.jpg";
+const BG_URL = () => global.config?.services?.bantho_bg_url || "https://i.imgur.com/brK0Hbb.jpg";
 
 module.exports.config = {
   name: "bantho",
@@ -35,7 +35,7 @@ module.exports.run = async function ({ api, event }) {
     fs.mkdirSync(tempDir, { recursive: true });
     const [user, bgBuffer] = await Promise.all([
       getUserInfo(api, targetId),
-      http.getBuffer(BG_URL, { timeout: 15000 })
+      http.getBuffer(BG_URL(), { timeout: 15000 })
     ]);
 
     const canvas = createCanvas(960, 634);

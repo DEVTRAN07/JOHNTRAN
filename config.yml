@@ -85,34 +85,47 @@ privacy:
     - whois.inet.vn
     - dpaste.com
     - graph.facebook.com
-    - facebook.com
-    - tiktokcdn.com
-    - tiktokcdn-us.com
-    - fbcdn.net
-    - googleusercontent.com
-    - zalo.ai
-    - zadn.vn
-    - zdn.vn
+     - facebook.com
+     - tiktokcdn.com
+     - tiktokcdn-us.com
+     - fbcdn.net
+     - googleusercontent.com
+     - zalo.ai
+     - zadn.vn
+     - zdn.vn
+     - api.elevenlabs.io
+     - api.checkphatnguoi.vn
+     - tikwm.com
 
 # ===== DỊCH VỤ NGOÀI (chỉ chạy khi admin tự cấu hình endpoint) =====
 # Để trống = tính năng tắt hoàn toàn, bot KHÔNG gửi dữ liệu đi đâu cả.
 services:
-  media_downloader_url: "" # endpoint tải media (autodown)
+  # --- Tải media (autodown) ---
+  media_downloader_url: "" # endpoint tải media genergic (autodown)
   media_generator_url: "" # endpoint video ngẫu nhiên (girltt)
   image_generator_url: "" # endpoint tạo ảnh/qr (qrheart)
-  tiktok_api_url: "" # endpoint lấy VIDEO tiktok/douyin (autodown) — để trống dùng tikwm.com mặc định
+  # --- TikTok/Douyin ---
+  tiktok_api_url: "" # endpoint lấy VIDEO tiktok/douyin (autodown). ĐỂ TRỐNG = dùng tikwm.com mặc định
+  bantho_bg_url: "https://i.imgur.com/brK0Hbb.jpg" # ảnh nền lệnh bantho (đổi được)
+  # --- Facebook ---
   facebook_api_url: "" # endpoint lấy uid facebook
   facebook_access_token: "" # token Graph API facebook của bạn (fbin4)
+  # --- Tiện ích ---
+  phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi" # kiểm tra phạt nguội (phatnguoi)
+  whois_url: "https://whois.inet.vn/api/whois/domainspecify/" # tra whois domain (cdm)
+  dpaste_url: "https://dpaste.com/api/v2/" # paste text trực tuyến (adc)
 
 # ===== AI =====
-# Key Gemini của bạn (lấy tại https://aistudio.google.com/apikey).
-# Có thể set bằng biến môi trường: JT_GEMINI_KEYS=key1,key2
+# Key Gemini: https://aistudio.google.com/apikey
+# Key ElevenLabs (TTS /say): https://elevenlabs.io → API Keys
+# Có thể set bằng biến môi trường: JT_GEMINI_KEYS=key1,key2 / JT_AI__ELEVENLABS_KEY=...
 ai:
   gemini_keys: []
   gemini_model: "gemini-2.5-flash"
   max_prompt_length: 340 # giới hạn ký tự prompt gửi đi
   max_history: 8 # số tin nhắn AI nhớ trong hội thoại với mỗi user
-  tts_enabled: false # bật lệnh /noi đọc giọng nói (gửi text tới Google TTS)
+  elevenlabs_key: "" # key ElevenLabs cho lệnh /say (để trống = /say tắt)
+  tts_enabled: true # bật lệnh /noi đọc giọng nói bằng Google TTS (miễn phí)
 
 # ===== NHẠC =====    
 music:
