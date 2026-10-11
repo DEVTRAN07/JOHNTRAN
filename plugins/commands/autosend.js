@@ -173,7 +173,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
 module.exports.run = async ({ api, event, args, Threads }) => {
   const { threadId, type } = event;
 
-  if (type === ThreadType.User) return api.sendMessage("❌ Lệnh chỉ có thể dùng trong nhóm", threadId, type);
+  if (type === ThreadType.User) return api.sendMessage({ msg: "❌ Lệnh chỉ có thể dùng trong nhóm", plain: true }, threadId, type);
 
   async function toggleAutoSend(id) {
     const thread = await Threads.getData(id);
@@ -186,14 +186,14 @@ module.exports.run = async ({ api, event, args, Threads }) => {
   // Không bật/tắt hàng loạt mọi nhóm — chỉ nhóm đang gọi lệnh mới điều khiển được
   if (args[0] === "all") {
     return api.sendMessage(
-      "❌ Không thể bật hàng loạt. Autosend chỉ bật/tắt trong từng nhóm: gõ `autosend` trong nhóm muốn điều khiển.",
+      { msg: "❌ Không thể bật hàng loạt. Autosend chỉ bật/tắt trong từng nhóm: gõ `autosend` trong nhóm muốn điều khiển.", plain: true },
       threadId, type
     );
   }
 
   const result = await toggleAutoSend(threadId);
   return api.sendMessage(
-    `📩 Autosend đã được ${result.status ? "bật ✅" : "tắt ❌"} cho nhóm này.`,
+    { msg: `📩 Autosend đã được ${result.status ? "bật ✅" : "tắt ❌"} cho nhóm này.`, plain: true },
     threadId, type
   );
 };

@@ -167,17 +167,9 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
 
-    if (content.plain) {
-      delete content.plain;
-      content.ttl = normalizeTtl(content.ttl);
-      return api.sendMessage(content, targetThreadId, targetType);
-    }
-
-    if (content.msg && !content.attachments) {
-      content.ttl = normalizeTtl(content.ttl);
-      return reply.text(content.msg, { ttl: content.ttl });
-    }
-
+    // Gửi TEXT + chuẩn hoá TTL. Muốn thẻ ảnh đẹp thì dùng reply.card() tường minh
+    // (menu, nhạc, gpt, stats...) — tránh biến mọi thông báo trạng thái thành ảnh.
+    if (content.plain) delete content.plain;
     content.ttl = normalizeTtl(content.ttl, content.attachments ? "media" : "message");
     return api.sendMessage(content, targetThreadId, targetType);
   });
