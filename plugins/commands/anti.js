@@ -256,26 +256,27 @@ module.exports.run = async function ({ api, event, args, Threads }) {
   const key = keyMap[action];
 
   if (!key) {
-    return api.sendMessage(
-      "🛡️ Quản lý chế độ Anti của nhóm\n\n" +
-      "• anti undo - Chống thu hồi tin nhắn\n" +
-      "• anti link - Chống gửi link\n" +
-      "• anti spam - Chống spam tin nhắn\n",
-      threadId,
-      type
-    );
+    return api.sendMessage({
+      plain: true,
+      msg: "🛡️ Quản lý chế độ Anti của nhóm\n\n" +
+      "• anti undo [on|off] - Chống thu hồi tin nhắn\n" +
+      "• anti link [on|off] - Chống gửi link\n" +
+      "• anti spam [on|off] - Chống spam tin nhắn\n" +
+      "• không ghi on/off = bật/tắt (toggle)"
+    }, threadId, type);
   }
 
   const threadData = await Threads.getData(threadId);
   const currentValue = threadData.data[key] || false;
-  const newValue = !currentValue;
+  // on/off tường minh nếu có tham số thứ 2, không thì toggle
+  const mode = (args[1] || "").toLowerCase();
+  const newValue = mode === "on" ? true : mode === "off" ? false : !currentValue;
 
   threadData.data[key] = newValue;
   await Threads.setData(threadId, threadData.data);
 
-  return api.sendMessage(
-    `✅ Đã ${newValue ? "bật" : "tắt"} chế độ Anti ${key.replace("anti_", "").toUpperCase()}.`,
-    threadId,
-    type
-  );
+  return api.sendMessage({
+    plain: true,
+    msg: `✅ Đã ${newValue ? "bật" : "tắt"} chế độ Anti ${key.replace("anti_", "").toUpperCase()}.`
+  }, threadId, type);
 };

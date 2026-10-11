@@ -189,25 +189,38 @@ module.exports.run = async ({ api, event, args, Threads }) => {
 
   if (type === ThreadType.User) return api.sendMessage({ msg: "❌ Lệnh chỉ có thể dùng trong nhóm", plain: true }, threadId, type);
 
-  async function toggleAutoSend(id) {
-    const thread = await Threads.getData(id);
-    const data = thread.data;
-    data.auto_send = !data.auto_send;
-    await Threads.setData(id, data);
-    return { id, status: data.auto_send };
-  }
+  const current = (await Threads.getData(threadId)).data || {};
 
   // Không bật/tắt hàng loạt mọi nhóm — chỉ nhóm đang gọi lệnh mới điều khiển được
   if (args[0] === "all") {
     return api.sendMessage(
-      { msg: "❌ Không thể bật hàng loạt. Autosend chỉ bật/tắt trong từng nhóm: gõ `autosend` trong nhóm muốn điều khiển.", plain: true },
+      { msg: "❌ Không thể bật hàng loạt. Autosend chỉ bật/tắt trong từng nhóm: gõ `autosend on` / `autosend off` trong nhóm muốn điều khiển.", plain: true },
       threadId, type
     );
   }
 
-  const result = await toggleAutoSend(threadId);
+  const action = (args[0] || "").toLowerCase();
+  let status;
+
+  if (action === "on" || action === "off") {
+    // on/off tường minh: luôn đặt đúng trạng thái (không toggle ngược)
+    status = action === "on";
+  } else if (action === "status" || action === "stt") {
+    return api.sendMessage(
+      { msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autosend on / autosend off`, plain: true },
+      threadId, type
+    );
+  } else {
+    // không tham số → toggle
+    status = !current.auto_send;
+  }
+
+  const data = (await Threads.getData(threadId)).data || {};
+  data.auto_send = status;
+  await Threads.setData(threadId, data);
+
   return api.sendMessage(
-    { msg: `📩 Autosend đã được ${result.status ? "bật ✅" : "tắt ❌"} cho nhóm này.`, plain: true },
+    { msg: `📩 Autosend đã được ${status ? "bật ✅" : "tắt ❌"} cho nhóm này.`, plain: true },
     threadId, type
   );
 };
