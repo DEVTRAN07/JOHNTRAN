@@ -236,6 +236,7 @@ assets/
 
 **Tính năng nổi bật v3:**
 - **Mọi ảnh MỘT KIỂU**: `core/canvas/theme.js` giữ nền (`assets/bg/theme.jpg` + gradient + glow), font, bo góc — menu, thẻ lệnh, nhạc (kết quả + đang phát), thẻ VIP đều dùng chung, muốn đổi chỉ sửa 1 file.
+- **Cỡ ảnh ORIGINAL**: render đúng 750px rồi lưu PNG lossless — Zalo **không** resize/nén JPEG như ảnh 1280px nữa, chữ sắc như thiết kế. Ảnh cũng nhẹ hơn (170–225KB thay vì 300KB+).
 - **Mọi lệnh đều thả icon**: 👍 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (lệnh tự thả reaction — nhạc, autodown — thì bot không thả thêm).
 - **Menu phân trang thật sự**: `/menu next` / `/menu prev` / `/menu <số>` / `/menu out`; khi menu đang mở thì gõ trần `next` / `prev` / `out` (khỏi prefix) cũng chuyển trang được — không bị cooldown chặn. Nhạc (`/scl next`) cũng vậy.
 - **TTL chuẩn hoá**: mọi tin nhắn TTL ≥ 60.000ms (Zalo chỉ tự xóa tin từ 1 phút) — `ttl.message/error/media/card` trong config.yml.

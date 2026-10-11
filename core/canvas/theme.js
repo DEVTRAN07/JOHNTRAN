@@ -23,7 +23,14 @@ const PALETTE = {
   gold: "#fbbf24"
 };
 
-const WIDTH = 1280;
+// ===== CỠ ẢNH "ORIGINAL" =====
+// Zalo resize + nén JPEG mọi ảnh rộng hơn ~720px → chữ bị mờ, nét bị vỡ.
+// Render ĐÚNG CỠ 750px để Zalo giữ nguyên PNG (lossless) → chữ sắc như thiết kế.
+const WIDTH = 750;
+
+// Hệ số scale từ bản thiết kế 1280px (giữ lại để port nhanh nếu cần)
+const DESIGN_WIDTH = 1280;
+const scale = (px) => Math.round((px * WIDTH) / DESIGN_WIDTH);
 
 // ===== Font (một kiểu cho mọi ảnh) =====
 const fontsReady = { done: false };
@@ -154,4 +161,4 @@ function save(canvas, prefix) {
   return filePath;
 }
 
-module.exports = { PALETTE, WIDTH, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save };
+module.exports = { PALETTE, WIDTH, scale, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save };

@@ -1,4 +1,4 @@
-// ===== Thẻ nhạc — dùng theme chung (core/canvas/theme.js) =====
+// ===== Thẻ nhạc — cỡ 750px (Zalo giữ nguyên PNG) =====
 const theme = require("./theme");
 
 // Số lượt nghe gọn: 12345 → 12K, 1234567 → 1.2M
@@ -25,94 +25,95 @@ async function fetchThumb(url) {
   }
 }
 
-// ===== Lưới kết quả tìm kiếm =====
+// ===== Lưới kết quả tìm kiếm (4 bài/trang, đọc rõ trên điện thoại) =====
 async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source }) {
+  theme.initFonts();
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text } = theme;
 
-  // ===== Kích thước TỰ TÍNH: chỉ vừa đủ số bài trong trang =====
-  const cols = 4;
-  const rows = Math.max(1, Math.ceil(tracks.length / cols));
-  const cardW = 286;
-  const cardH = 320;
-  const gapX = 22;
-  const gapY = 20;
-  const padX = (W - (cols * cardW + (cols - 1) * gapX)) / 2;
-  const headerH = 130;
-  const footerH = 140;
-  const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
+  const perPage = 4;
+  const shown = tracks.slice(0, perPage);
+  const cardW = W - 44;
+  const cardH = 190;
+  const gapY = 12;
+  const headerH = 108;
+  const footerH = 130;
+  const H = headerH + shown.length * cardH + Math.max(0, shown.length - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
 
-  text(ctx, "🔎", 40, 74, { font: "40px JT", color: PALETTE.accent });
-  text(ctx, `Kết quả: ${theme.truncate(ctx, query, W - 500)}`, W / 2, 74, {
-    font: "bold 48px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 320
+  // ===== Header =====
+  text(ctx, "🔎", 22, 52, { font: "32px JT", color: PALETTE.accent });
+  text(ctx, theme.truncate(ctx, query, W - 120), W / 2, 52, {
+    font: "bold 32px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 130
   });
   text(
     ctx,
-    `🎵 ${tracks.length} bài • 📡 ${source || "SoundCloud"} • 🔥 xếp theo lượt nghe & lượt thích`,
-    W / 2, 116,
-    { font: "21px JT", color: PALETTE.ink2, align: "center" }
+    `🎵 ${shown.length} bài  •  📡 ${source || "SoundCloud"}  •  🔥 nghe nhiều nhất`,
+    W / 2, 84,
+    { font: "16px JT", color: PALETTE.ink2, align: "center" }
   );
 
-  const shown = tracks.slice(0, cols * rows);
-  for (let index = 0; index < shown.length; index++) {
-    const track = shown[index];
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = padX + col * (cardW + gapX);
-    const y = headerH + row * (cardH + gapY);
+  // Nạp sẵn ảnh bìa (không await trong forEach được)
+  const covers = [];
+  for (const track of shown) covers.push(await fetchThumb(track.thumbnail));
+
+  // ===== Danh sách bài =====
+  shown.forEach((track, index) => {
+    const x = 22;
+    const y = headerH + index * (cardH + gapY);
 
     panel(ctx, x, y, cardW, cardH);
 
-    // ảnh bìa (vuông)
-    const cover = await fetchThumb(track.thumbnail);
-    const coverSize = cardW - 40;
+    // ảnh bìa vuông bên trái
+    const coverSize = cardH - 36;
+    const cover = covers[index];
     if (cover) {
       ctx.save();
-      theme.roundRect(ctx, x + 20, y + 18, coverSize, coverSize, 12);
+      theme.roundRect(ctx, x + 18, y + 18, coverSize, coverSize, 12);
       ctx.clip();
-      ctx.drawImage(cover, x + 20, y + 18, coverSize, coverSize);
+      ctx.drawImage(cover, x + 18, y + 18, coverSize, coverSize);
       ctx.restore();
     } else {
       ctx.fillStyle = "rgba(56, 189, 248, .12)";
-      theme.roundRect(ctx, x + 20, y + 18, coverSize, coverSize, 12);
+      theme.roundRect(ctx, x + 18, y + 18, coverSize, coverSize, 12);
       ctx.fill();
-      text(ctx, "🎵", x + 20 + coverSize / 2, y + 18 + coverSize / 2 + 14, { font: "40px JT", color: PALETTE.accent, align: "center" });
+      text(ctx, "🎵", x + 18 + coverSize / 2, y + 18 + coverSize / 2 + 16, { font: "34px JT", color: PALETTE.accent, align: "center" });
     }
 
-    // số thứ tự (nổi trên ảnh bìa)
-    ctx.fillStyle = "rgba(7, 10, 20, .8)";
-    theme.roundRect(ctx, x + 30, y + 28, 46, 34, 8);
+    // số thứ tự nổi trên ảnh bìa
+    ctx.fillStyle = "rgba(7, 10, 20, .82)";
+    theme.roundRect(ctx, x + 28, y + 28, 40, 30, 8);
     ctx.fill();
-    text(ctx, String(index + 1), x + 53, y + 53, { font: "bold 22px JT-Bold", color: PALETTE.accent, align: "center" });
+    text(ctx, String(index + 1), x + 48, y + 51, { font: "bold 20px JT-Bold", color: PALETTE.accent, align: "center" });
 
-    // tên bài
-    text(ctx, track.title, x + 20, y + 250, { font: "bold 20px JT-Bold", color: PALETTE.ink, maxWidth: cardW - 40 });
-    // ca sĩ + thời lượng
-    text(ctx, `${track.artist} • ${formatDuration(track.duration)}`, x + 20, y + 280, {
-      font: "17px JT", color: PALETTE.mute, maxWidth: cardW - 40
-    });
-    // lượt nghe + like
+    // thông tin bài bên phải
+    const infoX = x + coverSize + 34;
+    const infoW = cardW - coverSize - 52;
+    text(ctx, track.title, infoX, y + 56, { font: "bold 22px JT-Bold", color: PALETTE.ink, maxWidth: infoW });
+    text(ctx, `♫ ${track.artist} • ${formatDuration(track.duration)}`, infoX, y + 92, { font: "16px JT", color: PALETTE.ink2, maxWidth: infoW });
     text(
       ctx,
-      `👤 ${shortPlays(track.plays)} nghe • ❤️ ${shortPlays(track.likes)}`,
-      x + 20, y + 308,
-      { font: "bold 16px JT-Bold", color: PALETTE.green }
+      `👤 ${shortPlays(track.plays)} nghe  •  ❤️ ${shortPlays(track.likes)}`,
+      infoX, y + 124,
+      { font: "bold 15px JT-Bold", color: PALETTE.green, maxWidth: infoW }
     );
-  }
+  });
 
   // ===== Footer điều hướng =====
-  const footY = H - footerH + 18;
-  button(ctx, 40, footY, 300, 52, "◀  PREV", PALETTE.gold);
-  text(ctx, `📄 Trang ${page} / ${totalPages}`, W / 2, footY + 34, { font: "bold 28px JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, W - 340, footY, 300, 52, "NEXT  ▶", PALETTE.green);
+  const footY = H - footerH + 16;
+  const btnW = (W - 44 - 20) / 3;
+  button(ctx, 22, footY, btnW, 46, "⬅ PREV", PALETTE.gold);
+  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + 30, { font: "bold 22px JT-Bold", color: PALETTE.ink, align: "center" });
+  button(ctx, 22 + btnW + 10, footY, btnW - 10, 46, "❌ OUT", PALETTE.red);
+  button(ctx, 22 + btnW * 2 + 20, footY, btnW, 46, "NEXT ➡", PALETTE.green);
+
   text(
     ctx,
-    `⌨️ Gõ ${global.config.prefix}scl <số> tải bài • gõ trần next / prev / out để điều hướng`,
-    W / 2, footY + 92,
-    { font: "19px JT", color: PALETTE.ink2, align: "center" }
+    `⌨️ ${global.config.prefix}scl <số> để tải bài  •  gõ trần next / prev / out`,
+    W / 2, footY + 84,
+    { font: "15px JT", color: PALETTE.ink2, align: "center" }
   );
 
   return theme.save(canvas, "music_grid");
@@ -120,19 +121,21 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
 
 // ===== Thẻ ĐANG PHÁT =====
 async function renderNowPlaying(track, sourceLabel) {
-  const { ctx, canvas } = theme.newCanvas(theme.WIDTH, 700);
+  theme.initFonts();
   const W = theme.WIDTH;
   const { PALETTE, panel, text } = theme;
 
-  await theme.paintBackground(ctx, W, 700);
+  const coverSize = 300;
+  const H = 470;
+  const { ctx, canvas } = theme.newCanvas(W, H);
+  await theme.paintBackground(ctx, W, H);
 
-  text(ctx, "🎶", 44, 80, { font: "42px JT", color: PALETTE.accent });
-  text(ctx, "ĐANG PHÁT", W / 2, 80, { font: "bold 46px JT-Bold", color: PALETTE.ink, align: "center" });
+  text(ctx, "🎶", 24, 56, { font: "34px JT", color: PALETTE.accent });
+  text(ctx, "ĐANG PHÁT", W / 2, 56, { font: "bold 32px JT-Bold", color: PALETTE.ink, align: "center" });
 
   const cover = await fetchThumb(track.thumbnail);
-  const coverSize = 420;
-  const cx = 80;
-  const cy = 140;
+  const cx = (W - coverSize) / 2;
+  const cy = 74;
   if (cover) {
     ctx.save();
     theme.roundRect(ctx, cx, cy, coverSize, coverSize, 20);
@@ -145,18 +148,17 @@ async function renderNowPlaying(track, sourceLabel) {
     ctx.stroke();
   } else {
     panel(ctx, cx, cy, coverSize, coverSize, 20);
-    text(ctx, "🎵", cx + coverSize / 2, cy + coverSize / 2 + 20, { font: "80px JT", color: PALETTE.accent, align: "center" });
+    text(ctx, "🎵", cx + coverSize / 2, cy + coverSize / 2 + 22, { font: "70px JT", color: PALETTE.accent, align: "center" });
   }
 
-  const infoX = cx + coverSize + 60;
-  const infoW = W - infoX - 60;
-  text(ctx, track.title, infoX, cy + 70, { font: "bold 40px JT-Bold", color: PALETTE.ink, maxWidth: infoW });
-  text(ctx, `♫ ${track.artist}`, infoX, cy + 130, { font: "26px JT", color: PALETTE.ink2, maxWidth: infoW });
-  text(ctx, `📡 ${sourceLabel || track.source}`, infoX, cy + 190, { font: "22px JT", color: PALETTE.accent2 });
-  text(ctx, `⏱ ${formatDuration(track.duration)}`, infoX, cy + 240, { font: "22px JT", color: PALETTE.mute });
-  if (track.plays) text(ctx, `👤 ${shortPlays(track.plays)} lượt nghe • ❤️ ${shortPlays(track.likes)}`, infoX, cy + 290, { font: "bold 22px JT-Bold", color: PALETTE.green });
-
-  text(ctx, "➜ Đang tải file nhạc, vui lòng chờ...", W / 2, 660, { font: "20px JT", color: PALETTE.ink2, align: "center" });
+  text(ctx, track.title, W / 2, cy + coverSize + 52, { font: "bold 26px JT-Bold", color: PALETTE.ink, align: "center", maxWidth: W - 60 });
+  text(ctx, `♫ ${track.artist}  •  ⏱ ${formatDuration(track.duration)}`, W / 2, cy + coverSize + 84, {
+    font: "18px JT", color: PALETTE.ink2, align: "center", maxWidth: W - 60
+  });
+  text(ctx, `📡 ${sourceLabel || track.source}${track.plays ? `  •  👤 ${shortPlays(track.plays)} lượt nghe` : ""}`, W / 2, cy + coverSize + 114, {
+    font: "16px JT", color: PALETTE.accent, align: "center", maxWidth: W - 60
+  });
+  text(ctx, "➜ Đang tải file nhạc, vui lòng chờ...", W / 2, H - 34, { font: "15px JT", color: PALETTE.ink2, align: "center" });
 
   return theme.save(canvas, "music_now");
 }
