@@ -11,8 +11,8 @@ module.exports.config = {
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
     description: "Xem danh sách lệnh và info",
     category: "Tiện ích",
-    usage: "[tên lệnh/all/next] [text/canvas]",
-    cooldowns: 2,
+    usage: "[tên lệnh/all/next/out] [text/canvas]",
+    cooldowns: 1,
     dependencies: {
         "string-similarity": "",
         "moment-timezone": ""

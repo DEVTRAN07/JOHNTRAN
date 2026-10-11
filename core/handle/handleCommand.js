@@ -132,7 +132,11 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   }
 
   const cdTime = (command.config.cooldowns || 0) * 1000;
-  if (cdTime > 0) {
+  // Điều hướng menu (/menu next, /menu out, /menu 2) không bị cooldown chặn
+  const { isMenuNav } = require("./handleCommand-nav");
+  const isNavigation = isMenuNav(commandName, messageText, prefix);
+
+  if (cdTime > 0 && !isNavigation) {
     if (!global.client.cooldowns.has(commandName)) {
       global.client.cooldowns.set(commandName, new Map());
     }
