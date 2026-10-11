@@ -331,16 +331,22 @@ function generateQRCodeInTerminal(data, options = {}) {
     });
 }
 
-async function displayQRCodeInConsole(base64Image, fallbackPath = null) {
+async function displayQRCodeInConsole(base64Image, fallbackPath = null, options = {}) {
+    // options.terminal === false → chỉ lưu ảnh, KHÔNG in ra terminal
+    // (bot con chạy trên cloud: mỗi dòng log là 1 chunk stdout → QR in ra sẽ vỡ, không quét được)
     try {
-        const qrData = await decodeQRFromBase64(base64Image);
-        const qrString = await generateQRCodeInTerminal(qrData);
-        // in vào vùng thay thế được: QR mới sẽ đè lên QR cũ, màn hình không giật
-        logger.printReplaceable([qrString]);
+        if (options.terminal !== false) {
+            const qrData = await decodeQRFromBase64(base64Image);
+            const qrString = await generateQRCodeInTerminal(qrData);
+            // in vào vùng thay thế được: QR mới sẽ đè lên QR cũ, màn hình không giật
+            logger.printReplaceable([qrString]);
+        }
         if (fallbackPath) {
             try {
                 saveBase64Image(base64Image, fallbackPath);
-                logger.log(`Đã lưu QRCode tại: ${path.basename(fallbackPath)} (mở ảnh để xem nhỏ gọn hơn)`, "info");
+                if (options.terminal !== false) {
+                    logger.log(`Đã lưu QRCode tại: ${path.basename(fallbackPath)} (mở ảnh để xem nhỏ gọn hơn)`, "info");
+                }
             } catch (e) {
                 logger.log(`Không thể lưu QRCode ra file: ${e.message || e}`, "warn");
             }

@@ -109,9 +109,18 @@ async function loginWithQR() {
                 const { image } = data;
                 if (!image) return;
 
-                logger.log("Vui lòng quét mã QRCode bên dưới để đăng nhập:", "info");
-
                 const qrPath = resolveBotPath(global.config.qrcode_path);
+                const isChild = process.env.JT_PANEL_CHILD === "1";
+
+                if (isChild) {
+                    // Bot con (cloud): chỉ lưu ảnh — log gom theo dòng nên in terminal sẽ vỡ QR.
+                    // Xem + quét qua Panel quản lý (nút QR).
+                    await displayQRCodeInConsole(image, qrPath, { terminal: false });
+                    logger.log("Đã tạo QRCode — mở Panel quản lý, bấm nút QR để xem và quét", "info");
+                    return;
+                }
+
+                logger.log("Vui lòng quét mã QRCode bên dưới để đăng nhập:", "info");
                 await displayQRCodeInConsole(image, qrPath);
                 return;
             }
