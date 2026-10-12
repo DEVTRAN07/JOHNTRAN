@@ -264,8 +264,16 @@ async function downloadImage(url, prefix = "avt") {
   const img = await loadImg(url);
   if (!img) return null;
   const filePath = path.join(os.tmpdir(), `jt_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
-  fs.writeFileSync(filePath, img.toBuffer("image/png"));
-  return filePath;
+  try {
+    // node-canvas Image KHÔNG có toBuffer → phải vẽ sang canvas rồi mới xuất file
+    const canvas = createCanvas(img.width, img.height);
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
+    return filePath;
+  } catch (error) {
+    console.error("downloadImage:", error.message);
+    return null;
+  }
 }
 
 function cleanup(filePath) {
