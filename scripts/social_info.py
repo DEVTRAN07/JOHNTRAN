@@ -77,9 +77,20 @@ def tiktok(username):
         try:
             data = json.loads(m.group(1))
             scope = (data.get("__DEFAULT_SCOPE__") or {})
-            info = (scope.get("webapp.user-detail") or scope.get("webapp.profile") or {}).get("userInfo", {})
+            detail = scope.get("webapp.user-detail") or scope.get("webapp.profile") or {}
+            # CHÚ Ý: userInfo có thể có key nhưng value = None (khi bị chặn),
+            # nên phải "or {}" — .get("userInfo", {}) chỉ dùng default khi key
+            # KHÔNG tồn tại, không xử lý được value None → .get() nổ lỗi.
+            info = detail.get("userInfo") or {}
             user = info.get("user") or {}
             stats = info.get("stats") or {}
+            # statusCode TikTok: 0 = OK | 10202/10221 = user không tồn tại
+            # 209002 = bị CHẶN từ IP/user (account vẫn public!)
+            code = detail.get("statusCode")
+            if not user:
+                if code in (10202, 10221):
+                    raise SocialError("not_found", f"@{username} khong ton tai")
+                raise SocialError("blocked", f"TikTok dang chan truy cap (ma {code}) - thu lai sau")
             if user:
                 found_id = str(user.get("uniqueId") or "").lower()
                 if found_id and found_id != username.lower():
@@ -100,8 +111,10 @@ def tiktok(username):
                     "private": bool(user.get("privateAccount")),
                 })
                 return out
+        except SocialError:
+            raise  # KHÔNG được nuốt: not_found/blocked phải chạm tới fetch_with_retry
         except Exception:
-            pass  # rơi xuống regex
+            pass  # JSON hỏng → rơi xuống regex
 
     # 2) Fallback: regex trên HTML
     def grab(pattern, cast=str):
@@ -257,6 +270,7 @@ def fetch_with_retry(platform, target, tries=2):
 
     last = None
     for v in variants:
+        blocked = False
         for i in range(tries):
             try:
                 data = fn(v)
@@ -267,8 +281,17 @@ def fetch_with_retry(platform, target, tries=2):
                 return data
             except SocialError as e:
                 last = e
+                # Bị chặn (209002) → KHÔNG thử alias (sẽ tìm nhầm user khác),
+                # đợi lâu hơn rồi thử lại. Chỉ "không tồn tại" (10202) mới thử alias.
+                if e.code == "blocked":
+                    blocked = True
+                    if i < tries - 1:
+                        time.sleep(2.5)
+                    continue
                 if i < tries - 1:
                     time.sleep(1.2)
+        if blocked:
+            raise last  # bị chặn → dừng, báo lỗi thay vì đoán user khác
     raise last
 
 
