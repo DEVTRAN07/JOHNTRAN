@@ -1,4 +1,4 @@
-// ===== RENDERER HỒ SƠ BẢN 3.0 (getavt / cardzalo / cardtiktok / cardfb) =====
+// ===== RENDERER HỒ SƠ BẢN 3.0 (getavt / cardzalo) =====
 // Thiết kế mới hoàn toàn: ảnh nền nổi rõ + kính mờ + avatar viền gradient.
 const fs = require("fs");
 const os = require("os");
@@ -204,7 +204,7 @@ function skinTag(ctx, x, y, skin, w) {
 }
 
 /**
- * Thẻ hồ sơ đầy đủ thông tin (cardzalo / cardtiktok / cardfb)
+ * Thẻ hồ sơ đầy đủ thông tin (cardzalo)
  */
 async function renderProfile(o = {}) {
   const skin = SKINS[o.skin] || SKINS.neutral;
