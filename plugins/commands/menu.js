@@ -106,6 +106,13 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
         await api.sendMessage({ msg: "", attachments: gridPath, replace: "menu" }, threadId, type);
     } catch (error) {
         console.error("Lỗi render menu:", error.message);
+        // Báo lỗi ra chat để biết ngay (console.log trên Render khó xem)
+        try {
+            await api.sendMessage({
+                plain: true,
+                msg: `⚠️ Không render được ảnh menu: ${error.message}\n(Dạng text hiển thị tạm)`
+            }, threadId, type);
+        } catch { /* bỏ qua */ }
         await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
     } finally {
         if (gridPath && fs.existsSync(gridPath)) {
@@ -173,7 +180,14 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         const thread = (await Threads.getData(threadId)).data || {};
         thread.menu_mode = "canvas";
         await Threads.setData(threadId, thread);
-        return reply.success("Đã chuyển menu sang chế độ canvas.");
+        return reply.success("Đã chuyển menu sang chế độ canvas (ảnh).");
+    }
+
+    // Xem nhóm này đang dùng chế độ menu nào
+    if (argType === "mode" || argType === "che_do") {
+        const thread = (await Threads.getData(threadId)).data || {};
+        return reply.info(`Nhóm này đang dùng: ${thread.menu_mode === "text" ? "TEXT" : "CANVAS (ảnh)"}\nĐổi: ${prefix}menu canvas | ${prefix}menu text`,
+            { title: "⚙️ CHẾ ĐỘ MENU" });
     }
 
     // Điều hướng: next / prev / out / số trang
