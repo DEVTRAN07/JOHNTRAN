@@ -462,7 +462,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
         }
         if (msg.length > 0) {
             const handledData = await handleMessage(message, threadId, type);
-            responses.message = (await send(handledData))[0];
+            responses.message = (await send(handledData, clientId))[0];
         }
         return responses;
     };
