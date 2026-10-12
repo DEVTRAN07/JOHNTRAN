@@ -184,8 +184,8 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
         logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");
         metrics.track("error", { command: commandName });
         reactAuto(Reactions.CRY);
-      try {
-        await reply.error("❌ Đã xảy ra lỗi khi xử lý lệnh!");
+        try {
+          await reply.error("Đã xảy ra lỗi khi xử lý lệnh!");
       } catch {
         // bỏ qua nếu không gửi được thông báo lỗi
       }

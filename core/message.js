@@ -2,6 +2,7 @@ const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
+const styledText = require("./styled");
 const fs = require("fs");
 const crypto = require("crypto");
 
@@ -54,24 +55,37 @@ class Reply {
     this.reacted = false; // đã thả reaction cho tin này → handleCommand không thả lại
   }
 
-  // ===== MẶC ĐỊNH: TEXT THUẬN — phản hồi tức thì =====
-  // Trước đây text/error/success/info đều render ảnh thẻ (canvas ~0.7s+ mỗi
-  // tin trên Render). Nay chỉ gửi TEXT; muốn ảnh thẻ thì gọi reply.card().
+  // ===== MẶC ĐỊNH: TEXT CÓ STYLE — phản hồi tức thì (0ms, 1 API call) =====
+  // Zalo style text trực tiếp (bold/màu/cỡ chữ) nên vẫn đẹp như thẻ ảnh
+  // nhưng KHÔNG render canvas, KHÔNG upload ảnh. Ảnh thẻ chỉ khi lệnh
+  // chủ ý gọi reply.card().
   async text(msg, options = {}) {
-    return this.api.sendMessage({ msg, ttl: options.ttl }, this.threadId, this.type);
+    if (options.plain) {
+      return this.api.sendMessage({ msg, ttl: options.ttl }, this.threadId, this.type);
+    }
+    const styled = styledText.plain(msg);
+    return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
   }
 
   async error(msg, options = {}) {
-    return this.text(`❌ ${msg}`, options);
+    const styled = styledText.frame(msg, { kind: "error", title: options.title });
+    return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
   }
 
   async success(msg, options = {}) {
-    return this.text(`✅ ${msg}`, options);
+    const styled = styledText.frame(msg, { kind: "success", title: options.title });
+    return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
   }
 
   // Thẻ thông tin / hướng dẫn
   async info(msg, options = {}) {
-    return this.text(msg, options);
+    const styled = styledText.frame(msg, { kind: "info", title: options.title });
+    return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
+  }
+
+  async warn(msg, options = {}) {
+    const styled = styledText.frame(msg, { kind: "warn", title: options.title });
+    return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
   }
 
   // ===== Ảnh THẺ (opt-in): chỉ dùng khi thật sự muốn ảnh đẹp =====
