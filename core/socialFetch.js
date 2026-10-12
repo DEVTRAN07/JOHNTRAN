@@ -51,9 +51,21 @@ function explain(code, target, platform) {
   switch (code) {
     case "not_found":
       return `Không tìm thấy @${target} trên ${label}.\nKiểm tra lại username (phần sau dấu @ trong link profile).`;
+    case "blocked":
+      if (platform === "tiktok") {
+        return `TikTok đang chặn truy cập @${target} (anti-bot cho user này).\n\n` +
+               `💡 Cách sửa — set cookie TikTok cho bot:\n` +
+               `1) Đăng nhập tiktok.com trên trình duyệt\n` +
+               `2) F12 → Console → gõ: document.cookie → Enter\n` +
+               `3) Copy chuỗi cookie vào config.yml:\n` +
+               `   media: → tiktok_cookies: "chuỗi vừa copy"\n` +
+               `   (hoặc env TIKTOK_COOKIES)\n\n` +
+               `Nếu không, thử lại sau ít phút.`;
+      }
+      return `${label} đang chặn yêu cầu. Thử lại sau ít phút.`;
     case "empty":
     case "not_found":
-    case "blocked":
+    default:
       if (platform === "tiktok") {
         return `Không tìm thấy @${target} trên TikTok.\n\n` +
                `Có thể do:\n` +
@@ -65,10 +77,6 @@ function explain(code, target, platform) {
       return `@${target} chưa có nội dung công khai hoặc không tồn tại trên ${label}.`;
     case "private":
       return `Hồ sơ ${target} ở chế độ riêng tư nên không xem được.`;
-    case "blocked":
-      return `${label} đang chặn yêu cầu (hoặc server chưa cài curl_cffi). Thử lại sau ít phút.`;
-    default:
-      return `Không lấy được hồ sơ ${target} trên ${label}. Thử lại sau ít phút.`;
   }
 }
 

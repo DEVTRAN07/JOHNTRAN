@@ -21,7 +21,11 @@ import time
 
 def get(url, timeout=25):
     from curl_cffi import requests as cr
-    return cr.get(url, impersonate="chrome124", timeout=timeout)
+    cookies = load_cookies()
+    kwargs = dict(impersonate="chrome124", timeout=timeout)
+    if cookies:
+        kwargs["cookies"] = cookies
+    return cr.get(url, **kwargs)
 
 
 def clean_url(value):
@@ -48,6 +52,52 @@ def parse_count(value):
         return num(value)
     factor = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(m.group(2), 1)
     return int(float(m.group(1)) * factor)
+
+
+# ===== Cookie TikTok (bật khi TikTok chặn 209002) =====
+# Có thể lấy cookie từ env TIKTOK_COOKIES (chuỗi "a=b; c=d") hoặc file
+# Netscape TIKTOK_COOKIES_FILE (vd /app/cookies_tiktok.txt).
+_COOKIE_CACHE = None
+
+def dict_from_cookie_string(raw):
+    out = {}
+    for part in str(raw).split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        idx = part.find("=")
+        if idx > 0:
+            out[part[:idx].strip()] = part[idx + 1:].strip()
+    return out
+
+def dict_from_netscape(path):
+    out = {}
+    try:
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split("\t")
+            if len(cols) >= 7:
+                out[cols[5].strip()] = cols[6].strip()
+    except Exception:
+        pass
+    return out
+
+def load_cookies():
+    global _COOKIE_CACHE
+    if _COOKIE_CACHE is not None:
+        return _COOKIE_CACHE
+    raw = os.environ.get("TIKTOK_COOKIES", "").strip()
+    if raw:
+        _COOKIE_CACHE = dict_from_cookie_string(raw)
+    else:
+        fp = os.environ.get("TIKTOK_COOKIES_FILE", "").strip()
+        if fp and os.path.exists(fp):
+            _COOKIE_CACHE = dict_from_netscape(fp)
+    if _COOKIE_CACHE is None:
+        _COOKIE_CACHE = {}
+    return _COOKIE_CACHE
 
 
 class SocialError(Exception):
