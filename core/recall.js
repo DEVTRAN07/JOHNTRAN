@@ -101,17 +101,12 @@ async function recall(api, threadId, key, type = 1) {
   memory.delete(slot(threadId, key));
   if (!api) return "failed";
 
-  // Zalo không trả cliMsgId → tra lại trong lịch sử nhóm bằng msgId đã biết
-  let cliMsgId = ids.cliMsgId;
+  // cliMsgId = clientId mình đã gửi (vendor gắn vào response, vì Zalo không trả).
+  // LƯU Ý: getGroupChatHistory (cách tra cũ) trả 404 trên Zalo thật nên KHÔNG dùng nữa.
+  const cliMsgId = ids.cliMsgId;
   if (!cliMsgId) {
-    const found = await findCliMsgId(api, threadId, ids.msgId);
-    if (found) {
-      cliMsgId = found.cliMsgId;
-      debugFile(`TRA LẠI ĐƯỢC | msgId=${ids.msgId} → cliMsgId=${cliMsgId}`);
-    } else {
-      debugFile(`TRA LẠI THẤT BẠI | không thấy msgId=${ids.msgId} trong lịch sử nhóm`);
-      return "no-id";
-    }
+    debugFile(`THIẾU cliMsgId | msgId=${ids.msgId} — vendor chưa gắn được vào response`);
+    return "no-id";
   }
 
   // Cách 1: undo (thu hồi cho MỌI người trong nhóm)
