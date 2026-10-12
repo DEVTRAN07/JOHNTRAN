@@ -406,6 +406,8 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
                     nretry: "0",
                 }, data.query || {})),
                 body: data.body,
+                // mang theo clientId của file để response gắn đúng cliMsgId
+                clientId: data.clientId,
                 headers: data.fileType == "gif" ? data.headers : {},
             });
         }
@@ -454,7 +456,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
                 msg = "";
                 mentions = undefined;
             }
-            const handledData = await handleAttachment({ msg, mentions, attachments, quote, ttl, styles, urgency }, threadId, type);
+            const handledData = await handleAttachment({ msg, mentions, attachments, quote, ttl, styles, urgency }, threadId, type, clientId);
             responses.attachment = await send(handledData, clientId);
             msg = "";
         }
