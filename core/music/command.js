@@ -1,7 +1,7 @@
 const fs = require("fs");
 const music = require("./index");
 const models = require("./models");
-const cards = require("../canvas/music");
+const ui = require("./ui");
 const logger = require("../../utils/logger");
 
 let nextPageCursor = null; // "zing|2"
@@ -11,22 +11,9 @@ function send(api, threadId, type, msg) {
 }
 
 function usage(provider, reply) {
-  return reply.card({
-    theme: "music",
-    title: `Nhạc • ${provider.label}`,
-    subtitle: "Bài nhiều người nghe nhất lên đầu",
-    rows: [{
-      icon: "list",
-      label: "Cách dùng",
-      lines: [
-        `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
-        `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
-        `${global.config.prefix}${provider.name} next | prev — chuyển trang`,
-        `${global.config.prefix}${provider.name} out — đóng danh sách`
-      ]
-    }],
-    footer: models.BRAND
-  });
+  // Styled text — tức thì, không render canvas
+  const styled = ui.usageList(provider.name, provider.label, global.config.prefix);
+  return reply.text(styled.msg, { plain: true, styles: styled.styles });
 }
 
 function friendlyError(error, reply) {
@@ -44,17 +31,16 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
   await reply.working();
 
   let filePath = null;
-  let cardPath = null;
   try {
     const streamUrl = await provider.resolve(track);
     filePath = await music.downloadToFile(streamUrl, "mp3");
     const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
 
-    // Thẻ NOW PLAYING
+    // NOW PLAYING — styled text tức thì (không render ảnh)
     try {
-      cardPath = await cards.renderNowPlaying(track, provider.label.toUpperCase());
-      await api.sendMessage({ msg: "", attachments: cardPath }, threadId, type);
-    } catch { /* hỏng thẻ thì thôi */ }
+      const styled = ui.nowPlaying(track, provider.label.toUpperCase());
+      await api.sendMessage({ ...styled }, threadId, type);
+    } catch { /* hỏng thì thôi */ }
 
     await api.sendVoice({ voiceUrl }, threadId, type);
     await reply.done();
@@ -66,9 +52,6 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
     }
-    if (cardPath && fs.existsSync(cardPath)) {
-      try { fs.unlinkSync(cardPath); } catch { /* bỏ qua */ }
-    }
   }
 }
 
@@ -78,16 +61,15 @@ async function showResults(api, threadId, type, provider, query, tracks, page) {
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const slice = tracks.slice((safePage - 1) * perPage, safePage * perPage);
 
-  let gridPath = null;
-  try {
-    gridPath = await cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() });
-    await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
-    if (fs.existsSync(gridPath)) fs.unlinkSync(gridPath);
-  } catch {
-    // Fallback: thẻ text nếu canvas lỗi
-    await send(api, threadId, type, `🎵 ${provider.label} — "${query}"\n` +
-      slice.map((t, i) => `${i + 1}. ${t.title} — ${t.artist} (${models.formatDuration(t.duration)})`).join("\n"));
-  }
+  // Styled text — tức thì, không render canvas
+  const styled = ui.searchList({
+    providerLabel: provider.label.toUpperCase(),
+    query,
+    tracks: slice,
+    page: safePage,
+    totalPages
+  });
+  return api.sendMessage({ ...styled }, threadId, type);
 }
 
 function parseOptions(args) {

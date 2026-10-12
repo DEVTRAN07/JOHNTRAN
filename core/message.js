@@ -61,7 +61,7 @@ class Reply {
   // chủ ý gọi reply.card().
   async text(msg, options = {}) {
     if (options.plain) {
-      return this.api.sendMessage({ msg, ttl: options.ttl }, this.threadId, this.type);
+      return this.api.sendMessage({ msg, styles: options.styles, ttl: options.ttl }, this.threadId, this.type);
     }
     const styled = styledText.plain(msg);
     return this.api.sendMessage({ ...styled, ttl: options.ttl }, this.threadId, this.type);
