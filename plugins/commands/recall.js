@@ -40,9 +40,19 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
     const recall = require("../../core/recall");
     const hasUndo = typeof api.undo === "function";
     const hasDelete = typeof api.deleteMessage === "function";
+    // Kiểm tra file vendor TRÊN MÁY ĐANG CHẠY có được patch chưa
+    let vendorState = "không đọc được";
+    try {
+      const fs = require("fs");
+      const vendorFile = require.resolve("zalo-client/dist/api/sendMessage.js");
+      const vendorSrc = fs.readFileSync(vendorFile, "utf8");
+      const logOk = vendorSrc.includes("vendor-send");
+      const gắnOk = vendorSrc.includes("cliMsgId = clientId") || /result\.cliMsgId\s*=/.test(vendorSrc);
+      vendorState = `${logOk && gắnOk ? "đã patch ✅" : "CHƯA patch ❌"} (log:${logOk ? "có" : "thiếu"} gắn-id:${gắnOk ? "có" : "thiếu"})`;
+    } catch { /* bỏ qua */ }
     return api.sendMessage({
       plain: true,
-      msg: `🔍 THU HỒI TIN\n• api.undo: ${hasUndo ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• api.deleteMessage: ${hasDelete ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• Tin đang nhớ: ${recall.memorySize()}`
+      msg: `🔍 THU HỒI TIN\n• api.undo: ${hasUndo ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• api.deleteMessage: ${hasDelete ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• Tin đang nhớ: ${recall.memorySize()}\n• vendor: ${vendorState}`
     }, threadId, type);
   }
 
