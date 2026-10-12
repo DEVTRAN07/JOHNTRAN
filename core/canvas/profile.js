@@ -58,21 +58,25 @@ async function loadImg(url) {
   // không phải URL đầy đủ, phải bỏ qua chứ không ném lỗi
   if (!url || !/^https?:\/\//i.test(String(url).trim())) return null;
   try {
-    const mod = /^https:/i.test(String(url)) ? require("https") : require("http");
-    const buffer = await new Promise((resolve, reject) => {
-      mod.get(url, { timeout: 12000 }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return mod.get(res.headers.location, { timeout: 12000 }, (r2) => {
-            const chunks = [];
-            r2.on("data", (c) => chunks.push(c));
-            r2.on("end", () => resolve(Buffer.concat(chunks)));
-          }).on("error", reject);
+    const get = (target, hop) => new Promise((resolve, reject) => {
+      // Resolve redirect: server hay tra duong dan TUONG DOI ("/default",
+      // "cdn.../x.jpg") — dua ve tuyet doi, dung http/https theo scheme
+      const targetUrl = /^https?:\/\//i.test(target) ? target : new URL(target, url).href;
+      const client = /^https:/i.test(targetUrl) ? require("https") : require("http");
+      client.get(targetUrl, { timeout: 12000 }, (res) => {
+        const location = res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && location && hop < 5) {
+          res.resume(); // dong ket noi cu
+          resolve(get(location, hop + 1));
+          return;
         }
         const chunks = [];
         res.on("data", (c) => chunks.push(c));
         res.on("end", () => resolve(Buffer.concat(chunks)));
       }).on("error", reject);
     });
+
+    const buffer = await get(String(url).trim(), 0);
     return await loadImage(buffer);
   } catch {
     return null;
@@ -117,24 +121,24 @@ async function renderProfile(o = {}) {
   if (bg) {
     const s = Math.max(WIDTH / bg.width, H / bg.height);
     ctx.save();
-    ctx.globalAlpha = 0.22;
+    ctx.globalAlpha = 0.42; // nền ảnh hiện rõ, không còn mờ mất
     ctx.drawImage(bg, (WIDTH - bg.width * s) / 2, (H - bg.height * s) / 2, bg.width * s, bg.height * s);
     ctx.restore();
   }
 
   // vệt màu chủ đạo + mạch gradient đặc trưng
-  const stripe = ctx.createLinearGradient(0, 0, 0, 190);
+  const stripe = ctx.createLinearGradient(0, 0, 0, 150);
   stripe.addColorStop(0, skin.a);
   stripe.addColorStop(1, skin.b);
   ctx.save();
   ctx.globalAlpha = 0.85;
   ctx.fillStyle = stripe;
-  ctx.fillRect(0, 0, WIDTH, 190);
+  ctx.fillRect(0, 0, WIDTH, 150);
   ctx.restore();
   ctx.save();
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = skin.glow;
-  ctx.fillRect(0, 150, WIDTH, 40);
+  ctx.fillRect(0, 120, WIDTH, 30);
   ctx.restore();
 
   // ===== Avatar tròn viền sáng =====
@@ -142,9 +146,9 @@ async function renderProfile(o = {}) {
   const cx = WIDTH / 2;
   const cy = 132 + avatarSize / 2 + 40;
   if (av) {
-    // nền mờ phía sau
+    // nền avatar phủ rõ, kéo dài toàn thẻ
     ctx.save();
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.68;
     ctx.drawImage(av, 0, 190, WIDTH, H - 190);
     ctx.restore();
     // ảnh tròn
