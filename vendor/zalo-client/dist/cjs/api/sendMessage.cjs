@@ -92,7 +92,7 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
     function getGroupLayoutId() {
         return Date.now();
     }
-    async function send(data, clientId) {
+    async function send(data) {
         if (!Array.isArray(data))
             data = [data];
         const requests = [];
@@ -240,8 +240,7 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
             body: new URLSearchParams({ params: encryptedParams }),
         };
     }
-    async function handleAttachment(opts, threadId, type, outerClientId) {
-        const { msg, attachments, mentions, quote, ttl, urgency } = opts;
+    async function handleAttachment({ msg, attachments, mentions, quote, ttl, urgency }, threadId, type) {
         if (!attachments)
             throw new errors.ZaloApiError("Missing attachments");
         if (!Array.isArray(attachments))
@@ -264,10 +263,8 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
         msg = msgFinal;
         const isMentionsValid = mentionsFinal.length > 0 && isGroupMessage && attachments.length == 1;
         const isMultiFile = attachments.length > 1;
-        let clientId = outerClientId || Date.now();
+        let clientId = Date.now();
         for (const attachment of uploadAttachment) {
-            const usedClientId = clientId;
-            clientId = clientId + 1;
             let data;
             switch (attachment.fileType) {
                 case "image": {
@@ -275,7 +272,7 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
                         fileType: attachment.fileType,
                         params: {
                             photoId: attachment.photoId,
-                            clientId: usedClientId.toString(),
+                            clientId: (clientId++).toString(),
                             desc: msg,
                             width: attachment.width,
                             height: attachment.height,
@@ -356,7 +353,6 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
             if (!encryptedParams)
                 throw new errors.ZaloApiError("Failed to encrypt message");
             data.body.append("params", encryptedParams);
-            data.clientId = usedClientId;
             attachmentsData.push(data);
         }
         for (const gif of gifFiles) {
@@ -424,16 +420,6 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
      *
      * @throws {ZaloApiError | ZaloApiMissingImageMetadataGetter}
      */
-    // Zalo chỉ trả { msgId } — gắn cliMsgId = clientId đã gửi để sau này thu hồi.
-    // Không được throw: gửi tin là chính, thu hồi là phụ.
-    function attachCliMsgId(target) {
-        try {
-            const items = Array.isArray(target) ? target : [target];
-            items.forEach((item, index) => {
-                if (item && typeof item === "object" && !item.cliMsgId) item.cliMsgId = String(clientId + index);
-            });
-        } catch { }
-    }
     return async function sendMessage(message, threadId, type = Enum.ThreadType.User) {
         if (!message)
             throw new errors.ZaloApiError("Missing message content");
@@ -441,7 +427,6 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
             throw new errors.ZaloApiError("Missing threadId");
         if (typeof message == "string")
             message = { msg: message };
-        const clientId = message.clientId || Date.now();
         let { msg, attachments, mentions } = message;
         const { quote, ttl, styles, urgency } = message;
         if (attachments && !Array.isArray(attachments)) {
@@ -462,21 +447,18 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
             if ((!canBeDesc && msg.length > 0) || (msg.length > 0 && quote)) {
                 // send message and attachment separately
                 await handleMessage(message, threadId, type).then(async (data) => {
-                    responses.message = (await send(data, clientId))[0];
-                    attachCliMsgId(responses.message);
+                    responses.message = (await send(data))[0];
                 });
                 msg = "";
                 mentions = undefined;
             }
             const handledData = await handleAttachment({ msg, mentions, attachments, quote, ttl, urgency }, threadId, type);
-            responses.attachment = await send(handledData, clientId);
-            attachCliMsgId(responses.attachment);
+            responses.attachment = await send(handledData);
             msg = "";
         }
         if (msg.length > 0) {
             const handledData = await handleMessage(message, threadId, type);
-            responses.message = (await send(handledData, clientId))[0];
-            attachCliMsgId(responses.message);
+            responses.message = (await send(handledData))[0];
         }
         return responses;
     };
