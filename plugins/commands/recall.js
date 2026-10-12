@@ -12,7 +12,7 @@ module.exports.config = {
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
   description: "Thử thu hồi tin nhắn của bot (kiểm chứng Zalo)",
   category: "Hệ thống",
-  usage: "recall test | test <giây> | status",
+  usage: "recall test [giây] | status | log",
   cooldowns: 3,
   dependencies: {}
 };
@@ -20,6 +20,17 @@ module.exports.config = {
 module.exports.run = async function ({ api, event, args, Threads, reply }) {
   const { threadId, type } = event;
   const sub = (args[0] || "").toLowerCase();
+
+  // In log debug thu hồi ra chat (để bạn copy gửi khi cần chẩn đoán)
+  if (sub === "log" || sub === "debug") {
+    const fs = require("fs");
+    const logPath = require("path").join(__dirname, "..", "..", "data", "recall_debug.log");
+    if (!fs.existsSync(logPath)) {
+      return reply.info("Chưa có log nào. Hãy gõ /recall test trước đã.", { title: "📄 LOG THU HỒI" });
+    }
+    const lines = fs.readFileSync(logPath, "utf8").trim().split("\n").slice(-8);
+    return reply.info(lines.join("\n") || "(rỗng)", { title: `📄 LOG THU HỒI (${lines.length} dòng cuối)` });
+  }
 
   if (sub === "status" || sub === "stt" || sub === "info") {
     const recall = require("../../core/recall");
