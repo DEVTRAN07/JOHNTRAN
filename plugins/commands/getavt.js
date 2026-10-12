@@ -1,168 +1,130 @@
-// /getavt — lấy ảnh đại diện Zalo (người dùng hoặc nhóm)
-//   /getavt              → ảnh của chính mình
-//   /getavt <uid>        → ảnh theo UID
-//   /getavt @nguoi_dung  → ảnh người được tag
-//   /getavt box          → ảnh đại diện nhóm
-//   /getavt debug        → gửi thông tin chẩn đoán (uid, Zalo trả gì)
-const profile = require("../../core/canvas/profile");
-const { fetchProfile, pickUser } = require("../../core/zaloProfile");
+// /getavt — Lấy ảnh đại diện người dùng (theo mẫu Kenne400k/filebotha-leak)
+// Tham khảo modules/commands/Getavt.js — cùng cấu trúc lệnh:
+//   /getavt                      → HDSD
+//   /getavt id <uid>             → lấy avatar theo UID
+//   /getavt link <link>          → lấy theo link profile
+//   /getavt user                 → avatar của chính mình
+//   /getavt user @mentions       → avatar người được tag
+//   /getavt <uid> hoặc /getavt @tag → lấy nhanh (bổ sung)
+// Viết lại cho Zalo API (không dùng facebook graph/token).
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { fetchProfile } = require("../../core/zaloProfile");
+const { loadImg } = require("../../core/canvas/profileCard");
 
 module.exports.config = {
   name: "getavt",
   aliases: ["avt", "avatar"],
-  version: "3.2.0",
+  version: "4.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Lấy ảnh đại diện người dùng hoặc nhóm",
+  description: "Lấy ảnh đại diện người dùng",
   category: "Tiện ích",
-  usage: "getavt [uid | @tag | box | raw | debug]",
+  usage: "getavt id [uid] | getavt link [link] | getavt user",
   cooldowns: 3,
   dependencies: {}
 };
 
-// Gửi lỗi dạng TEXT để đọc được (ảnh thẻ canvas không copy được nội dung)
-function say(api, threadId, type, msg) {
-  return api.sendMessage({ plain: true, msg }, threadId, type);
-}
+const HD = `=== 『 GET-AVATAR 』 ===
 
-// URL avatar Zalo hợp lệ (Zalo trả "/default" hoặc "" khi chưa đặt ảnh)
-function usableAvatar(user) {
-  // Zalo đổi chỗ chứa ảnh giữa các phiên bản → thử mọi field
-  const candidates = [
-    user?.avatar?.value, user?.avatar?.url, user?.avatarUrl,
-    user?.avatar, user?.avatar_360, user?.avatar_240, user?.avatar_120,
-    user?.bgavatar?.value, user?.bgavatar
-  ];
-  for (const c of candidates) {
-    const u = String(c ?? "").trim();
-    if (/^https?:\/\//i.test(u)) return u;
-  }
-  return null;
-}
+• getavt id [uid] → lấy ảnh theo UID người muốn lấy
+• getavt link [link] → lấy theo link profile
+• getavt user → lấy avatar của chính người dùng lệnh
+• getavt user [@mentions] → lấy avatar người vừa tag
 
-// Lấy uid cần xem: uid → tag → chính mình
-function resolveUid(args, data) {
-  if (args[0] && /^\d{6,}$/.test(args[0])) return args[0];
-  if (data.mentions && Object.keys(data.mentions).length > 0) return String(Object.keys(data.mentions)[0]);
-  return String(data.uidFrom);
-}
+• HDSD => không lấy được avatar khi người đó chưa đặt ảnh hoặc chặn bot`;
 
-module.exports.run = async function ({ api, event, args, reply }) {
-  const { threadId, type, data } = event;
-  const arg = (args[0] || "").toLowerCase();
+// Tải ảnh về file tạm rồi gửi (giống cách repo: lưu cache → gửi → xoá)
+async function sendAvatarFromUrl(api, threadId, type, url) {
+  const img = await loadImg(url);
+  if (!img) return null;
 
-  // ===== CHẨN ĐOÁN: cho admin biết Zalo đang trả gì =====
-  if (["debug", "chandoan", "info"].includes(arg)) {
-    const uid = args[1] && /^\d{6,}$/.test(args[1]) ? args[1] : String(data.uidFrom);
-    let raw;
-    let err = null;
-    try {
-      ({ raw } = await fetchProfile(api, uid));
-    } catch (e) {
-      err = e.message;
-    }
-    const keys = raw ? Object.keys(raw).join(", ") : "(không có response)";
-    const cp = raw?.changed_profiles;
-    const cpKeys = cp ? (Array.isArray(cp) ? `mảng[${cp.length}]` : Object.keys(cp).join(", ")) : "không có";
-    const up = raw?.unchanged_profiles;
-    const upKeys = up ? Object.keys(up).join(", ") : "không có";
-    const user = raw ? pickUser(raw, uid) : null;
-    const av = user?.avatar;
-    const avText = av === undefined ? "không có field avatar" : (typeof av === "object" ? `object(${Object.keys(av).join(",")})` : `"${String(av).slice(0, 70)}"`);
-    return say(api, threadId, type,
-      `🔍 CHẨN ĐOÁN /getavt\n` +
-      `• uid gửi lên: ${uid}\n` +
-      `• lỗi API: ${err || "không có"}\n` +
-      `• tìm được user: ${user ? "CÓ ✅" : "KHÔNG ❌"}\n` +
-      `• giá trị avatar: ${avText}\n` +
-      `• có thể dùng được: ${usableAvatar(user) ? "CÓ ✅" : "KHÔNG ❌"}\n` +
-      `• changed_profiles keys: ${cpKeys}\n` +
-      `• unchanged_profiles keys: ${upKeys}\n` +
-      `💡 Copy nội dung này gửi admin để sửa cho đúng.`
-    );
-  }
-
-  // ===== GỬI ẢNH GỐC (không làm thẻ) =====
-  if (["raw", "goc", "url"].includes(arg)) {
-    const uid = resolveUid(args.slice(1), data);
-    let user;
-    try {
-      ({ user } = await fetchProfile(api, uid));
-    } catch (error) {
-      return say(api, threadId, type, `❌ Không đọc được thông tin của ${uid}: ${error.message}`);
-    }
-    const avatar = usableAvatar(user);
-    if (!avatar) return say(api, threadId, type, `❌ ${user?.displayName || uid} chưa đặt ảnh đại diện.`);
-    const filePath = await profile.downloadImage(avatar, "avt");
-    if (!filePath) return say(api, threadId, type, "❌ Tải ảnh thất bại.");
-    try {
-      await api.sendMessage({ msg: `🖼️ ${avatar}`, attachments: filePath, ttlKind: "media" }, threadId, type);
-    } catch (error) {
-      return say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
-    } finally {
-      profile.cleanup(filePath);
-    }
-    return;
-  }
-
-  // ===== Ảnh nhóm =====
-  if (["box", "group", "nhom"].includes(arg)) {
-    let group;
-    try {
-      const info = await api.getGroupInfo(threadId);
-      group = info?.gridInfoMap?.[threadId];
-    } catch (error) {
-      return say(api, threadId, type, `❌ Không đọc được thông tin nhóm: ${error.message}`);
-    }
-    const avt = String(group?.avt || group?.avatar || "").trim();
-    if (!/^https?:\/\//i.test(avt)) {
-      return say(api, threadId, type, "❌ Nhóm không có ảnh đại diện (Zalo trả rỗng).");
-    }
-    try {
-      const cardPath = await profile.renderAvatarCard({
-        skin: "neutral",
-        title: String(group?.name || "Nhóm"),
-        subtitle: `🖼️ Ảnh đại diện nhóm • 🆔 ${threadId}`,
-        avatar: avt
-      });
-      await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
-      profile.cleanup(cardPath);
-    } catch (error) {
-      say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
-    }
-    return;
-  }
-
-  // ===== Ảnh người dùng =====
-  const uid = resolveUid(args, data);
-  let user;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jt_avt_"));
+  const filePath = path.join(tmpDir, "avatar.png");
   try {
-    ({ user } = await fetchProfile(api, uid));
-  } catch (error) {
-    return say(api, threadId, type, `❌ Không đọc được thông tin của ${uid}: ${error.message}`);
+    const canvas = require("canvas").createCanvas(img.width, img.height);
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
+    await api.sendMessage({ msg: "", attachments: [filePath], ttlKind: "media" }, threadId, type);
+    return true;
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* bỏ qua */ }
   }
+}
+
+// Lấy avatar của 1 uid → gửi
+async function getAvatar(api, threadId, type, uid) {
+  const { user } = await fetchProfile(api, uid);
   if (!user) {
-    return say(api, threadId, type, `❌ Zalo không trả về hồ sơ của ${uid}. Gõ ${global.config.prefix}getavt debug ${uid} để xem chi tiết.`);
+    await api.sendMessage({ msg: "❌ Người dùng không tồn tại.", plain: true, ttl: 60000 }, threadId, type);
+    return;
+  }
+  const avatar = String(user.avatar || "").trim();
+  if (!/^https?:\/\//i.test(avatar)) {
+    await api.sendMessage({
+      msg: `⚠️ Không lấy được ảnh đại diện của ${user.displayName || uid}.\n(Zalo trả về đường dẫn mặc định "${avatar || "trống"}" — người này chưa đặt ảnh hoặc chặn bot.)`,
+      plain: true,
+      ttl: 60000
+    }, threadId, type);
+    return;
+  }
+  const ok = await sendAvatarFromUrl(api, threadId, type, avatar).catch(() => null);
+  if (!ok) {
+    await api.sendMessage({ msg: "❌ Không thể lấy ảnh người dùng.", plain: true, ttl: 60000 }, threadId, type);
+  }
+}
+
+module.exports.run = async function ({ api, event, args }) {
+  const { threadId, type, data } = event;
+  const sub = (args[0] || "").toLowerCase();
+
+  // ===== KHÔNG THAM SỐ → HDSD (như repo) =====
+  if (!args[0]) {
+    return api.sendMessage({ msg: HD, plain: true, ttl: 120000 }, threadId, type);
   }
 
-  const avatar = usableAvatar(user);
-  if (!avatar) {
-    return say(api, threadId, type,
-      `❌ ${user.displayName || uid} chưa đặt ảnh đại diện Zalo.\n` +
-      `(Zalo trả về đường dẫn "${String(user.avatar || "").trim() || "trống"}")`
-    );
+  // ===== ID <uid> =====
+  if (sub === "id") {
+    const uid = args[1];
+    if (!uid || !/^\d{6,}$/.test(uid)) {
+      return api.sendMessage({ msg: "⚠️ Vui lòng nhập uid cần get avatar.", plain: true, ttl: 60000 }, threadId, type);
+    }
+    return getAvatar(api, threadId, type, uid);
   }
 
-  try {
-    const cardPath = await profile.renderAvatarCard({
-      skin: "zalo",
-      title: String(user.displayName || uid),
-      subtitle: `🖼️ Ảnh đại diện Zalo • 🆔 ${uid}`,
-      avatar
-    });
-    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
-    profile.cleanup(cardPath);
-  } catch (error) {
-    say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
+  // ===== LINK <link> =====
+  if (sub === "link") {
+    const link = args.slice(1).join(" ");
+    if (!link) {
+      return api.sendMessage({ msg: "⚠️ Vui lòng nhập link cần get avatar.", plain: true, ttl: 60000 }, threadId, type);
+    }
+    // Zalo không có link profile công khai kiểu FB → lấy uid nếu link có dạng zalo.me/xxxx
+    const m = link.match(/zalo\.me\/(\d{6,})/) || link.match(/(\d{6,})/);
+    if (!m) {
+      return api.sendMessage({ msg: "❌ Không đọc được uid từ link này (Zalo cần uid, không lấy được từ link FB).", plain: true, ttl: 60000 }, threadId, type);
+    }
+    return getAvatar(api, threadId, type, m[1]);
   }
+
+  // ===== USER [@tag] =====
+  if (sub === "user") {
+    // /getavt user @tag → avatar người được tag
+    if (data?.mentions && Object.keys(data.mentions).length > 0) {
+      return getAvatar(api, threadId, type, String(Object.keys(data.mentions)[0]));
+    }
+    // /getavt user <uid> → avatar theo uid
+    if (args[1] && /^\d{6,}$/.test(args[1])) {
+      return getAvatar(api, threadId, type, args[1]);
+    }
+    return getAvatar(api, threadId, type, String(data.uidFrom));
+  }
+
+  // ===== GÕ NHANH: /getavt <uid> hoặc /getavt @tag =====
+  if (/^\d{6,}$/.test(sub)) return getAvatar(api, threadId, type, sub);
+  if (data?.mentions && Object.keys(data.mentions).length > 0) {
+    return getAvatar(api, threadId, type, String(Object.keys(data.mentions)[0]));
+  }
+
+  return api.sendMessage({ msg: "❌ Sai lệnh. Gõ /getavt để xem hướng dẫn.", plain: true, ttl: 60000 }, threadId, type);
 };

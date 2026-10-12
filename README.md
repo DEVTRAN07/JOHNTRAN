@@ -260,7 +260,7 @@ assets/
 **Lệnh tiện ích:**
 | Lệnh | Chức năng |
 |---|---|
-| `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
+| `/getavt` | Lấy avatar theo mẫu Kenne400k: `/getavt id <uid>` • `link <link>` • `user [@tag]` |
 | `/card [uid \| @tag]` | Thẻ hồ sơ Zalo layout Kenne400k: nền ảnh + **avatar tròn** + cột thông tin bên phải (cyan `#00FFFF`, link xanh lá `#00FF33`) |
 | `/tiktok <username>` | Thẻ thông tin TikTok (followers, thích, video, xác minh) |
 | `/tiktok video <link>` / `tiktok music <link>` | Tải video/nhạc TikTok |

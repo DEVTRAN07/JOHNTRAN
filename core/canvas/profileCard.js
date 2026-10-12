@@ -127,4 +127,30 @@ async function render(o = {}) {
   }
 }
 
-module.exports = { render, circle, CYAN, GREEN, WIDTH: W, HEIGHT: H };
+// Tải ảnh từ URL (http/https, resolve redirect tương đối)
+async function loadImg(url, depth = 0) {
+  const u = String(url ?? "").trim();
+  if (!/^https?:\/\//i.test(u) || depth > 5) return null;
+  try {
+    const client = /^https:/i.test(u) ? require("https") : require("http");
+    const buffer = await new Promise((resolve, reject) => {
+      client.get(u, { timeout: 15000 }, (res) => {
+        const location = res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && location) {
+          res.resume();
+          const target = /^https?:\/\//i.test(location) ? location : new URL(location, u).href;
+          resolve(loadImg(target, depth + 1));
+          return;
+        }
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+      }).on("error", reject);
+    });
+    return await loadImage(buffer);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { render, circle, loadImg, CYAN, GREEN, WIDTH: W, HEIGHT: H };
