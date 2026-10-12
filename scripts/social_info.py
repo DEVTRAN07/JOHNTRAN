@@ -12,8 +12,11 @@ Cách dùng:
 Kết quả: JSON một dòng ra stdout.
 """
 import json
+import os
 import re
 import sys
+import tempfile
+import time
 
 
 def get(url, timeout=25):
@@ -212,13 +215,56 @@ def facebook(target):
     return out
 
 
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "jt_social_cache.json")
+CACHE_TTL = 1800  # 30 phút — TikTok hay chặn theo IP nên phải giữ kết quả
+
+def cache_get(key):
+    try:
+        if os.path.exists(CACHE_DIR):
+            raw = json.load(open(CACHE_DIR))
+            item = raw.get(key)
+            if item and (time.time() - item["at"]) < CACHE_TTL:
+                return item["data"]
+    except Exception:
+        pass
+    return None
+
+def cache_put(key, data):
+    try:
+        raw = {}
+        if os.path.exists(CACHE_DIR):
+            raw = json.load(open(CACHE_DIR))
+        raw[key] = {"at": time.time(), "data": data}
+        json.dump(raw, open(CACHE_DIR, "w"))
+    except Exception:
+        pass
+
+# Lấy info kèm cache + retry (TikTok bất ổn định do chặn theo IP)
+def fetch_with_retry(platform, target, tries=2):
+    key = f"{platform}:{target.lower()}"
+    cached = cache_get(key)
+    if cached:
+        return cached
+    last = None
+    for i in range(tries):
+        try:
+            data = tiktok(target) if platform == "tiktok" else facebook(target)
+            cache_put(key, data)
+            return data
+        except SocialError as e:
+            last = e
+            if i < tries - 1:
+                time.sleep(1.2)
+    raise last
+
+
 def main():
     if len(sys.argv) < 3:
         print(json.dumps({"ok": False, "error": "Usage: social_info.py <tiktok|facebook> <target>"}))
         return 1
     platform, target = sys.argv[1].lower().strip(), sys.argv[2].strip().lstrip("@")
     try:
-        info = tiktok(target) if platform.startswith("tiktok") else facebook(target)
+        info = fetch_with_retry("tiktok" if platform.startswith("tiktok") else "facebook", target)
         print(json.dumps({"ok": True, "data": info}, ensure_ascii=False))
         return 0
     except SocialError as e:

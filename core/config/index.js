@@ -166,6 +166,7 @@ const DEFAULTS = {
       "dpaste.com",
       "googleusercontent.com",
       "stickers.zaloapp.com",
+      "fbcdn.net",
       "zalo.ai",
       "zadn.vn",
       "zdn.vn",

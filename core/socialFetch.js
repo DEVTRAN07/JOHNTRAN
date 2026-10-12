@@ -52,6 +52,14 @@ function explain(code, target, platform) {
     case "not_found":
       return `Không tìm thấy @${target} trên ${label}.\nKiểm tra lại username (phần sau dấu @ trong link profile).`;
     case "empty":
+      if (platform === "tiktok") {
+        return `Không tìm thấy @${target} trên TikTok.\n\n` +
+               `Có thể do:\n` +
+               `• username sai (username là phần sau dấu @ trong link profile, không phải tên hiển thị)\n` +
+               `• hồ sơ bị riêng tư hoặc đã bị khóa\n\n` +
+               `Ví dụ link: https://www.tiktok.com/@username\n` +
+               `→ gõ: /tiktok username`;
+      }
       return `@${target} chưa có nội dung công khai hoặc không tồn tại trên ${label}.`;
     case "private":
       return `Hồ sơ ${target} ở chế độ riêng tư nên không xem được.`;
