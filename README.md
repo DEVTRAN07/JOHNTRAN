@@ -261,7 +261,7 @@ assets/
 | Lệnh | Chức năng |
 |---|---|
 | `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
-| `/card [uid \| @tag]` | Thẻ hồ sơ kiểu Kenne400k (avatar tròn + thông tin bên phải) |
+| `/card [uid \| @tag]` và `/cardzalo [uid \| @tag]` | Thẻ hồ sơ layout Kenne400k: nền ảnh + **avatar tròn** + cột thông tin bên phải (cyan `#00FFFF` + link xanh lá `#00FF33`) |
 | `/cardzalo [uid \| @tag]` | Thẻ hồ sơ người dùng Zalo (ảnh canvas) |
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |

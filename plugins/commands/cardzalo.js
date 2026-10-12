@@ -1,87 +1,82 @@
-// /cardzalo — thẻ hồ sơ người dùng Zalo (ảnh canvas, kiểu mới)
-//   /cardzalo            → thẻ của chính mình
-//   /cardzalo <uid>      → thẻ theo UID
-//   /cardzalo @nguoi_dung→ thẻ người được tag
-const profile = require("../../core/canvas/profile");
+// /cardzalo — Thẻ hồ sơ Zalo (layout Kenne400k, dùng chung renderer với /card)
+// Tham khảo: Kenne400k/filebotha-leak (modules/commands/card.js)
+const http = require("../../core/http");
+const card = require("../../core/canvas/profileCard");
 const { fetchProfile } = require("../../core/zaloProfile");
 
 module.exports.config = {
   name: "cardzalo",
-  aliases: ["card", "zalo"],
-  version: "3.1.0",
+  aliases: ["zalo", "cacd", "profile"],
+  version: "3.2.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Thẻ hồ sơ người dùng Zalo",
+  description: "Thẻ hồ sơ Zalo (layout Kenne400k)",
   category: "Tiện ích",
-  usage: "cardzalo [uid | @tag]",
+  usage: "cardzalo (reply) | cardzalo <uid>",
   cooldowns: 5,
   dependencies: {}
 };
 
 function genderText(g) {
   const n = Number(g);
-  if (n === 1) return "Nam ♂";
-  if (n === 2) return "Nữ ♀";
+  if (n === 1) return "Nam";
+  if (n === 2) return "Nữ";
   return "Không công khai";
 }
 
 function dobText(dob, sdob) {
   if (sdob) return String(sdob);
-  if (!dob) return "Không công khai";
+  if (!dob) return "không công khai";
   const d = new Date(Number(dob) * 1000);
-  if (Number.isNaN(d.getTime())) return "Không công khai";
+  if (Number.isNaN(d.getTime())) return "không công khai";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-function fail(api, threadId, type, msg) {
-  return api.sendMessage({ plain: true, msg }, threadId, type);
 }
 
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event;
 
+  await api.sendMessage({ msg: "⏳ Đang tạo thẻ...", plain: true }, threadId, type);
+
+  // ---- chọn uid: reply → uid → tag → chính mình ----
   let uid = null;
-  if (args[0] && /^\d{6,}$/.test(args[0])) uid = args[0];
-  else if (data.mentions && Object.keys(data.mentions).length > 0) uid = String(Object.keys(data.mentions)[0]);
+  const quote = data?.quote;
+  if (Array.isArray(quote?.mentions) && quote.mentions[0]?.uid) uid = String(quote.mentions[0].uid);
+  else if (args[0] && /^\d{6,}$/.test(args[0])) uid = args[0];
+  else if (data?.mentions && Object.keys(data.mentions)[0]) uid = String(Object.keys(data.mentions)[0]);
+  else if (quote?.uidFrom) uid = String(quote.uidFrom);
   else uid = String(data.uidFrom);
 
-  let user;
-  try {
-    ({ user } = await fetchProfile(api, uid));
-  } catch (error) {
-    console.error("cardzalo:", error.message);
-    return fail(api, threadId, type, `❌ Không đọc được hồ sơ Zalo của ${uid}: ${error.message}`);
+  const { user } = await fetchProfile(api, uid);
+  if (!user) return reply.error(`Không đọc được hồ sơ của ${uid}.`);
+
+  // ---- avatar ----
+  let avatarBuffer = null;
+  const avatar = String(user.avatar || "").trim();
+  if (/^https?:\/\//i.test(avatar)) {
+    try {
+      const { buffer } = await http.getBuffer(avatar, { timeout: 20000 });
+      avatarBuffer = buffer;
+    } catch { /* thiếu ảnh vẫn tạo thẻ */ }
   }
 
-  if (!user) return fail(api, threadId, type, `❌ Không tìm thấy hồ sơ ${uid} (Zalo không trả về dữ liệu).`);
-
-  const rows = [
-    { icon: "👤", label: "Tên Zalo", value: user.zaloName || user.displayName || "—" },
-    { icon: "⚧", label: "Giới tính", value: genderText(user.gender) },
-    { icon: "🎂", label: "Ngày sinh", value: dobText(user.dob, user.sdob) },
-    { icon: "💬", label: "Trạng thái", value: user.status || "Không có" },
-    { icon: "🆔", label: "UID", value: uid }
-  ];
-
-  const cardPath = await profile.renderProfile({
-    skin: "zalo",
-    title: String(user.displayName || user.zaloName || "Người dùng Zalo"),
-    handle: `@${user.username || user.zaloName || uid}`,
-    subtitle: Number(user.isFr) === 1 ? "Bạn bè 💚" : "Chưa kết bạn",
-    avatar: /^https?:\/\//i.test(String(user.avatar || "").trim()) ? user.avatar : undefined,
-    rows,
-    footer: "CARD ZALO"
-  });
-
+  // ---- render + gửi ----
+  let cardPath = null;
   try {
-    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
+    cardPath = await card.render({
+      name: String(user.displayName || user.zaloName || "—"),
+      avatarBuffer,
+      rows: [
+        ["» Sinh nhật", dobText(user.dob, user.sdob)],
+        ["» Giới tính", genderText(user.gender)],
+        ["» Bạn bè", Number(user.isFr) === 1 ? "Có" : "Chưa kết bạn"],
+        ["» Trạng thái", user.status ? String(user.status).slice(0, 22) : "Không có"],
+        ["» UID", uid]
+      ],
+      link: user.username ? `@${user.username}` : uid
+    });
+    await api.sendMessage({ msg: "", attachments: [cardPath], ttlKind: "card" }, threadId, type);
   } catch (error) {
-    console.error("cardzalo gửi ảnh:", error.message);
-    return reply.error(
-      `Không gửi được ảnh (${error.message}).\n` +
-      `Tên: ${user.displayName}\nUID: ${uid}\nGiới tính: ${genderText(user.gender)}\nNgày sinh: ${dobText(user.dob, user.sdob)}`
-    );
-  } finally {
-    profile.cleanup(cardPath);
+    console.error("cardzalo:", error.message);
+    return reply.error(`Tạo thẻ thất bại: ${error.message}`);
   }
 };
