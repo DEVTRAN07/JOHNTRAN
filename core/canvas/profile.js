@@ -54,9 +54,11 @@ function fit(ctx, text, w) {
 }
 
 async function loadImg(url) {
-  if (!url) return null;
+  // Zalo trả avatar kiểu "/default" hoặc "" khi người dùng chưa đặt ảnh —
+  // không phải URL đầy đủ, phải bỏ qua chứ không ném lỗi
+  if (!url || !/^https?:\/\//i.test(String(url).trim())) return null;
   try {
-    const mod = url.startsWith("http") ? require("https") : require("http");
+    const mod = /^https:/i.test(String(url)) ? require("https") : require("http");
     const buffer = await new Promise((resolve, reject) => {
       mod.get(url, { timeout: 12000 }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {

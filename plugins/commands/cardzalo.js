@@ -3,6 +3,7 @@
 //   /cardzalo <uid>      → thẻ theo UID
 //   /cardzalo @nguoi_dung→ thẻ người được tag
 const profile = require("../../core/canvas/profile");
+const { fetchProfile } = require("../../core/zaloProfile");
 
 module.exports.config = {
   name: "cardzalo",
@@ -42,11 +43,10 @@ module.exports.run = async function ({ api, event, args, reply }) {
 
   let user;
   try {
-    const info = await api.getUserInfo(uid);
-    user = info?.changed_profiles?.[uid] || info?.unchanged_profiles?.[uid];
+    ({ user } = await fetchProfile(api, uid));
   } catch (error) {
     console.error("cardzalo:", error.message);
-    return reply.error(`Không đọc được hồ sơ Zalo của ${uid}.`);
+    return reply.error(`Không đọc được hồ sơ Zalo của ${uid}: ${error.message}`);
   }
 
   if (!user) return reply.error(`Không tìm thấy hồ sơ ${uid}.`);
@@ -64,7 +64,7 @@ module.exports.run = async function ({ api, event, args, reply }) {
     title: String(user.displayName || user.zaloName || "Người dùng Zalo"),
     handle: `@${user.username || user.zaloName || uid}`,
     subtitle: Number(user.isFr) === 1 ? "Bạn bè 💚" : "Chưa kết bạn",
-    avatar: user.avatar || undefined,
+    avatar: /^https?:\/\//i.test(String(user.avatar || "").trim()) ? user.avatar : undefined,
     rows,
     footer: "CARD ZALO"
   });

@@ -4,6 +4,7 @@
 //   /getavt @nguoi_dung  → ảnh người được tag
 //   /getavt box          → ảnh đại diện nhóm
 const profile = require("../../core/canvas/profile");
+const { fetchProfile } = require("../../core/zaloProfile");
 
 module.exports.config = {
   name: "getavt",
@@ -54,16 +55,22 @@ module.exports.run = async function ({ api, event, args, reply }) {
 
   let user;
   try {
-    const info = await api.getUserInfo(uid);
-    user = info?.changed_profiles?.[uid] || info?.unchanged_profiles?.[uid];
+    ({ user } = await fetchProfile(api, uid));
   } catch (error) {
     console.error("getavt:", error.message);
-    return reply.error(`Không đọc được thông tin của ${uid}.`);
+    return reply.error(`Không đọc được thông tin của ${uid}: ${error.message}`);
   }
 
-  if (!user?.avatar) return reply.error(`Không có ảnh đại diện (${user?.displayName || uid}).`);
+  const avatarUrl = String(user?.avatar || "").trim();
+  const hasAvatar = /^https?:\/\//i.test(avatarUrl);
+  if (!hasAvatar) {
+    return reply.error(
+      `Người dùng này chưa đặt ảnh đại diện Zalo.\n` +
+      `(Zalo trả về đường dẫn "${avatarUrl || "trống"}" — mặc định không có ảnh)`
+    );
+  }
 
-  const filePath = await profile.downloadImage(user.avatar, "avt");
+  const filePath = await profile.downloadImage(avatarUrl, "avt");
   if (!filePath) return reply.error("Tải ảnh đại diện thất bại.");
   try {
     await api.sendMessage({ msg: `🖼️ Ảnh đại diện: ${user.displayName || uid}`, attachments: filePath, ttlKind: "media" }, threadId, type);
