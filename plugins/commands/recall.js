@@ -60,10 +60,11 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
       if (vendorFile) {
         const vendorSrc = fs.readFileSync(vendorFile, "utf8");
         const logOk = vendorSrc.includes("vendor-send");
-        const ganOk = /result\.cliMsgId\s*=/.test(vendorSrc);
+        // Bản mới: helper attachCliMsgId • bản cũ: result.cliMsgId trong send()
+        const ganOk = /function attachCliMsgId/.test(vendorSrc) || /result\.cliMsgId\s*=/.test(vendorSrc);
         const truyenOk = vendorSrc.split("send(handledData, clientId)").length - 1 >= 2;
         const isCjs = vendorFile.endsWith(".cjs");
-        vendorState = `${logOk && ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (file:${isCjs ? "cjs" : "js"} log:${logOk ? "có" : "thiếu"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
+        vendorState = `${ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (file:${isCjs ? "cjs" : "js"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
       }
     } catch { /* bỏ qua */ }
     // Cho biết bot đang chạy bản code nào (tránh kiểm tra nhầm bản cũ)
