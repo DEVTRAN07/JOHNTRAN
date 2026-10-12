@@ -131,6 +131,13 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     // Chỉ hoạt động trong nhóm — không chat riêng
     if (event.type !== ThreadType.Group) return;
 
+    // Bỏ qua tin do chính bot gửi (tránh vòng lặp: bot trả link → lại tự tải)
+    if (isSelf === true) return;
+
+    // Bỏ qua tin là LỆNH (bắt đầu bằng prefix) — /menu không nên tự tải link trong đó
+    const rawContent = String(event.data.content || "").trim();
+    if (global.config.prefix && rawContent.startsWith(global.config.prefix)) return;
+
     // Zalo gửi link dạng text (webchat) HOẶC dạng object (tin chia sẻ, link gợi ý...)
     const url = extractUrl(event.data.content);
     if (!url) return;

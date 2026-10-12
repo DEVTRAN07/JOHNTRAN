@@ -261,13 +261,14 @@ assets/
 | Lệnh | Chức năng |
 |---|---|
 | `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
+| `/card [uid \| @tag]` | Thẻ hồ sơ kiểu Kenne400k (avatar tròn + thông tin bên phải) |
 | `/cardzalo [uid \| @tag]` | Thẻ hồ sơ người dùng Zalo (ảnh canvas) |
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
 | `/getvd` (reply video) | Tải video gốc → upload asyncfile → gửi video gốc (không nén) |
 | `/stk` (reply ảnh/GIF/video/sticker) | Phân tích ảnh → **tìm sticker Zalo thật** trong kho → gõ số để gửi |
 | `/stkvd` (reply GIF/video/sticker động) | Như trên nhưng ưu tiên sticker **động** (type 1) |
-| `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
+| `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm. Đang bật thì **mọi link gửi vào nhóm** đều được tự tải (không cần prefix). Bot bỏ qua tin do chính mình gửi và tin là lệnh → không bị lặp |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |
 | `/stats` | Thẻ thống kê ngày (lệnh, nhạc, lỗi, top lệnh, cache hit rate) |
