@@ -38,13 +38,13 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
 
   if (sub === "status" || sub === "stt" || sub === "info") {
     const recall = require("../../core/recall");
+    const fs = require("fs");
+    const path = require("path");
     const hasUndo = typeof api.undo === "function";
     const hasDelete = typeof api.deleteMessage === "function";
     // Kiểm tra file vendor TRÊN MÁY ĐANG CHẠY có được patch chưa
     let vendorState = "không đọc được";
     try {
-      const fs = require("fs");
-      const path = require("path");
       // package.json của zalo-client có "exports" nên require.resolve subpath bị chặn
       // → đọc trực tiếp file vendor ĐANG CHẠY (node_modules trước, rồi vendor/)
       // require("zalo-client") nạp dist/cjs (package.json exports.require)
@@ -64,7 +64,9 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         const ganOk = /function attachCliMsgId/.test(vendorSrc) || /result\.cliMsgId\s*=/.test(vendorSrc);
         const truyenOk = vendorSrc.split("send(handledData, clientId)").length - 1 >= 2;
         const isCjs = vendorFile.endsWith(".cjs");
-        vendorState = `${ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (file:${isCjs ? "cjs" : "js"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
+        vendorState = ganOk && truyenOk
+          ? "đã patch ✅ (gửi tin kèm cliMsgId)"
+          : "bản gốc (không patch) — thu hồi thử bằng cliMsgId=msgId";
       }
     } catch { /* bỏ qua */ }
     // Cho biết bot đang chạy bản code nào (tránh kiểm tra nhầm bản cũ)
