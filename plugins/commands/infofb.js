@@ -74,13 +74,13 @@ module.exports.run = async function ({ api, event, args, reply }) {
       avatarBuffer,
       rows: [
         ["» Người theo dõi", shortNum(info.followers)],
-        ["» Lượt thích", shortNum(info.fan_count)],
+        ["» Lượt thích", shortNum(info.talking_about || info.fan_count)],
         ["» Giới tính", info.gender || "Không công khai"],
         ["» Sinh nhật", info.birthday || "Không công khai"],
         ["» Địa điểm", info.location?.name || "Không công khai"],
         ["» ID", info.fb_id || target]
       ],
-      link: info.category ? String(info.category).slice(0, 46) : (info.username ? `@${info.username}` : target)
+      link: info.about ? String(info.about).slice(0, 46) : (info.category ? String(info.category).slice(0, 46) : (info.username ? `@${info.username}` : target))
     });
     await api.sendMessage({ msg: "", attachments: [cardPath], ttlKind: "card" }, threadId, type);
   } catch (error) {

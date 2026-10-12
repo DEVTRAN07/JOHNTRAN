@@ -130,22 +130,81 @@ def facebook(target):
     resp = get(url)
     html = resp.text
     if resp.status_code != 200:
-        raise Exception(f"HTTP {resp.status_code}")
+        raise SocialError("blocked", f"Facebook tra ve HTTP {resp.status_code}")
 
     out = {"source": "facebook", "username": str(target)}
 
-    def grab(pattern, cast=str, idx=1):
-        mm = re.search(pattern, html)
-        return cast(mm.group(idx)) if mm else None
+    def grab(pattern, idx=1, flags=0):
+        mm = re.search(pattern, html, flags)
+        return mm.group(idx) if mm else None
 
-    # id + tên
+    # tên (bỏ hậu tố "• Facebook", "| Facebook", " - Facebook")
     out["name"] = grab(r"<title>([^<]{1,80})</title>") or grab(r'"name":"([^"]{1,80})"')
-    out["fb_id"] = grab(r'"userID":"?(\d+)"?') or grab(r'"entityID":"?(\d+)"?') or grab(r'"profile_id":"?(\d+)"?')
-    out["avatar"] = clean_url(grab(r'"profilePicLarge":"([^"]+)"') or grab(r'"profilePicMedium":"([^"]+)"') or grab(r'"profile_picture":\{"uri":"([^"]+)"'))
-    out["followers"] = parse_count(grab(r'"follower_count":(\d+)') or grab(r'"followers":\{"count":(\d+)'))
-    out["about"] = (grab(r'"biography":"([^"]{0,200})"') or grab(r'"about":\{"text":"([^"]{0,200})"') or "")[:120] or None
-    out["category"] = grab(r'"category_name":"([^"]{0,60})"') or grab(r'"categoryType":"([^"]{0,60})"')
-    out["verified"] = bool(grab(r'"is_verified":(true|false)') == "true")
+    if out["name"]:
+        out["name"] = out["name"].strip()
+        out["name"] = re.sub(r"\s*[|•\-]\s*Facebook.*$", "", out["name"], flags=re.I).strip()
+        out["name"] = out["name"].replace("&#064;", "@").replace("&amp;", "&")
+        if out["name"] in ("Facebook", ""):
+            out["name"] = None
+
+    # id
+    out["fb_id"] = (grab(r'"userID":"?(\d+)"?') or grab(r'"entityID":"?(\d+)"?')
+                   or grab(r'"profile_id":"?(\d+)"?') or grab(r'"entity_id":\s*"?(\d+)"?'))
+
+    # avatar
+    av = (grab(r'"profilePicLarge":"([^"]+)"') or grab(r'"profilePicMedium":"([^"]+)"')
+          or grab(r'"profile_picture":\{"uri":"([^"]+)"')
+          or grab(r'<meta property="og:image" content="([^"]+)"'))
+    out["avatar"] = clean_url(av) if av else None
+
+    # giới tính: FB trả JSON '"gender":"male"' (có thể UPPERCASE)
+    g = grab(r'"gender":"([A-Za-z]+)"')
+    if g:
+        gl = g.lower()
+        out["gender"] = "Nam" if gl.startswith("m") else ("Nu" if gl.startswith("f") else g)
+    else:
+        out["gender"] = None
+
+    # followers + mô tả: nằm trong og:description
+    #  "Mark Zuckerberg. 121,434,345 followers · 1,009,053 talking about this. Bringing the world closer together."
+    ogd = grab(r'og:description" content="([^"]+)"')
+    if ogd:
+        ogd = ogd.replace("&#xb7;", "|").replace("&amp;", "&")
+        fm = re.search(r"([\d.,]+)\s*followers", ogd, re.I)
+        if fm:
+            out["followers"] = parse_count(fm.group(1))
+        tm = re.search(r"([\d.,]+)\s*talking", ogd, re.I)
+        if tm:
+            out["talking_about"] = parse_count(tm.group(1))
+        # phần mô tả sau cùng (about) — lấy phần KHÔNG RỖNG cuối cùng vì
+        # chuỗi og:description hay kết thúc bằng dấu "." → split ra chuỗi rỗng
+        tail = ""
+        for part in reversed(ogd.split(".")):
+            part = part.strip()
+            if part:
+                tail = part
+                break
+        if tail and "followers" not in tail.lower():
+            out["about"] = tail[:120]
+
+    if not out.get("followers"):
+        fm2 = re.search(r"([\d.,]+)\s*followers", html, re.I)
+        if fm2:
+            out["followers"] = parse_count(fm2.group(1))
+
+    # ngày sinh (nếu công khai)
+    bd = (grab(r'"birthday":"([^"]{4,24})"') or grab(r"(January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}")
+          or grab(r"\d{1,2} tháng \d{1,2}, \d{4}"))
+    out["birthday"] = bd if bd else None
+
+    # địa điểm
+    loc = (grab(r'"location":\{"name":"([^"]{1,60})"')
+           or grab(r'"current_city":\{"name":"([^"]{1,60})"')
+           or grab(r'"hometown":\{"name":"([^"]{1,60})"'))
+    out["location"] = loc if loc else None
+
+    # xác minh
+    out["verified"] = bool(grab(r'"is_verified":(true|false)') == "true" or grab(r'"verified":(true|false)') == "true")
     out["link"] = url
 
     if not out.get("name") or out["name"] == "Facebook":
