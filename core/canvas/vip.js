@@ -61,6 +61,27 @@ async function renderVipCard(spec = {}) {
 
   await theme.paintBackground(ctx, WIDTH, height);
 
+  // Nền ảnh riêng (avatar người dùng...) — phủ lên, giữ overlay để chữ rõ
+  if (spec.background) {
+    try {
+      const { buffer } = await require("../http").getBuffer(spec.background, { timeout: 10000, retries: 1 });
+      const bg = await require("canvas").loadImage(buffer);
+      const scale = Math.max(WIDTH / bg.width, height / bg.height);
+      const dw = bg.width * scale;
+      const dh = bg.height * scale;
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(bg, (WIDTH - dw) / 2, (height - dh) / 2, dw, dh);
+      ctx.restore();
+      // overlay tối cho chữ luôn đọc được
+      const shade = ctx.createLinearGradient(0, 0, 0, height);
+      shade.addColorStop(0, "rgba(7, 10, 20, .6)");
+      shade.addColorStop(1, "rgba(7, 10, 20, .9)");
+      ctx.fillStyle = shade;
+      ctx.fillRect(0, 0, WIDTH, height);
+    } catch { /* hỏng ảnh nền thì thôi, vẫn có nền mặc định */ }
+  }
+
   let y = S(74);
 
   // ===== Tiêu đề =====

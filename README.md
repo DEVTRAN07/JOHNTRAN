@@ -260,6 +260,10 @@ assets/
 **Lệnh tiện ích:**
 | Lệnh | Chức năng |
 |---|---|
+| `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
+| `/cardzalo [uid \| @tag]` | Thẻ thông tin người dùng Zalo (ảnh canvas) |
+| `/cardtiktok <username>` | Thẻ thông tin người dùng TikTok |
+| `/cardfb <username \| uid>` | Thẻ thông tin người dùng Facebook |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |

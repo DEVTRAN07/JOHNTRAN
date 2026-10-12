@@ -176,7 +176,9 @@ const DEFAULTS = {
     media_downloader_url: "",
     tiktok_api_url: "",
     phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi",
-    dpaste_url: "https://dpaste.com/api/v2/"
+    dpaste_url: "https://dpaste.com/api/v2/",
+    facebook_api_url: "https://graph.facebook.com/v19.0",
+    facebook_access_token: ""
   },
   ai: {
     tts_enabled: true
