@@ -123,13 +123,14 @@ function registerStickerApi(api) {
   api.custom("sendCustomStickerUrl", async ({ utils, props }) => {
     const {
       staticImgUrl, animationImgUrl, threadId, threadType,
-      reply = null, width = 480, height = 480, ttl = 0,
+      reply = null, ttl = 0,
       variant = "ai"        // "ai" = bản stk gốc | "std" = bản stkvd gốc
     } = props || {};
 
     if (!staticImgUrl || !threadId) throw new Error("Thiếu URL hoặc threadId");
-    width = Number(width) || 480;
-    height = Number(height) || 480;
+    // props.width/height là const — ép số bằng biến mới, KHÔNG gán lại destructure
+    const width = Number(props?.width) || 480;
+    const height = Number(props?.height) || 480;
 
     const isGroup = Number(threadType) === 1;
     const sendPath = isGroup ? SEND_GROUP_PATH : SEND_USER_PATH;
