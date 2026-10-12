@@ -55,11 +55,10 @@ async function navigate({ api, event, Threads, action, senderId }) {
 
     const threadData = (await Threads.getData(threadId)).data || {};
 
-    // Đóng menu: thu hồi trang đang hiện + xoá trạng thái phân trang
+    // Đóng menu: chỉ xoá trạng thái phân trang
     if (action === "out" || action === "exit" || action === "close") {
         delete threadData.menu_page;
         await Threads.setData(threadId, threadData);
-        await require("../../core/recall").recall(api, threadId, "menu", type);
         return api.sendMessage({
             msg: "✅ Đã đóng menu. Gõ /menu để mở lại.",
             }, threadId, type);
