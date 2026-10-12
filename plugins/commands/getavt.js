@@ -19,6 +19,11 @@ module.exports.config = {
   dependencies: {}
 };
 
+// Gửi lỗi dạng TEXT để đọc được (ảnh thẻ canvas không copy được nội dung)
+function fail(api, threadId, type, msg) {
+  return api.sendMessage({ plain: true, msg }, threadId, type);
+}
+
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event;
   const arg = (args[0] || "").toLowerCase();
@@ -31,16 +36,16 @@ module.exports.run = async function ({ api, event, args, reply }) {
       group = info?.gridInfoMap?.[threadId];
     } catch (error) {
       console.error("getavt box:", error.message);
-      return reply.error("Không đọc được thông tin nhóm.");
+      return fail(api, threadId, type, "❌ Không đọc được thông tin nhóm.");
     }
     const avt = group?.avt || group?.avatar;
-    if (!avt) return reply.error("Nhóm không có ảnh đại diện.");
+    if (!avt) return fail(api, threadId, type, "❌ Nhóm không có ảnh đại diện.");
     const filePath = await profile.downloadImage(avt, "grp");
-    if (!filePath) return reply.error("Tải ảnh nhóm thất bại.");
+    if (!filePath) return fail(api, threadId, type, "❌ Tải ảnh nhóm thất bại.");
     try {
       await api.sendMessage({ msg: `🖼️ Ảnh đại diện nhóm: ${group?.name || "—"}`, attachments: filePath, ttlKind: "media" }, threadId, type);
     } catch (error) {
-      return reply.error(`Gửi ảnh thất bại: ${error.message}`);
+      return fail(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
     } finally {
       profile.cleanup(filePath);
     }
@@ -58,17 +63,12 @@ module.exports.run = async function ({ api, event, args, reply }) {
     ({ user } = await fetchProfile(api, uid));
   } catch (error) {
     console.error("getavt:", error.message);
-    return reply.error(`Không đọc được thông tin của ${uid}: ${error.message}`);
+    return fail(api, threadId, type, `❌ Không đọc được thông tin của ${uid}: ${error.message}`);
   }
 
   const avatarUrl = String(user?.avatar || "").trim();
   const hasAvatar = /^https?:\/\//i.test(avatarUrl);
-  if (!hasAvatar) {
-    return reply.error(
-      `Người dùng này chưa đặt ảnh đại diện Zalo.\n` +
-      `(Zalo trả về đường dẫn "${avatarUrl || "trống"}" — mặc định không có ảnh)`
-    );
-  }
+  if (!hasAvatar) return fail(api, threadId, type, `❌ Người dùng này chưa đặt ảnh đại diện Zalo (Zalo trả về "${avatarUrl || "trống"}").`);
 
   const filePath = await profile.downloadImage(avatarUrl, "avt");
   if (!filePath) return reply.error("Tải ảnh đại diện thất bại.");

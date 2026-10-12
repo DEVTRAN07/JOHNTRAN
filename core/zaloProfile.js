@@ -10,6 +10,18 @@ function pickUser(info, uid) {
   const maps = [info.changed_profiles, info.unchanged_profiles];
   for (const map of maps) {
     if (!map || typeof map !== "object") continue;
+
+    // Zalo có phiên bản trả về MẢNG hồ sơ thay vì object key
+    if (Array.isArray(map)) {
+      const hit = map.find((u) => {
+        const id = String(u?.userId ?? u?.uid ?? u?.id ?? "");
+        return id === uid || id.startsWith(uid);
+      });
+      // Khớp được thì trả, KHÔNG đoán phần tử duy nhất (dễ trả nhầm người)
+      if (hit) return hit;
+      continue;
+    }
+
     if (map[uid]) return map[uid];
     if (map[`${uid}_0`]) return map[`${uid}_0`];
     const keys = Object.keys(map);
@@ -27,17 +39,34 @@ function pickUser(info, uid) {
  */
 async function fetchProfile(api, uid) {
   let raw;
+  let usedAvatarSize = true;
   try {
     raw = await api.getUserInfo(String(uid), AVATAR_LARGE);
   } catch (error) {
     // Thử lại không kèm avatarSize (một số phiên bản không nhận tham số 2)
+    usedAvatarSize = false;
     try {
       raw = await api.getUserInfo(String(uid));
     } catch (error2) {
       throw error;
     }
   }
-  return { user: pickUser(raw, String(uid)), raw };
+  const user = pickUser(raw, String(uid));
+
+  // Không đọc được user → log nguyên văn shape để biết Zalo thật trả gì
+  if (!user) {
+    const cp = raw?.changed_profiles;
+    const up = raw?.unchanged_profiles;
+    const detail = [
+      `avatarSize=${usedAvatarSize ? AVATAR_LARGE : "mặc định"}`,
+      `keys=${Object.keys(raw || {}).join(",")}`,
+      `changed_keys=${cp ? Object.keys(cp).join(",") : "không có"}`,
+      `changed_isArr=${Array.isArray(cp)}`,
+      `unchanged_keys=${up ? Object.keys(up).join(",") : "không có"}`
+    ].join(" | ");
+    console.error(`[zaloProfile] ${uid} KHÔNG tra được user: ${detail}`);
+  }
+  return { user, raw };
 }
 
 module.exports = { pickUser, fetchProfile, AVATAR_LARGE };

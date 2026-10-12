@@ -33,6 +33,10 @@ function dobText(dob, sdob) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function fail(api, threadId, type, msg) {
+  return api.sendMessage({ plain: true, msg }, threadId, type);
+}
+
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event;
 
@@ -46,10 +50,10 @@ module.exports.run = async function ({ api, event, args, reply }) {
     ({ user } = await fetchProfile(api, uid));
   } catch (error) {
     console.error("cardzalo:", error.message);
-    return reply.error(`Không đọc được hồ sơ Zalo của ${uid}: ${error.message}`);
+    return fail(api, threadId, type, `❌ Không đọc được hồ sơ Zalo của ${uid}: ${error.message}`);
   }
 
-  if (!user) return reply.error(`Không tìm thấy hồ sơ ${uid}.`);
+  if (!user) return fail(api, threadId, type, `❌ Không tìm thấy hồ sơ ${uid} (Zalo không trả về dữ liệu).`);
 
   const rows = [
     { icon: "👤", label: "Tên Zalo", value: user.zaloName || user.displayName || "—" },
