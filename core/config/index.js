@@ -183,7 +183,7 @@ const DEFAULTS = {
   },
   // Cỡ ảnh canvas: 1280 = lớn rõ, 750 = Zalo gửi nguyên bản (không resize)
   canvas: {
-    width: 1280,
+    width: 750,
     quality: 100
   },
   music: {

@@ -177,7 +177,16 @@ function text(ctx, str, x, y, { size = 20, family = "JT", color = PALETTE.ink2, 
 
 function newCanvas(w, h) {
   const canvas = createCanvas(w, h);
-  return { canvas, ctx: canvas.getContext("2d") };
+  const ctx = canvas.getContext("2d");
+  // Chất lượng render cao nhất: khử răng cưcj "best", ảnh nền nét, chữ không rỗ
+  try {
+    ctx.antialias = "best";
+    ctx.quality = "best";
+    ctx.patternQuality = "best";
+    ctx.filter = "best";
+    ctx.textDrawingMode = "default";
+  } catch { /* node-canvas cũ không hỗ trợ thì bỏ qua */ }
+  return { canvas, ctx };
 }
 
 function save(canvas, prefix) {

@@ -34,7 +34,7 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const { PALETTE, panel, button, text } = theme;
 
   const perPage = 8;
-  const cols = 4;
+  const cols = W >= 1100 ? 4 : 2; // 750px (Zalo nguyên bản) → 2 cột cho đọc rõ
   const shown = tracks.slice(0, perPage);
   const rows = Math.max(1, Math.ceil(shown.length / cols));
   const cardW = (W - S(50) - S(18) * (cols - 1)) / cols;

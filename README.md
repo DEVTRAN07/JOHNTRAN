@@ -234,7 +234,8 @@ assets/
 
 **Tính năng nổi bật v3:**
 - **Mọi ảnh MỘT KIỂU**: `core/canvas/theme.js` giữ nền (`assets/bg/theme.jpg` + gradient + glow), font, bo góc — menu, thẻ lệnh, nhạc (kết quả + đang phát), thẻ VIP đều dùng chung, muốn đổi chỉ sửa 1 file.
-- **Cỡ ảnh chỉnh được 1 chỗ**: `config.yml → canvas.width` (mặc định **1280** = kích cỡ cũ, lớn rõ). Muốn Zalo gửi **NGUYÊN BẢN** không resize thì set `750` — mọi ảnh tự co giãn theo (cả font lẫn bố cục). Cũng đổi được bằng biến môi trường `JT_CANVAS__WIDTH=750`.
+- **Cỡ ảnh chỉnh được 1 chỗ**: `config.yml → canvas.width` (mặc định **750** = Zalo gửi **NGUYÊN BẢN**, ảnh nét, không bị nén/resize thành HD). Đổi sang `1280` nếu muốn ảnh lớn hơn (nhưng Zalo sẽ resize + nén). Cũng đổi được bằng biến môi trường `JT_CANVAS__WIDTH`.
+- **Render chất lượng cao nhất**: `antialias/quality = "best"`, lưu PNG lossless → chữ sắc, ảnh nền không rỗ. Bố cục tự co theo cỡ (750px → menu 2 cột, nhạc 2 cột; ≥1100px → 3/4 cột như cũ).
 - **PNG lossless**: ảnh lưu PNG không nén (`canvas.quality` trong config) — giữ original.
 - **8 family font** để ảnh đa dạng: `JT` (sans), `JT-Display` (serif, tiêu đề), `JT-Round` (bo tròn), `JT-Mono` (số liệu/thời gian) — kèm bản Bold; tự động đăng ký theo hệ điều hành (macOS/Windows/Linux).
 - **Mọi lệnh đều thả icon**: 👍 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (lệnh tự thả reaction — nhạc, autodown — thì bot không thả thêm).

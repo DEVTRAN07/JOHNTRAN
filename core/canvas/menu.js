@@ -13,7 +13,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
 
   // ===== Bố cục CŨ: 9 lệnh/trang (3 cột x 3 hàng) =====
   const perPage = 9;
-  const cols = 3;
+  const cols = W >= 1100 ? 3 : 2; // 750px (Zalo nguyên bản) → 2 cột cho chữ đọc rõ
   const rows = Math.ceil(Math.min(commands.page.length, perPage) / cols);
   const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
   const cardH = S(142);
