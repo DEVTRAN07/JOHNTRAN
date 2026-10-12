@@ -26,23 +26,24 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
     const fs = require("fs");
     const logPath = require("path").join(__dirname, "..", "..", "data", "recall_debug.log");
     if (!fs.existsSync(logPath)) {
-      return reply.info("Chưa có log nào. Hãy gõ /recall test trước đã.", { title: "📄 LOG THU HỒI" });
+      return api.sendMessage({ plain: true, msg: "📄 Chưa có log thu hồi nào. Hãy gõ /recall test trước đã." }, threadId, type);
     }
     const lines = fs.readFileSync(logPath, "utf8").trim().split("\n").slice(-8);
-    return reply.info(lines.join("\n") || "(rỗng)", { title: `📄 LOG THU HỒI (${lines.length} dòng cuối)` });
+    // Gửi TEXT THUẦN để copy được (ảnh thẻ không coppy nội dung)
+    return api.sendMessage({
+      plain: true,
+      msg: `📄 LOG THU HỒI (${lines.length} dòng cuối)\n${"═".repeat(20)}\n${lines.join("\n") || "(rỗng)"}`
+    }, threadId, type);
   }
 
   if (sub === "status" || sub === "stt" || sub === "info") {
     const recall = require("../../core/recall");
     const hasUndo = typeof api.undo === "function";
     const hasDelete = typeof api.deleteMessage === "function";
-    return reply.info(
-      `api.undo: ${hasUndo ? "có ✅" : "KHÔNG ❌"}\napi.deleteMessage: ${hasDelete ? "có ✅" : "KHÔNG ❌"}`,
-      {
-        title: "🔍 THU HỒI TIN",
-        rows: [{ label: "Khả năng", lines: [`Tin đang nhớ: ${recall.memorySize()}`, `api.undo: ${hasUndo ? "sẵn sàng" : "không có"}`, `api.deleteMessage: ${hasDelete ? "sẵn sàng" : "không có"}`] }]
-      }
-    );
+    return api.sendMessage({
+      plain: true,
+      msg: `🔍 THU HỒI TIN\n• api.undo: ${hasUndo ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• api.deleteMessage: ${hasDelete ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• Tin đang nhớ: ${recall.memorySize()}`
+    }, threadId, type);
   }
 
   if (sub === "test" || sub < "a" || !sub) {
