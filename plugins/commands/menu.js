@@ -103,7 +103,10 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
             commands: { total: commands.length, page: slice },
             uptimeText: getUptimeText()
         });
-        await api.sendMessage({ msg: "", attachments: gridPath, replace: "menu" }, threadId, type);
+        // Thu hồi trang menu cũ (nếu có) rồi gửi trang mới và nhớ id để lần sau thu hồi
+        await require("../../core/recall").recall(api, threadId, "menu", type);
+        const sent = await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
+        require("../../core/recall").remember(threadId, "menu", sent);
     } catch (error) {
         console.error("Lỗi render menu:", error.message);
         // Báo lỗi ra chat để biết ngay (console.log trên Render khó xem)

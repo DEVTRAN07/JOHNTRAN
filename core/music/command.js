@@ -84,7 +84,9 @@ async function showResults(api, threadId, type, provider, query, tracks, page, r
   let gridPath = null;
   try {
     gridPath = await cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() });
-    await api.sendMessage({ msg: "", attachments: gridPath, replace: replaceKey }, threadId, type);
+    await recall.recall(api, threadId, replaceKey, type);
+    const sent = await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
+    recall.remember(threadId, replaceKey, sent);
     if (fs.existsSync(gridPath)) fs.unlinkSync(gridPath);
   } catch {
     // Fallback: thẻ text nếu canvas lỗi
