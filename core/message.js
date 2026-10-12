@@ -2,6 +2,7 @@ const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
+const recall = require("./recall");
 
 // Tin nhắn KHÔNG còn tự xoá (đã bỏ toàn bộ hệ thống TTL theo yêu cầu).
 
@@ -150,6 +151,18 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
     if (content.plain) delete content.plain;
+
+    // replace: "<khung>" → thu hồi tin CŨ cùng khung trước, gửi tin mới rồi nhớ id
+    const replaceKey = content.replace;
+    if (replaceKey) {
+      const key = replaceKey === true ? `cmd:${commandName}` : String(replaceKey);
+      delete content.replace;
+      await recall.recall(api, targetThreadId, key, targetType);
+      const response = await api.sendMessage(content, targetThreadId, targetType);
+      recall.remember(targetThreadId, key, response);
+      return response;
+    }
+
     return api.sendMessage(content, targetThreadId, targetType);
   });
 

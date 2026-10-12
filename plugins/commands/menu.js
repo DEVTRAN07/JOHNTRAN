@@ -59,7 +59,7 @@ async function navigate({ api, event, Threads, action, senderId }) {
     if (action === "out" || action === "exit" || action === "close") {
         delete threadData.menu_page;
         await Threads.setData(threadId, threadData);
-        
+        await require("../../core/recall").recall(api, threadId, "menu", type);
         return api.sendMessage({
             msg: "✅ Đã đóng menu. Gõ /menu để mở lại.",
             }, threadId, type);
@@ -103,7 +103,7 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
             commands: { total: commands.length, page: slice },
             uptimeText: getUptimeText()
         });
-        await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
+        await api.sendMessage({ msg: "", attachments: gridPath, replace: "menu" }, threadId, type);
     } catch (error) {
         console.error("Lỗi render menu:", error.message);
         await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
