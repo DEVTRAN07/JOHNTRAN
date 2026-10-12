@@ -1,1 +1,1 @@
-commit: d070ffa (fix(vendor): gắn cliMsgId ở tầng ngoài có try/catch — sửa lỗi Assignment to constant trên Render)
+commit: 6b3cdda
