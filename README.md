@@ -265,8 +265,8 @@ assets/
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
 | `/getvd` (reply video) | Tải video gốc → upload asyncfile → gửi video gốc (không nén) |
-| `/stk` (reply ảnh/GIF/video/sticker) | Gửi lại dạng sticker |
-| `/stkvd` (reply GIF/video/sticker động) | Gửi sticker động (chỉ loại động) |
+| `/stk` (reply ảnh/GIF/video/sticker) | Phân tích ảnh → **tìm sticker Zalo thật** trong kho → gõ số để gửi |
+| `/stkvd` (reply GIF/video/sticker động) | Như trên nhưng ưu tiên sticker **động** (type 1) |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |
@@ -325,11 +325,10 @@ assets/
 | `/spamsticker off` | Dừng spam sticker |
 | `/spamsticker list` / `reload` / `test` | Xem kho / nạy lại / kiểm tra nguồn (không spam) |
 
-**Sticker:**
-- `/stk <cateId> <stickerId>` — gửi sticker tĩnh
-- `/stk find <từ khóa>` → gõ số để gửi sticker tìm được
-- `/stkvd <cateId> <stickerId>` — gửi sticker động (video sticker)
-- `/stkvd find <từ khóa>` → tìm sticker động rồi chọn
+> **Lưu ý về sticker:** Zalo API không cho bot **tạo** sticker mới từ ảnh/video.
+> Nên `/stk` và `/stkvd` phân tích màu ảnh reply → gợi ý từ khóa → **tìm sticker
+> CÓ SẴN trong kho Zalo** (qua `searchSticker` + `getStickersDetail`) → bạn gõ
+> số để gửi. Reply đúng sticker gốc thì gửi lại sticker đó.
 
 - Folder ngôn từ spam: `assets/spam/*.txt` — MỖI FILE = MỘT NGÔN NGỮ (`vi`, `en`, `zh`, `ja`, `ko`, `th`, `mix`). Mỗi dòng một câu, dòng `#` là chú thích. Sửa file xong gõ `/spam reload`, **không cần sửa code**.
 - Kho sticker hiệu ứng nạp 1 lần rồi nhớ 30 phút; mỗi lần `reload` xáo trộn và quét 24 bộ sticker mới.

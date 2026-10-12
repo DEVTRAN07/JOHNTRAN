@@ -1,79 +1,119 @@
-// /stk — Sticker từ ảnh/GIF/video/sticker (reply)
-//   reply sticker  → gửi lại chính sticker đó (sendSticker)
-//   reply ảnh/gif  → gửi lại dạng ảnh/GIF
-//   reply video    → gửi lại dạng video
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
-const { parseQuote, hint } = require("../../core/mediaReply");
+// /stk — Sticker từ ảnh/GIF/video (reply)
+//   reply ảnh/GIF/video → phân tích màu → gợi ý từ khóa → TÌM STICKER ZALO
+//   THẬT trong kho (searchSticker) → hiện danh sách → gõ /stk <số> để gửi.
+//   reply sticker gốc → gửi lại chính sticker đó.
+// (Zalo API không cho bot TẠO sticker mới từ ảnh nên cách này lấy sticker
+//  có sẵn giống nhất — vẫn là sticker thật trong nhãn dán Zalo.)
+const http = require("../../core/http");
+const { analyze } = require("../../core/imageAnalyze");
+const stickerStore = require("../../core/stickerStore");
 
 module.exports.config = {
   name: "stk",
   aliases: ["sticker"],
-  version: "4.0.0",
+  version: "5.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Sticker từ ảnh/GIF/video/sticker (reply)",
+  description: "Sticker từ ảnh/GIF/video (reply) — tìm sticker Zalo thật",
   category: "Tiện ích",
-  usage: "stk (reply ảnh/gif/video/sticker)",
+  usage: "stk (reply ảnh/gif/video/sticker) | stk <số>",
   cooldowns: 5,
   dependencies: {}
 };
 
-// Tải file về rồi gửi lại theo đúng loại
-async function sendFile(api, threadId, type, url, label, gif = false) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jt_stk_"));
+const SEARCH_TTL = 3 * 60 * 1000;
+
+// Reply sticker gốc → gửi nguyên
+async function sendOriginalSticker(api, threadId, type, sticker) {
   try {
-    const http = require("../../core/http");
-    const { buffer } = await http.getBuffer(url, { timeout: 90000 });
-    if (!buffer || !buffer.length) throw new Error("File rỗng");
-
-    const ext = gif ? "gif" : (String(url).split("?")[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] || "jpg").toLowerCase();
-    const filePath = path.join(tmpDir, `reply_${Date.now()}.${ext}`);
-    fs.writeFileSync(filePath, buffer);
-
-    await api.sendMessage({ msg: label, attachments: [filePath] }, threadId, type);
+    await api.sendSticker({ id: sticker.id, cateId: sticker.cateId, type: sticker.type || 0 }, threadId, type);
     return true;
-  } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* bỏ qua */ }
+  } catch (error) {
+    console.error("stk (sticker gốc):", error.message);
+    return false;
   }
 }
 
-module.exports.run = async function ({ api, event }) {
-  const { threadId, type } = event;
+// Reply ảnh/GIF/video → tìm sticker Zalo thật
+async function findStickers(api, url, animated) {
+  const { buffer } = await http.getBuffer(url, { timeout: 60000 });
+  const info = await analyze(buffer);
 
+  const found = [];
+  const seen = new Set();
+  for (const keyword of info.keywords) {
+    try {
+      const ids = await api.searchSticker(`${keyword} dễ thương`, animated ? 30 : 20);
+      if (!Array.isArray(ids) || !ids.length) continue;
+      const details = await api.getStickersDetail(ids.slice(0, 12));
+      for (const d of details || []) {
+        if (!d?.id || !d?.cateId || seen.has(d.id)) continue;
+        seen.add(d.id);
+        found.push({ id: d.id, cateId: d.cateId, type: Number(d.type) || (animated ? 1 : 0), keyword });
+        if (found.length >= 10) break;
+      }
+    } catch { /* thử từ khóa tiếp */ }
+    if (found.length) break;
+  }
+  return { found, info };
+}
+
+module.exports.run = async function ({ api, event, args }) {
+  const { threadId, type, data } = event;
+  const { parseQuote } = require("../../core/mediaReply");
+
+  // ===== Gõ số → gửi sticker từ kết quả tìm =====
+  if (/^\d{1,2}$/.test(args[0] || "")) {
+    const list = stickerStore.getSearch(threadId, data.uidFrom);
+    const target = list?.[parseInt(args[0], 10) - 1];
+    if (!target) return api.sendMessage({ plain: true, msg: "❌ Số không có trong kết quả. Reply ảnh rồi gõ /stk trước." }, threadId, type);
+    try {
+      await api.sendSticker({ id: target.id, cateId: target.cateId, type: target.type || 0 }, threadId, type);
+    } catch (error) {
+      return api.sendMessage({ plain: true, msg: `❌ Gửi sticker thất bại: ${error.message}` }, threadId, type);
+    }
+    return;
+  }
+
+  // ===== Reply sticker gốc → gửi nguyên =====
   const media = parseQuote(event);
-  if (!media) {
+  if (media?.isSticker && media.sticker.cateId > 0) {
+    const ok = await sendOriginalSticker(api, threadId, type, media.sticker);
+    if (ok) return;
+    // gửi không được → rơi xuống tìm theo URL nếu có
+  }
+
+  // ===== Reply ảnh/GIF/video → tìm sticker =====
+  const url = media?.image || media?.video || media?.file;
+  if (!url) {
     return api.sendMessage({
       plain: true,
-      msg: "❌ Hãy reply tin ảnh/GIF/video/sticker rồi gõ /stk"
+      msg: "❌ Hãy reply ảnh/GIF/video/sticker rồi gõ /stk\n" +
+           "Bot sẽ phân tích màu và tìm sticker Zalo thật trong kho."
     }, threadId, type);
   }
 
-  // 1) Sticker gốc → gửi lại bằng sendSticker (giữ nguyên chất lượng)
-  if (media.isSticker && media.sticker.cateId > 0) {
-    try {
-      await api.sendSticker({
-        id: media.sticker.id,
-        cateId: media.sticker.cateId,
-        type: media.sticker.type || 0
-      }, threadId, type);
-      return;
-    } catch (error) {
-      console.error("stk (sticker gốc):", error.message);
-      // rơi xuống gửi file bên dưới nếu có URL
-    }
-  }
+  await api.sendMessage({ msg: "🔎 Đang phân tích ảnh và tìm sticker...", plain: true }, threadId, type);
 
-  // 2) GIF/video → gửi lại file
-  const url = media.video || media.file || media.image;
-  if (!url) return api.sendMessage({ plain: true, msg: hint("sticker") }, threadId, type);
-
-  const isGif = media.isGif || /\.gif(\?|$)/i.test(url) || /gif/i.test(String(media.ext || ""));
+  let found;
+  let info;
   try {
-    await sendFile(api, threadId, type, url, "", isGif);
+    ({ found, info } = await findStickers(api, url, false));
   } catch (error) {
     console.error("stk:", error.message);
-    return api.sendMessage({ plain: true, msg: `❌ Gửi sticker thất bại: ${error.message}` }, threadId, type);
+    return api.sendMessage({ plain: true, msg: `❌ Tìm sticker thất bại: ${error.message}` }, threadId, type);
   }
+
+  if (!found.length) {
+    return api.sendMessage({ plain: true, msg: "❌ Không tìm thấy sticker phù hợp. Thử ảnh khác." }, threadId, type);
+  }
+
+  stickerStore.setSearch(threadId, data.uidFrom, found);
+  const shown = found.map((s, i) => `${i + 1}. [${s.type ? "động" : "tĩnh"}] id=${s.id} • kho ${s.cateId} (từ "${s.keyword}")`).join("\n");
+  return api.sendMessage({
+    plain: true,
+    msg: `🎯 PHÂN TÍCH ẢNH\n• màu chủ đạo: ${info.dominant}\n• độ sáng: ${info.brightness}/255\n` +
+         `• gợi ý: ${info.keywords.join(", ")}\n\n${shown}\n\n` +
+         `Gõ ${global.config.prefix}stk <số> để gửi sticker thật.`
+  }, threadId, type);
 };
