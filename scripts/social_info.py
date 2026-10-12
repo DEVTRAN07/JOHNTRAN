@@ -245,16 +245,29 @@ def fetch_with_retry(platform, target, tries=2):
     cached = cache_get(key)
     if cached:
         return cached
+
+    fn = tiktok if platform == "tiktok" else facebook
+    # TikTok username không cho phép mọi ký tự người dùng hay dùng (dấu chấm,
+    # gạch dưới...) — nếu thất bại thì thử biến thể đã bỏ dấu chấm/gạch dưới.
+    variants = [target]
+    if platform == "tiktok":
+        stripped = re.sub(r"[._]", "", target)
+        if stripped and stripped != target:
+            variants.append(stripped)
+
     last = None
-    for i in range(tries):
-        try:
-            data = tiktok(target) if platform == "tiktok" else facebook(target)
-            cache_put(key, data)
-            return data
-        except SocialError as e:
-            last = e
-            if i < tries - 1:
-                time.sleep(1.2)
+    for v in variants:
+        for i in range(tries):
+            try:
+                data = fn(v)
+                cache_put(f"{platform}:{v.lower()}", data)
+                cache_put(key, data)
+                return data
+            except SocialError as e:
+                last = e
+                if i < tries - 1:
+                    time.sleep(1.2)
+        # không dùng từ khoá yếu
     raise last
 
 
