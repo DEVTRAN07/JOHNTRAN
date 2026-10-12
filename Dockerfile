@@ -21,7 +21,7 @@ WORKDIR /app
 # copy package.json + vendor TRƯỚC để npm ci tìm thấy zalo-client (file:vendor/zalo-client)
 COPY package*.json ./
 COPY vendor ./vendor
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN rm -rf node_modules/zalo-client && (npm ci --omit=dev --no-cache || npm install --omit=dev --no-cache)
 COPY . .
 
 # Koyeb/Render/Northflank inject PORT — health server + panel tự mở đúng port đó.
