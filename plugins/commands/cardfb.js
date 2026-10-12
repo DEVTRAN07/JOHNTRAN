@@ -36,11 +36,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
 
   if (!token) {
     return reply.error(
-      "Lệnh này cần Facebook Graph API token.\n\n" +
-      "Cách bật (chọn 1):\n" +
-      "1) config.yml → services.facebook_access_token: \"EAA...\"\n" +
-      "2) biến môi trường FB_ACCESS_TOKEN=EAA...\n\n" +
-      "Lấy token: https://developers.facebook.com → Graph API Explorer"
+      "Thiếu Facebook Graph API token.\n\n" +
+      "💡 config.yml → services.facebook_access_token: \"EAA...\"\n" +
+      "Lấy token: developers.facebook.com → Graph API Explorer"
     );
   }
 

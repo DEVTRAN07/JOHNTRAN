@@ -15,7 +15,7 @@ module.exports.config = {
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
   description: "Lấy ảnh đại diện người dùng hoặc nhóm",
   category: "Tiện ích",
-  usage: "getavt [uid | @tag | box | debug]",
+  usage: "getavt [uid | @tag | box | raw | debug]",
   cooldowns: 3,
   dependencies: {}
 };
@@ -82,6 +82,29 @@ module.exports.run = async function ({ api, event, args, reply }) {
     );
   }
 
+  // ===== GỬI ẢNH GỐC (không làm thẻ) =====
+  if (["raw", "goc", "url"].includes(arg)) {
+    const uid = resolveUid(args.slice(1), data);
+    let user;
+    try {
+      ({ user } = await fetchProfile(api, uid));
+    } catch (error) {
+      return say(api, threadId, type, `❌ Không đọc được thông tin của ${uid}: ${error.message}`);
+    }
+    const avatar = usableAvatar(user);
+    if (!avatar) return say(api, threadId, type, `❌ ${user?.displayName || uid} chưa đặt ảnh đại diện.`);
+    const filePath = await profile.downloadImage(avatar, "avt");
+    if (!filePath) return say(api, threadId, type, "❌ Tải ảnh thất bại.");
+    try {
+      await api.sendMessage({ msg: `🖼️ ${avatar}`, attachments: filePath, ttlKind: "media" }, threadId, type);
+    } catch (error) {
+      return say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
+    } finally {
+      profile.cleanup(filePath);
+    }
+    return;
+  }
+
   // ===== Ảnh nhóm =====
   if (["box", "group", "nhom"].includes(arg)) {
     let group;
@@ -95,14 +118,17 @@ module.exports.run = async function ({ api, event, args, reply }) {
     if (!/^https?:\/\//i.test(avt)) {
       return say(api, threadId, type, "❌ Nhóm không có ảnh đại diện (Zalo trả rỗng).");
     }
-    const filePath = await profile.downloadImage(avt, "grp");
-    if (!filePath) return say(api, threadId, type, "❌ Tải ảnh nhóm thất bại.");
     try {
-      await api.sendMessage({ msg: `🖼️ Ảnh đại diện nhóm: ${group?.name || "—"}`, attachments: filePath, ttlKind: "media" }, threadId, type);
+      const cardPath = await profile.renderAvatarCard({
+        skin: "neutral",
+        title: String(group?.name || "Nhóm"),
+        subtitle: `🖼️ Ảnh đại diện nhóm • 🆔 ${threadId}`,
+        avatar: avt
+      });
+      await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
+      profile.cleanup(cardPath);
     } catch (error) {
-      return say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
-    } finally {
-      profile.cleanup(filePath);
+      say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
     }
     return;
   }
@@ -127,15 +153,16 @@ module.exports.run = async function ({ api, event, args, reply }) {
     );
   }
 
-  const filePath = await profile.downloadImage(avatar, "avt");
-  if (!filePath) {
-    return say(api, threadId, type, `❌ Tải ảnh thất bại. Link Zalo trả về có thể đã hỏng: ${avatar.slice(0, 60)}`);
-  }
   try {
-    await api.sendMessage({ msg: `🖼️ Ảnh đại diện: ${user.displayName || uid}`, attachments: filePath, ttlKind: "media" }, threadId, type);
+    const cardPath = await profile.renderAvatarCard({
+      skin: "zalo",
+      title: String(user.displayName || uid),
+      subtitle: `🖼️ Ảnh đại diện Zalo • 🆔 ${uid}`,
+      avatar
+    });
+    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
+    profile.cleanup(cardPath);
   } catch (error) {
-    return say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
-  } finally {
-    profile.cleanup(filePath);
+    say(api, threadId, type, `❌ Gửi ảnh thất bại: ${error.message}`);
   }
 };

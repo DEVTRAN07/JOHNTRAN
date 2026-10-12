@@ -1,22 +1,19 @@
-// ===== RENDERER MỚI CHO THẺ HỒ SƠ (getavt / cardzalo / cardtiktok / cardfb) =====
-// Thiết kế hoàn toàn mới, độc lập với core/canvas/vip.js + theme.js.
-// Đặc điểm: thẻ dọc, avatar tròn viền sáng, hàng thông tin có icon,
-// mỗi loại hồ sơ một màu chủ đạo riêng.
+// ===== RENDERER HỒ SƠ BẢN 3.0 (getavt / cardzalo / cardtiktok / cardfb) =====
+// Thiết kế mới hoàn toàn: ảnh nền nổi rõ + kính mờ + avatar viền gradient.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 
 const WIDTH = 750;
-const PAD = 44;
+const PAD = 40;
 const BG_IMAGE = path.join(__dirname, "..", "..", "assets", "bg", "theme.jpg");
 
-// Bảng màu theo loại hồ sơ — chỉ ăn với bộ mới này
 const SKINS = {
-  zalo:    { name: "ZALO",     a: "#0068ff", b: "#00c8ff", glow: "rgba(0,140,255,.35)",  icon: "🟦" },
-  tiktok:  { name: "TIKTOK",   a: "#00e5d0", b: "#ff2e63", glow: "rgba(0,229,208,.30)",  icon: "🎵" },
-  facebook:{ name: "FACEBOOK", a: "#1877f2", b: "#4267b2", glow: "rgba(24,119,242,.32)",  icon: "📘" },
-  neutral: { name: "PROFILE",  a: "#a78bfa", b: "#38bdf8", glow: "rgba(167,139,250,.30)", icon: "🪪" }
+  zalo:     { name: "ZALO",     a: "#0068ff", b: "#00d4ff", icon: "🟦" },
+  tiktok:   { name: "TIKTOK",   a: "#00e5d0", b: "#ff2e63", icon: "🎵" },
+  facebook: { name: "FACEBOOK", a: "#1877f2", b: "#8ab4f8", icon: "📘" },
+  neutral:  { name: "HỒ SƠ",    a: "#a78bfa", b: "#38bdf8", icon: "🪪" }
 };
 
 let fontReady = false;
@@ -53,21 +50,20 @@ function fit(ctx, text, w) {
   return t + "…";
 }
 
-async function loadImg(url) {
-  // Zalo trả avatar kiểu "/default" hoặc "" khi người dùng chưa đặt ảnh —
-  // không phải URL đầy đủ, phải bỏ qua chứ không ném lỗi
-  if (!url || !/^https?:\/\//i.test(String(url).trim())) return null;
+// Tải ảnh: chỉ nhận URL tuyệt đối, resolve redirect cả tương đối
+async function loadImg(url, depth = 0) {
+  const u = String(url ?? "").trim();
+  if (!/^https?:\/\//i.test(u) || depth > 5) return null;
   try {
-    const get = (target, hop) => new Promise((resolve, reject) => {
-      // Resolve redirect: server hay tra duong dan TUONG DOI ("/default",
-      // "cdn.../x.jpg") — dua ve tuyet doi, dung http/https theo scheme
-      const targetUrl = /^https?:\/\//i.test(target) ? target : new URL(target, url).href;
-      const client = /^https:/i.test(targetUrl) ? require("https") : require("http");
-      client.get(targetUrl, { timeout: 12000 }, (res) => {
-        const location = res.headers.location;
-        if (res.statusCode >= 300 && res.statusCode < 400 && location && hop < 5) {
-          res.resume(); // dong ket noi cu
-          resolve(get(location, hop + 1));
+    const client = /^https:/i.test(u) ? require("https") : require("http");
+    const buffer = await new Promise((resolve, reject) => {
+      client.get(u, { timeout: 12000 }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          const target = /^https?:\/\//i.test(res.headers.location)
+            ? res.headers.location
+            : new URL(res.headers.location, u).href;
+          resolve(loadImg(target, depth + 1));
           return;
         }
         const chunks = [];
@@ -75,8 +71,6 @@ async function loadImg(url) {
         res.on("end", () => resolve(Buffer.concat(chunks)));
       }).on("error", reject);
     });
-
-    const buffer = await get(String(url).trim(), 0);
     return await loadImage(buffer);
   } catch {
     return null;
@@ -84,107 +78,159 @@ async function loadImg(url) {
 }
 
 /**
- * Vẽ thẻ hồ sơ kiểu MỚI.
- * @param {object} o
- * @param {string} o.skin     "zalo" | "tiktok" | "facebook" | "neutral"
- * @param {string} o.title    tên người dùng
- * @param {string} o.handle   @username / UID
- * @param {string} o.avatar   url ảnh đại diện (nền mờ + ảnh tròn)
- * @param {Array}  o.rows     [{icon,label,value}]
- * @param {string} o.subtitle dòng phụ dưới tên
- * @param {string} o.footer   chữ chân thẻ
+ * Vẽ ảnh nền dùng chung: ảnh theme rõ nét + gradient màu loại + vệt sáng
+ */
+async function paintBase(ctx, skin, w, h, avatar) {
+  fonts();
+  // lớp nền tối
+  const base = ctx.createLinearGradient(0, 0, w, h);
+  base.addColorStop(0, "#080b16");
+  base.addColorStop(0.5, "#0e1428");
+  base.addColorStop(1, "#080b16");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, w, h);
+
+  // ảnh nền chính (rõ)
+  const bg = await loadImg(BG_IMAGE);
+  if (bg) {
+    const s = Math.max(w / bg.width, h / bg.height);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(bg, (w - bg.width * s) / 2, (h - bg.height * s) / 2, bg.width * s, bg.height * s);
+    ctx.restore();
+  }
+
+  // gradient màu loại phủ lên
+  const tint = ctx.createLinearGradient(0, 0, w, h);
+  tint.addColorStop(0, `${skin.a}55`);
+  tint.addColorStop(0.6, `${skin.b}33`);
+  tint.addColorStop(1, "rgba(8,11,22,.9)");
+  ctx.fillStyle = tint;
+  ctx.fillRect(0, 0, w, h);
+
+  // avatar làm nền mờ nếu có
+  if (avatar) {
+    const av = await loadImg(avatar);
+    if (av) {
+      const s = Math.max(w / av.width, h / av.height);
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.drawImage(av, w - av.width * s * 0.8, h - av.height * s * 0.8, av.width * s * 0.8, av.height * s * 0.8);
+      ctx.restore();
+    }
+  }
+}
+
+// Vẽ avatar tròn viền gradient
+async function drawAvatar(ctx, url, cx, cy, size, skin) {
+  const av = url ? await loadImg(url) : null;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  if (av) {
+    const s = Math.max(size / av.width, size / av.height);
+    ctx.drawImage(av, cx - (av.width * s) / 2, cy - (av.height * s) / 2, av.width * s, av.height * s);
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,.1)";
+    ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+    ctx.font = `${Math.round(size * 0.5)}px P`;
+    ctx.fillStyle = skin.a;
+    ctx.textAlign = "center";
+    ctx.fillText("👤", cx, cy + Math.round(size * 0.18));
+    ctx.textAlign = "left";
+  }
+  ctx.restore();
+
+  // viền gradient
+  const grd = ctx.createLinearGradient(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2);
+  grd.addColorStop(0, skin.a);
+  grd.addColorStop(1, skin.b);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = grd;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 + 2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// Hàng thông tin kiểu kính mờ
+function infoRow(ctx, x, y, w, h, skin, icon, label, value) {
+  ctx.fillStyle = "rgba(255,255,255,.09)";
+  rr(ctx, x, y, w, h, 14);
+  ctx.fill();
+  ctx.strokeStyle = skin.a;
+  ctx.globalAlpha = 0.28;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // ô icon
+  ctx.fillStyle = `${skin.a}33`;
+  rr(ctx, x + 14, y + (h - 40) / 2, 40, 40, 12);
+  ctx.fill();
+  ctx.font = "22px P";
+  ctx.textAlign = "center";
+  ctx.fillStyle = skin.b;
+  ctx.fillText(icon || "•", x + 34, y + h / 2 + 8);
+  ctx.textAlign = "left";
+
+  // nhãn + giá trị
+  ctx.font = "14px P";
+  ctx.fillStyle = "#8b9ab8";
+  ctx.fillText(String(label || "").toUpperCase(), x + 68, y + h / 2 - 6);
+  ctx.font = "bold 21px PB";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(fit(ctx, value ?? "—", w - 92), x + 68, y + h / 2 + 20);
+}
+
+// Nhãn loại hồ sơ
+function skinTag(ctx, x, y, skin, w) {
+  ctx.font = "bold 15px PB";
+  const text = `${skin.icon}  ${skin.name}`;
+  const tw = ctx.measureText(text).width + 36;
+  ctx.fillStyle = `${skin.a}2e`;
+  rr(ctx, x, y, tw, 34, 17);
+  ctx.fill();
+  ctx.strokeStyle = skin.a;
+  ctx.globalAlpha = 0.6;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.fillText(text, x + tw / 2, y + 23);
+  ctx.textAlign = "left";
+  return tw;
+}
+
+/**
+ * Thẻ hồ sơ đầy đủ thông tin (cardzalo / cardtiktok / cardfb)
  */
 async function renderProfile(o = {}) {
-  fonts();
   const skin = SKINS[o.skin] || SKINS.neutral;
-  const rows = Array.isArray(o.rows) ? o.rows.filter(Boolean).slice(0, 7) : [];
-
-  const avatarSize = 190;
-  const rowH = 62;
-  const headerH = 132 + avatarSize + 62;
-  const bodyH = rows.length ? rows.length * rowH + 40 : 40;
-  const H = headerH + bodyH + 74;
+  const rows = Array.isArray(o.rows) ? o.rows.filter(Boolean).slice(0, 8) : [];
+  const avatarSize = 200;
+  const rowH = 64;
+  const top = 118;              // chừa chỗ nhãn loại
+  const avatarBlock = avatarSize + 118; // avatar + tên + handle
+  const H = top + avatarBlock + (rows.length ? rows.length * rowH + 18 : 0) + 64;
 
   const canvas = createCanvas(WIDTH, H);
   const ctx = canvas.getContext("2d");
   ctx.quality = "best";
+  await paintBase(ctx, skin, WIDTH, H, o.avatar);
 
-  // ===== Nền: ảnh theme + gradient màu riêng của loại hồ sơ =====
-  const g = ctx.createLinearGradient(0, 0, WIDTH, H);
-  g.addColorStop(0, "#060913");
-  g.addColorStop(0.55, "#0b1020");
-  g.addColorStop(1, "#060913");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, WIDTH, H);
+  // nhãn loại
+  skinTag(ctx, PAD, 44, skin, WIDTH);
 
-  const bg = await loadImg(BG_IMAGE);
-  if (bg) {
-    const s = Math.max(WIDTH / bg.width, H / bg.height);
-    ctx.save();
-    ctx.globalAlpha = 0.42; // nền ảnh hiện rõ, không còn mờ mất
-    ctx.drawImage(bg, (WIDTH - bg.width * s) / 2, (H - bg.height * s) / 2, bg.width * s, bg.height * s);
-    ctx.restore();
-  }
-
-  // vệt màu chủ đạo + mạch gradient đặc trưng
-  const stripe = ctx.createLinearGradient(0, 0, 0, 150);
-  stripe.addColorStop(0, skin.a);
-  stripe.addColorStop(1, skin.b);
-  ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = stripe;
-  ctx.fillRect(0, 0, WIDTH, 150);
-  ctx.restore();
-  ctx.save();
-  ctx.globalAlpha = 0.3;
-  ctx.fillStyle = skin.glow;
-  ctx.fillRect(0, 120, WIDTH, 30);
-  ctx.restore();
-
-  // ===== Avatar tròn viền sáng =====
-  const av = await loadImg(o.avatar);
+  // avatar
   const cx = WIDTH / 2;
-  const cy = 132 + avatarSize / 2 + 40;
-  if (av) {
-    // nền avatar phủ rõ, kéo dài toàn thẻ
-    ctx.save();
-    ctx.globalAlpha = 0.68;
-    ctx.drawImage(av, 0, 190, WIDTH, H - 190);
-    ctx.restore();
-    // ảnh tròn
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, avatarSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-    const s = Math.max(avatarSize / av.width, avatarSize / av.height);
-    ctx.drawImage(av, cx - (av.width * s) / 2, cy - (av.height * s) / 2, av.width * s, av.height * s);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = "rgba(255,255,255,.08)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, avatarSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = "60px P";
-    ctx.fillStyle = skin.a;
-    ctx.textAlign = "center";
-    ctx.fillText("👤", cx, cy + 22);
-    ctx.textAlign = "left";
-  }
-  // viền
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = skin.b;
-  ctx.beginPath();
-  ctx.arc(cx, cy, avatarSize / 2 + 4, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,.5)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, avatarSize / 2 + 12, 0, Math.PI * 2);
-  ctx.stroke();
+  const cy = top + 34 + avatarSize / 2;
+  await drawAvatar(ctx, o.avatar, cx, cy, avatarSize, skin);
 
-  // ===== Tên + handle =====
+  // tên + handle + subtitle
   ctx.textAlign = "center";
-  ctx.font = "bold 40px PB";
+  ctx.font = "bold 42px PB";
   ctx.fillStyle = "#ffffff";
   ctx.fillText(fit(ctx, o.title || "—", WIDTH - PAD * 2), cx, cy + avatarSize / 2 + 52);
   if (o.handle) {
@@ -193,79 +239,73 @@ async function renderProfile(o = {}) {
     ctx.fillText(fit(ctx, o.handle, WIDTH - PAD * 2), cx, cy + avatarSize / 2 + 84);
   }
   if (o.subtitle) {
-    ctx.font = "19px P";
-    ctx.fillStyle = "#aab6cf";
+    ctx.font = "18px P";
+    ctx.fillStyle = "#c3cee3";
     ctx.fillText(fit(ctx, o.subtitle, WIDTH - PAD * 2), cx, cy + avatarSize / 2 + 112);
   }
   ctx.textAlign = "left";
 
-  // ===== Các hàng thông tin =====
-  let y = headerH + 16;
+  // hàng thông tin
+  let y = top + avatarBlock;
   for (const row of rows) {
-    // hộp
-    ctx.fillStyle = "rgba(9,14,28,.72)";
-    rr(ctx, PAD, y, WIDTH - PAD * 2, rowH - 12, 12);
-    ctx.fill();
-    ctx.strokeStyle = skin.a;
-    ctx.globalAlpha = 0.35;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    // icon ô tròn
-    ctx.fillStyle = `${skin.a}33`;
-    ctx.beginPath();
-    ctx.arc(PAD + 36, y + (rowH - 12) / 2, 20, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = "22px P";
-    ctx.textAlign = "center";
-    ctx.fillText(row.icon || "•", PAD + 36, y + (rowH - 12) / 2 + 8);
-    ctx.textAlign = "left";
-
-    // nhãn + giá trị
-    ctx.font = "15px P";
-    ctx.fillStyle = "#7c8aa5";
-    ctx.fillText(String(row.label || "").toUpperCase(), PAD + 68, y + 24);
-    ctx.font = "bold 19px PB";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(fit(ctx, row.value ?? "—", WIDTH - PAD * 2 - 90), PAD + 68, y + 46);
-
+    infoRow(ctx, PAD, y, WIDTH - PAD * 2, rowH - 10, skin, row.icon, row.label, row.value);
     y += rowH;
   }
 
-  // ===== Nhãn loại + chân thẻ =====
-  const tagW = 190;
-  ctx.fillStyle = `${skin.a}2e`;
-  rr(ctx, PAD, H - 56, tagW, 34, 17);
-  ctx.fill();
-  ctx.strokeStyle = skin.a;
-  ctx.globalAlpha = 0.6;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  // footer
   ctx.font = "bold 16px PB";
-  ctx.fillStyle = skin.b;
-  ctx.textAlign = "center";
-  ctx.fillText(`${skin.icon} ${skin.name}`, PAD + tagW / 2, H - 33);
-  ctx.textAlign = "left";
-
-  ctx.font = "bold 16px PB";
-  ctx.fillStyle = "#6b7a99";
+  ctx.fillStyle = "#8b9ab8";
   ctx.textAlign = "right";
-  ctx.fillText(String(o.footer || "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"), WIDTH - PAD, H - 33);
+  ctx.fillText(String(o.footer || "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"), WIDTH - PAD, H - 22);
   ctx.textAlign = "left";
 
+  return save(canvas);
+}
+
+/**
+ * Thẻ avatar gọn (dùng cho getavt) — avatar to + tên, không hàng thông tin
+ */
+async function renderAvatarCard(o = {}) {
+  const skin = SKINS[o.skin] || SKINS.neutral;
+  const avatarSize = 340;
+  const H = 150 + avatarSize + 150;
+
+  const canvas = createCanvas(WIDTH, H);
+  const ctx = canvas.getContext("2d");
+  ctx.quality = "best";
+  await paintBase(ctx, skin, WIDTH, H, o.avatar);
+
+  skinTag(ctx, PAD, 44, skin);
+
+  const cx = WIDTH / 2;
+  const cy = 150 + avatarSize / 2;
+  await drawAvatar(ctx, o.avatar, cx, cy, avatarSize, skin);
+
+  ctx.textAlign = "center";
+  ctx.font = "bold 40px PB";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(fit(ctx, o.title || "—", WIDTH - PAD * 2), cx, H - 62);
+  if (o.subtitle) {
+    ctx.font = "19px P";
+    ctx.fillStyle = "#c3cee3";
+    ctx.fillText(fit(ctx, o.subtitle, WIDTH - PAD * 2), cx, H - 30);
+  }
+  ctx.textAlign = "left";
+
+  return save(canvas);
+}
+
+function save(canvas) {
   const filePath = path.join(os.tmpdir(), `jt_prof_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
   fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
   return filePath;
 }
 
-/** Tải ảnh về file tạm (dùng cho getavt) */
 async function downloadImage(url, prefix = "avt") {
   const img = await loadImg(url);
   if (!img) return null;
   const filePath = path.join(os.tmpdir(), `jt_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
   try {
-    // node-canvas Image KHÔNG có toBuffer → phải vẽ sang canvas rồi mới xuất file
     const canvas = createCanvas(img.width, img.height);
     canvas.getContext("2d").drawImage(img, 0, 0);
     fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
@@ -280,4 +320,4 @@ function cleanup(filePath) {
   try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
 }
 
-module.exports = { renderProfile, downloadImage, cleanup, SKINS, WIDTH };
+module.exports = { renderProfile, renderAvatarCard, downloadImage, cleanup, SKINS, WIDTH };

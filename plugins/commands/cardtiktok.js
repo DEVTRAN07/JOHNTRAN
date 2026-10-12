@@ -79,9 +79,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
   }
 
   console.error("cardtiktok:", errors.join(" | "));
+  // Lỗi ngắn gọn + 1 hành động rõ ràng
   return reply.error(
-    `Không lấy được hồ sơ TikTok @${username}.\n` +
-    `Chi tiết: ${errors.join(" | ").slice(0, 150)}\n\n` +
-    `💡 API TikTok công khai hay bị chặn. Nếu bạn có nguồn riêng, đặt vào config.yml → services.tiktok_api_url.`
+    `Không lấy được hồ sơ TikTok @${username} — API công khai đang bị chặn (Cloudflare).\n\n` +
+    `💡 Nếu có API riêng: config.yml → services.tiktok_api_url`
   );
 };
