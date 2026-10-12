@@ -43,9 +43,10 @@ function magicExt(buf) {
   return "";
 }
 
-// Tải media từ URL (Zalo CDN).allowlist privacy đã có zdn.vn.
-async function download(url, outDir) {
-  const { buffer } = await http.getBuffer(url, { timeout: 60000 });
+// Tải media từ URL. fetchImpl tuỳ biến (vd session Zalo) hoặc core/http.
+async function download(url, outDir, fetchImpl) {
+  const fetchFn = fetchImpl || ((u) => http.getBuffer(u, { timeout: 60000 }));
+  const { buffer } = await fetchFn(url);
   if (!buffer || buffer.length < 64) throw new Error("File tải về quá nhỏ hoặc rỗng");
   const ext = magicExt(buffer) || ".bin";
   const filePath = path.join(outDir, `src_${Date.now()}${ext}`);
@@ -167,9 +168,9 @@ async function convertStatic(inputPath, outPath) {
  * @param {string} outDir  thư mục tạm
  * @param {boolean} forceStatic  true = coi là ảnh tĩnh (loop 2.5s)
  */
-async function makeStickerFile(url, outDir, forceStatic = false) {
+async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl) {
   fs.mkdirSync(outDir, { recursive: true });
-  const inputPath = await download(url, outDir);
+  const inputPath = await download(url, outDir, fetchImpl);
   try {
     const buf = fs.readFileSync(inputPath);
     const animated = isAnimatedBuffer(buf) || [".mp4", ".webm"].includes(path.extname(inputPath));

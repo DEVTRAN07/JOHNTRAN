@@ -169,6 +169,7 @@ const DEFAULTS = {
       "fbcdn.net",
       "zalo.ai",
       "zadn.vn",
+      "dlfl.vn",
       "zdn.vn",
       "api.checkphatnguoi.vn"
     ]

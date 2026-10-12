@@ -29,6 +29,20 @@ function pickMediaUrl(media) {
          cleanMediaUrl(media.image) || cleanMediaUrl(media.file) || null;
 }
 
+// Host CDN của Zalo (zdn.vn, dlfl.vn, zadn.vn, zaloapp.com...) — tải bằng
+// session của bot: đây là host CỦA CHÍNH tài khoản, không phải bên thứ 3,
+// không chạy privacy guard như media bên ngoài.
+const ZALO_HOST_RE = /(^|\.)(zdn\.vn|dlfl\.vn|zadn\.vn|zaloapp\.com|zalo\.me|zalo\.ai)$/i;
+
+function pickFetcher(api, url) {
+  let host = "";
+  try { host = new URL(url).hostname; } catch { return null; }
+  if (ZALO_HOST_RE.test(host) && typeof api?.fetchZaloMedia === "function") {
+    return (u) => api.fetchZaloMedia({ url: u });
+  }
+  return null; // mặc định: core/http (có privacy guard)
+}
+
 // Upload Litterbox (multipart thủ công — core/http chỉ nhận string/Buffer body)
 async function uploadCatbox(filePath) {
   const fileName = path.basename(filePath);
@@ -84,7 +98,7 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
   }
 
   // Chỉ nhận sticker động/GIF qua stkvd: ảnh tĩnh vẫn cho qua stk (loop 2.5s)
-  const file = await converter.makeStickerFile(url, CACHE_DIR, forceStatic);
+  const file = await converter.makeStickerFile(url, CACHE_DIR, forceStatic, pickFetcher(api, url));
   let stickerUrl = null;
   let via = "zalo";
 

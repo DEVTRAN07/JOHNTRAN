@@ -119,6 +119,20 @@ function registerStickerApi(api) {
     return result || {};
   });
 
+  // ===== 3. Tải media từ CDN Zalo bằng session của bot =====
+  // Host CDN Zalo (zdn.vn, dlfl.vn, zadn.vn...) không có trong allowlist
+  // privacy — đây là host CỦA CHÍNH tài khoản bot nên tải bằng cookie session
+  // (utils.request) thay vì core/http.
+  api.custom("fetchZaloMedia", async ({ utils, props }) => {
+    const { url } = props || {};
+    if (!url) throw new Error("Thiếu URL media");
+    const res = await utils.request(String(url));
+    if (!res?.ok) throw new Error("Tải media lỗi HTTP " + (res?.status ?? "?"));
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length < 64) throw new Error("Media rỗng hoặc quá nhỏ");
+    return { buffer, contentType: res.headers?.get?.("content-type") || "" };
+  });
+
   // ===== 2. Gửi sticker từ URL CDN =====
   api.custom("sendCustomStickerUrl", async ({ utils, props }) => {
     const {
