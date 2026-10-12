@@ -130,4 +130,26 @@ function stats() {
   return { total: pool.length, ageMs: builtAt ? Date.now() - builtAt : null, fresh: isFresh(), log: lastBuildLog.slice(0, 5) };
 }
 
-module.exports = { build, ensure, pick, stats, isFresh, STORE_URL };
+// ===== Kết quả TÌM sticker tạm thời (dùng cho /stk find rồi gõ số) =====
+const searches = new Map();
+const SEARCH_TTL_MS = 3 * 60 * 1000;
+
+function sKey(threadId, uid) {
+  return `${threadId}:${uid}`;
+}
+
+function setSearch(threadId, uid, list) {
+  searches.set(sKey(threadId, uid), { list, at: Date.now() });
+}
+
+function getSearch(threadId, uid) {
+  const entry = searches.get(sKey(threadId, uid));
+  if (!entry) return null;
+  if (Date.now() - entry.at > SEARCH_TTL_MS) {
+    searches.delete(sKey(threadId, uid));
+    return null;
+  }
+  return entry.list;
+}
+
+module.exports = { build, ensure, pick, stats, isFresh, STORE_URL, setSearch, getSearch };

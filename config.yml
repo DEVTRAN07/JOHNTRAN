@@ -82,7 +82,7 @@ services:
   tiktok_api_url: "" # endpoint lấy VIDEO tiktok/douyin (autodown). ĐỂ TRỐNG = dùng tikwm.com mặc định
   # --- Facebook (cardfb) ---
   facebook_api_url: "https://graph.facebook.com/v19.0" # endpoint Graph API cho /cardfb
-  facebook_access_token: "" # token Graph API (lấy ở developers.facebook.com). ĐỂ TRỐNG = /cardfb báo cách bật
+  facebook_access_token: "13968a890f7b214e24d372f0941d349f45a5176666abdec28dffabe38d18405c" # token Graph API (lấy ở developers.facebook.com). ĐỂ TRỐNG = /cardfb báo cách bật
   # --- Tiện ích ---
   phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi" # kiểm tra phạt nguội (phatnguoi)
   dpaste_url: "https://dpaste.com/api/v2/" # paste text trực tuyến (adc)

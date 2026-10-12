@@ -261,9 +261,12 @@ assets/
 | Lệnh | Chức năng |
 |---|---|
 | `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
-| `/cardzalo [uid \| @tag]` | Thẻ thông tin người dùng Zalo (ảnh canvas) |
-| `/cardtiktok <username>` | Thẻ thông tin người dùng TikTok |
-| `/cardfb <username \| uid>` | Thẻ thông tin người dùng Facebook |
+| `/cardzalo [uid \| @tag]` | Thẻ hồ sơ người dùng Zalo (ảnh canvas) |
+| `/getlink` (reply tin) hoặc `/getlink <url>` | Lấy link media/URL từ tin nhắn |
+| `/getvideo <url>` | Tải video từ link (yt-dlp) rồi gửi vào nhóm |
+| `/getvoice <url>` | Tải audio từ link rồi gửi dạng voice |
+| `/stk <cateId> <stickerId>` | Gửi sticker Zalo theo id |
+| `/stkvd <cateId> <stickerId>` | Gửi sticker ĐỘNG (video sticker) theo id |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |
@@ -320,7 +323,13 @@ assets/
 | `/spam off` | Dừng job spam đang chạy trong nhóm |
 | `/spamsticker on [số lần]` | Spam sticker **hiệu ứng màn hình** (gây lag) — nguồn `stickers.zaloapp.com`, bot tự lọc sticker `effectId > 0` |
 | `/spamsticker off` | Dừng spam sticker |
-| `/spamsticker list` / `reload` / `test` | Xem kho / nạp lại / kiểm tra nguồn (không spam) |
+| `/spamsticker list` / `reload` / `test` | Xem kho / nạy lại / kiểm tra nguồn (không spam) |
+
+**Sticker:**
+- `/stk <cateId> <stickerId>` — gửi sticker tĩnh
+- `/stk find <từ khóa>` → gõ số để gửi sticker tìm được
+- `/stkvd <cateId> <stickerId>` — gửi sticker động (video sticker)
+- `/stkvd find <từ khóa>` → tìm sticker động rồi chọn
 
 - Folder ngôn từ spam: `assets/spam/*.txt` — MỖI FILE = MỘT NGÔN NGỮ (`vi`, `en`, `zh`, `ja`, `ko`, `th`, `mix`). Mỗi dòng một câu, dòng `#` là chú thích. Sửa file xong gõ `/spam reload`, **không cần sửa code**.
 - Kho sticker hiệu ứng nạp 1 lần rồi nhớ 30 phút; mỗi lần `reload` xáo trộn và quét 24 bộ sticker mới.
