@@ -86,7 +86,9 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
     const { threadId, type, data } = event;
     const prefix = global.config.prefix;
 
-    if (threadData.menu_mode === "text") {
+    // Mặc định TEXT (phản hồi tức thì). Canvas chỉ khi nhóm chủ động bật
+    // "menu canvas" — render ảnh 3x3 mất ~1-2s trên Render free tier.
+    if (threadData.menu_mode !== "canvas") {
         return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
     }
 
@@ -190,7 +192,7 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
     // Xem nhóm này đang dùng chế độ menu nào
     if (argType === "mode" || argType === "che_do") {
         const thread = (await Threads.getData(threadId)).data || {};
-        return reply.info(`Nhóm này đang dùng: ${thread.menu_mode === "text" ? "TEXT" : "CANVAS (ảnh)"}\nĐổi: ${prefix}menu canvas | ${prefix}menu text`,
+        return reply.info(`Nhóm này đang dùng: ${thread.menu_mode === "canvas" ? "CANVAS (ảnh)" : "TEXT"}\nĐổi: ${prefix}menu canvas | ${prefix}menu text`,
             { title: "⚙️ CHẾ ĐỘ MENU" });
     }
 

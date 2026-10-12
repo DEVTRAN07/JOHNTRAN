@@ -166,22 +166,24 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
 
     // MỌI lệnh đều có reaction trạng thái: 👍 đang xử lý → ✅ xong / 😢 lỗi.
     // Lệnh TỰ thả reaction (nhạc, autodown...) thì hệ thống giữ im lặng.
+    // Reaction KHÔNG await: mỗi reaction là 1 round-trip tới server Zalo —
+    // chờ 2 lần/lệnh làm phản hồi chậm thêm ~0.5s (Render xa VN).
     const reply = wrappedApi.__reply;
     let autoReacted = false; // hệ thống đã thả
-    const reactAuto = async (icon) => {
-      if (reply.reacted && !autoReacted) return;
-      autoReacted = true;
-      try { await reply.react(icon); } catch { /* khỏi cần */ }
+    const reactAuto = (icon) => {
+        if (reply.reacted && !autoReacted) return;
+        autoReacted = true;
+        Promise.resolve(reply.react(icon)).catch(() => { /* khỏi cần */ });
     };
 
-    await reactAuto(Reactions.LIKE);
+    reactAuto(Reactions.LIKE);
     try {
-      await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply });
-      await reactAuto(Reactions.OK);
+        await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply });
+        reactAuto(Reactions.OK);
     } catch (err) {
-      logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");
-      metrics.track("error", { command: commandName });
-      await reactAuto(Reactions.CRY);
+        logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");
+        metrics.track("error", { command: commandName });
+        reactAuto(Reactions.CRY);
       try {
         await reply.error("❌ Đã xảy ra lỗi khi xử lý lệnh!");
       } catch {

@@ -100,28 +100,30 @@ if (!fs.existsSync(messageCachePath)) {
     fs.writeFileSync(messageCachePath, "{}", "utf-8");
 }
 
-function cleanOldMessages() {
-    let messageCache = readMessageJson();
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+// ===== CACHE TIN NHẮN: giữ trong RAM, ghi đĩa DEBOUNCE =====
+// Trước: mỗi tin nhắn đều readFileSync + JSON.parse + writeFileSync TOÀN BỘ
+// file (càng ngày càng lớn) → chặn event loop, bot phản hồi chậm dần,
+// đặc biệt trên Render (đĩa chậm + CPU chia sẻ).
+// Nay: đọc đĩa 1 lần, giữ trong RAM; ghi lại debounce 5s (và khi thoát).
+let messageCacheMem = null;
+let cacheFlushTimer = null;
+const CACHE_FLUSH_DELAY = 5000;
 
-    Object.keys(messageCache).forEach((key) => {
-        if (messageCache[key].timestamp < oneDayAgo) {
-            delete messageCache[key];
-        }
-    });
-    writeMessageJson(messageCache);
-}
-
-function readMessageJson() {
+function loadMessageCacheFromDisk() {
     try {
         const data = fs.readFileSync(messageCachePath, "utf-8");
-        return JSON.parse(data);
+        return JSON.parse(data) || {};
     } catch (error) {
         // File chưa có (lần đầu chạy) là bình thường — không cần log lỗi
         if (error.code === "ENOENT") return {};
-        logger.log("Lỗi khi đọc file message.json: " + error.message, "error");
+        logger.log("Lỗi đọc file message.json: " + error.message, "error");
         return {};
     }
+}
+
+function readMessageJson() {
+    if (messageCacheMem === null) messageCacheMem = loadMessageCacheFromDisk();
+    return messageCacheMem;
 }
 
 function writeMessageJson(data) {
@@ -130,17 +132,48 @@ function writeMessageJson(data) {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(messageCachePath, JSON.stringify(data, null, 2), "utf-8");
     } catch (error) {
-        logger.log("Lỗi khi ghi file message.json: " + error.message, "error");
+        logger.log("Lỗi ghi file message.json: " + error.message, "error");
     }
 }
 
+function flushMessageCache() {
+    cacheFlushTimer = null;
+    if (messageCacheMem) writeMessageJson(messageCacheMem);
+}
+
+function scheduleCacheFlush() {
+    if (cacheFlushTimer) return;
+    cacheFlushTimer = setTimeout(flushMessageCache, CACHE_FLUSH_DELAY);
+    cacheFlushTimer.unref?.();
+}
+
+// Ghi nổi lần cuối khi process thoát (exit chạy cả khi SIGTERM/SIGINT)
+process.on("exit", () => {
+    if (cacheFlushTimer) {
+        clearTimeout(cacheFlushTimer);
+        cacheFlushTimer = null;
+    }
+    if (messageCacheMem) writeMessageJson(messageCacheMem);
+});
+
+function cleanOldMessages() {
+    const messageCache = readMessageJson();
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+    Object.keys(messageCache).forEach((key) => {
+        if (messageCache[key].timestamp < oneDayAgo) {
+            delete messageCache[key];
+        }
+    });
+    flushMessageCache();
+}
+
 function getMessageCache() {
-    let messageCache = readMessageJson();
-    return messageCache;
+    return readMessageJson();
 }
 
 function updateMessageCache(data) {
-    let messageCache = readMessageJson();
+    let messageCache = readMessageJson(); // RAM — không đọc đĩa mỗi tin
     try {
         const timestamp = new Date().toISOString();
         const filtered = {
@@ -157,7 +190,7 @@ function updateMessageCache(data) {
             type: data.type
         };
         messageCache[data.data.cliMsgId] = filtered;
-        writeMessageJson(messageCache);
+        scheduleCacheFlush(); // ghi đĩa debounce 5s — không chặn event loop
     } catch (e) {
         logger.log("Lỗi khi update messageCache: " + e.message, "error");
     }

@@ -2,8 +2,47 @@ const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
+const fs = require("fs");
+const crypto = require("crypto");
 
 // Tin nhắn KHÔNG còn tự xoá (đã bỏ toàn bộ hệ thống TTL theo yêu cầu).
+
+// ===== CACHE ẢNH THẺ ĐÃ RENDER =====
+// Render 1 thẻ canvas mất ~0.7s trên máy mạnh, 2-3s trên Render free tier.
+// Thẻ lặp lại (menu, thông báo lỗi cùng nội dung, hướng dẫn...) giờ dùng lại
+// ảnh đã render trong 5 phút — không render lại, không chờ CPU.
+const CARD_TTL = 5 * 60 * 1000;
+const CARD_MAX = 60;
+const cardCache = new Map(); // hash → { path, at, cached }
+
+function hashSpec(spec, ttl) {
+  return crypto.createHash("md5").update(JSON.stringify({ ttl, ...(spec || {}) })).digest("hex");
+}
+
+async function renderCachedCard(spec, ttl) {
+  const hash = hashSpec(spec, ttl);
+
+  const hit = cardCache.get(hash);
+  if (hit && Date.now() - hit.at < CARD_TTL && fs.existsSync(hit.path)) {
+    hit.at = Date.now(); // LRU: dùng lại thì kéo dài tuổi
+    return hit.path;
+  }
+
+  const filePath = await renderVipCard({ ttl, ...(spec || {}) });
+  if (!filePath) return null;
+
+  if (cardCache.size >= CARD_MAX) {
+    // xoá thẻ cũ nhất khỏi cache (và xoá file tạm của nó)
+    const oldestKey = [...cardCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]?.[0];
+    if (oldestKey) {
+      const old = cardCache.get(oldestKey);
+      try { if (old?.path) fs.unlinkSync(old.path); } catch { /* bỏ qua */ }
+      cardCache.delete(oldestKey);
+    }
+  }
+  cardCache.set(hash, { path: filePath, at: Date.now(), cached: true });
+  return filePath;
+}
 
 class Reply {
   constructor(api, threadId, type, commandName, event = null) {
@@ -15,48 +54,36 @@ class Reply {
     this.reacted = false; // đã thả reaction cho tin này → handleCommand không thả lại
   }
 
+  // ===== MẶC ĐỊNH: TEXT THUẬN — phản hồi tức thì =====
+  // Trước đây text/error/success/info đều render ảnh thẻ (canvas ~0.7s+ mỗi
+  // tin trên Render). Nay chỉ gửi TEXT; muốn ảnh thẻ thì gọi reply.card().
   async text(msg, options = {}) {
-    const ttl = options.ttl;
-    if (options.plain) {
-      return this.api.sendMessage({ msg, ttl }, this.threadId, this.type);
-    }
-    return this._sendCard(null, ttl, { ...options, title: options.title || this.commandName.toUpperCase(), rows: options.rows || [{ lines: String(msg).split("\n").filter((l) => l.trim() !== "") }] });
+    return this.api.sendMessage({ msg, ttl: options.ttl }, this.threadId, this.type);
   }
 
   async error(msg, options = {}) {
-    return this._sendCard(null, options.ttl, {
-      ...options,
-      theme: "error",
-      title: options.title || "Đã xảy ra lỗi",
-      subtitle: options.subtitle || msg,
-      rows: options.rows
-    });
+    return this.text(`❌ ${msg}`, options);
   }
 
   async success(msg, options = {}) {
-    return this._sendCard(null, options.ttl, {
-      ...options,
-      theme: "success",
-      title: options.title || "Hoàn thành",
-      subtitle: options.subtitle || msg,
-      rows: options.rows
-    });
+    return this.text(`✅ ${msg}`, options);
   }
 
-  // Thẻ thông tin / hướng dẫn (TTL dài hơn tin thường vì người ta cần đọc kỹ)
+  // Thẻ thông tin / hướng dẫn
   async info(msg, options = {}) {
-    return this._sendCard(null, options.ttl, {
-      ...options,
-      theme: options.theme || "info",
-      title: options.title || "Thông tin",
-      subtitle: options.subtitle || msg,
-      rows: options.rows
-    });
+    return this.text(msg, options);
   }
 
+  // ===== Ảnh THẺ (opt-in): chỉ dùng khi thật sự muốn ảnh đẹp =====
   async card(spec = {}) {
     const ttl = spec.ttl;
-    return this._sendCard(spec, ttl, spec);
+    const filePath = await renderCachedCard(spec, ttl);
+    if (!filePath) {
+      // render hỏng → gửi text thuần, không mất phản hồi
+      const plainMsg = spec.subtitle || spec.title || String(spec.msg || "");
+      return this.api.sendMessage({ msg: plainMsg, ttl }, this.threadId, this.type);
+    }
+    return this.api.sendMessage({ msg: "", attachments: filePath, ttl }, this.threadId, this.type);
   }
 
   async media({ msg, attachments, ttl }) {
@@ -99,31 +126,6 @@ class Reply {
   working() { return this.react(Reactions.PRAY); }
   done() { return this.react(Reactions.OK); }
   failed() { return this.react(Reactions.CRY); }
-
-  async _sendCard(spec, ttl, options) {
-    let filePath = null;
-    try {
-      filePath = await renderVipCard({ ttl, ...(spec || {}) });
-    } catch (error) {
-      logger.log(`Lỗi render thẻ: ${error.message}`, "warn");
-      filePath = null;
-    }
-
-    // Không render được ảnh → gửi TEXT thuần (không dùng 2 kiểu ảnh khác nhau)
-    if (!filePath) {
-      const plainMsg = options.subtitle || options.title || String(options.msg || "");
-      return this.api.sendMessage({ msg: plainMsg, ttl }, this.threadId, this.type);
-    }
-
-    const cleanup = () => {
-      try { require("fs").unlinkSync(filePath); } catch { /* bỏ qua */ }
-    };
-    try {
-      return await this.api.sendMessage({ msg: "", attachments: filePath, ttl }, this.threadId, this.type);
-    } finally {
-      cleanup();
-    }
-  }
 }
 
 // ZaloApi của zalo-client khai báo MỌI method bằng accessor get/set (lazy).
