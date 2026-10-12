@@ -260,6 +260,8 @@ def fetch_with_retry(platform, target, tries=2):
         for i in range(tries):
             try:
                 data = fn(v)
+                if v != target:
+                    data["_matched_alias"] = v
                 cache_put(f"{platform}:{v.lower()}", data)
                 cache_put(key, data)
                 return data
@@ -267,7 +269,6 @@ def fetch_with_retry(platform, target, tries=2):
                 last = e
                 if i < tries - 1:
                     time.sleep(1.2)
-        # không dùng từ khoá yếu
     raise last
 
 

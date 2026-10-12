@@ -98,6 +98,15 @@ module.exports.run = async function ({ api, event, args, reply }) {
 
   let cardPath = null;
   try {
+    const alias = info._matched_alias;
+    if (alias) {
+      // TikTok trả 209002 cho tên gốc → dùng biến thể bỏ dấu chấm/gạch dưới
+      await api.sendMessage({
+        msg: `ℹ️ Không tìm thấy @${target} — đang hiển thị kết quả gần đúng nhất: @${alias}`,
+        plain: true,
+        ttl: 60000
+      }, threadId, type);
+    }
     cardPath = await card.render({
       name: String(info.nickname || info.username || target),
       avatarBuffer,
@@ -107,9 +116,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
         ["» Số video", shortNum(info.videos)],
         ["» Đang follow", shortNum(info.following)],
         ["» Xác minh", info.verified ? "Có" : "Không"],
-        ["» Username", `@${info.username || target}`]
+        ["» Username", `@${info.username || alias || target}`]
       ],
-      link: info.bio ? String(info.bio).slice(0, 46) : `@${info.username || target}`
+      link: info.bio ? String(info.bio).slice(0, 46) : `@${info.username || alias || target}`
     });
     await api.sendMessage({ msg: "", attachments: [cardPath], ttlKind: "card" }, threadId, type);
   } catch (error) {
