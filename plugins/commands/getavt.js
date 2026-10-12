@@ -1,17 +1,14 @@
-// /getavt — lấy ảnh đại diện Zalo người dùng hoặc nhóm
+// /getavt — lấy ảnh đại diện Zalo (người dùng hoặc nhóm)
 //   /getavt              → ảnh của chính mình
-//   /getavt <uid>        → ảnh theo id
-//   /getavt @nguoi_dùng  → ảnh người được tag (trả lời kèm ảnh)
+//   /getavt <uid>        → ảnh theo UID
+//   /getavt @nguoi_dung  → ảnh người được tag
 //   /getavt box          → ảnh đại diện nhóm
-const fs = require("fs");
-const path = require("path");
-const http = require("../../core/http");
-const { ThreadType } = require("zalo-client");
+const profile = require("../../core/canvas/profile");
 
 module.exports.config = {
   name: "getavt",
   aliases: ["avt", "avatar"],
-  version: "3.0.0",
+  version: "3.1.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
   description: "Lấy ảnh đại diện người dùng hoặc nhóm",
@@ -21,60 +18,58 @@ module.exports.config = {
   dependencies: {}
 };
 
-// Tải ảnh về file tạm rồi gửi (Zalo cần file cục bộ)
-async function sendAvatar(api, threadId, type, imageUrl, msg, ttlKind) {
-  const tempDir = path.join(__dirname, "temp");
-  fs.mkdirSync(tempDir, { recursive: true });
-  const filePath = path.join(tempDir, `avt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`);
-  try {
-    const { buffer } = await http.getBuffer(imageUrl, { timeout: 15000, retries: 1 });
-    fs.writeFileSync(filePath, buffer);
-    await api.sendMessage({ msg: msg || "", attachments: filePath, ttlKind }, threadId, type);
-  } finally {
-    if (fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
-    }
-  }
-}
-
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event;
   const arg = (args[0] || "").toLowerCase();
 
   // ===== Ảnh nhóm =====
-  if (["box", "group", "nhom", "nam"].includes(arg)) {
+  if (["box", "group", "nhom"].includes(arg)) {
+    let group;
     try {
       const info = await api.getGroupInfo(threadId);
-      const group = info?.gridInfoMap?.[threadId];
-      const avt = group?.avt || group?.avatar;
-      if (!avt) return reply.error("Không lấy được ảnh đại diện của nhóm.");
-      const name = group?.name || "nhóm";
-      return sendAvatar(api, threadId, type, avt, `🖼️ Ảnh đại diện nhóm: ${name}`, "media");
+      group = info?.gridInfoMap?.[threadId];
     } catch (error) {
-      console.error("Lỗi getavt box:", error.message);
-      return reply.error("Không lấy được thông tin nhóm.");
+      console.error("getavt box:", error.message);
+      return reply.error("Không đọc được thông tin nhóm.");
     }
+    const avt = group?.avt || group?.avatar;
+    if (!avt) return reply.error("Nhóm không có ảnh đại diện.");
+    const filePath = await profile.downloadImage(avt, "grp");
+    if (!filePath) return reply.error("Tải ảnh nhóm thất bại.");
+    try {
+      await api.sendMessage({ msg: `🖼️ Ảnh đại diện nhóm: ${group?.name || "—"}`, attachments: filePath, ttlKind: "media" }, threadId, type);
+    } catch (error) {
+      return reply.error(`Gửi ảnh thất bại: ${error.message}`);
+    } finally {
+      profile.cleanup(filePath);
+    }
+    return;
   }
 
-  // ===== Xác định người dùng: uid → tag → chính mình =====
-  let targetId = null;
-  if (args[0] && /^\d{6,}$/.test(args[0])) {
-    targetId = args[0];
-  } else if (data.mentions && Object.keys(data.mentions).length > 0) {
-    targetId = String(Object.keys(data.mentions)[0]);
-  } else {
-    targetId = String(data.uidFrom);
-  }
+  // ===== Ảnh người dùng: uid → tag → chính mình =====
+  let uid = null;
+  if (args[0] && /^\d{6,}$/.test(args[0])) uid = args[0];
+  else if (data.mentions && Object.keys(data.mentions).length > 0) uid = String(Object.keys(data.mentions)[0]);
+  else uid = String(data.uidFrom);
 
+  let user;
   try {
-    const info = await api.getUserInfo(targetId);
-    const user = info?.changed_profiles?.[targetId] || info?.unchanged_profiles?.[targetId];
-    if (!user || !user.avatar) {
-      return reply.error(`Không lấy được ảnh đại diện của ${user?.displayName || targetId}.`);
-    }
-    return sendAvatar(api, threadId, type, user.avatar, `🖼️ Ảnh đại diện: ${user.displayName || targetId}`, "media");
+    const info = await api.getUserInfo(uid);
+    user = info?.changed_profiles?.[uid] || info?.unchanged_profiles?.[uid];
   } catch (error) {
-    console.error("Lỗi getavt:", error.message);
-    return reply.error("Không thể lấy ảnh đại diện.");
+    console.error("getavt:", error.message);
+    return reply.error(`Không đọc được thông tin của ${uid}.`);
+  }
+
+  if (!user?.avatar) return reply.error(`Không có ảnh đại diện (${user?.displayName || uid}).`);
+
+  const filePath = await profile.downloadImage(user.avatar, "avt");
+  if (!filePath) return reply.error("Tải ảnh đại diện thất bại.");
+  try {
+    await api.sendMessage({ msg: `🖼️ Ảnh đại diện: ${user.displayName || uid}`, attachments: filePath, ttlKind: "media" }, threadId, type);
+  } catch (error) {
+    return reply.error(`Gửi ảnh thất bại: ${error.message}`);
+  } finally {
+    profile.cleanup(filePath);
   }
 };

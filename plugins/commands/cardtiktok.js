@@ -1,18 +1,16 @@
-// /cardtiktok — thẻ thông tin người dùng TikTok (ảnh canvas)
-//   /cardtiktok <username>     (vd: @tiktok)
-// Dùng API công khai (tikwm...). Nếu API chết/không cấu hình thì báo rõ,
-// KHÔNG báo lỗi mơ hồ. Admin có thể trỏ API khác trong config.yml:
-//   services.tiktok_api_url
-const { renderVipCard } = require("../../core/canvas/vip");
+// /cardtiktok — thẻ hồ sơ người dùng TikTok (ảnh canvas, kiểu mới)
+//   /cardtiktok <username>   (vd: @tiktok hoặc tiktok)
+// Nguồn dữ liệu: services.tiktok_api_url (admin tự cấu hình) → tikwm mặc định.
+const profile = require("../../core/canvas/profile");
 const services = require("../../core/services");
 
 module.exports.config = {
   name: "cardtiktok",
   aliases: ["tiktok", "tt"],
-  version: "1.0.0",
+  version: "2.1.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Thẻ thông tin người dùng TikTok",
+  description: "Thẻ hồ sơ người dùng TikTok",
   category: "Tiện ích",
   usage: "cardtiktok <username>",
   cooldowns: 5,
@@ -29,12 +27,9 @@ function shortNum(n) {
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type } = event;
   const raw = (args[0] || "").trim();
-  if (!raw) {
-    return reply.error(`Cách dùng: ${global.config.prefix}cardtiktok <username>`);
-  }
-  const username = raw.replace(/^@/, "").replace(/\/+$/, "");
+  if (!raw) return reply.error(`Cách dùng: ${global.config.prefix}cardtiktok <username>`);
 
-  // Chuỗi API thử lần lượt: endpoint admin tự cấu hình → tikwm
+  const username = raw.replace(/^@/, "").replace(/^https?:\/\/(www\.)?tiktok\.com\/@?/, "").replace(/\/.*$/, "").replace(/\/+$/, "");
   const bases = [...new Set([services.serviceUrl("tiktok_api_url"), "https://www.tikwm.com/api"].filter(Boolean))];
   const errors = [];
 
@@ -45,46 +40,48 @@ module.exports.run = async function ({ api, event, args, reply }) {
         timeout: 30000,
         headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", Accept: "application/json" }
       });
-      const info = res.data?.data?.user || res.data?.user;
-      const stats = res.data?.data?.stats || res.data?.stats;
-      if (info) {
-        const cardPath = await renderVipCard({
-          theme: "ai",
-          icon: "🎵",
-          title: `@${info.unique_id || username}`,
-          subtitle: `${info.nickname || "TikTok"}${info.private_account ? " • 🔒 Riêng tư" : ""}`,
-          background: info.avatarLarger || info.avatarMedium || info.avatarThumb || undefined,
-          rows: [
-            { label: "Thống kê", lines: [
-              `👥 ${shortNum(stats?.followerCount)} người theo dõi`,
-              `❤️ ${shortNum(stats?.heartCount || stats?.heart)} lượt thích`,
-              `🎬 ${shortNum(stats?.videoCount)} video`
-            ] },
-            { label: "Chữ ký", lines: [info.signature ? String(info.signature).slice(0, 80) : "Không có"] }
-          ],
-          footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ • CARD TIKTOK",
-          ttl: 300000
-        });
-        const fs = require("fs");
-        try {
-          await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
-          return;
-        } catch (error) {
-          return reply.error(`Có thông tin nhưng không gửi được ảnh: ${error.message}`);
-        } finally {
-          if (fs.existsSync(cardPath)) fs.unlinkSync(cardPath);
-        }
+      const d = res.data?.data || res.data;
+      const info = d?.user || d;
+      const stats = d?.stats || info?.stats;
+      if (!info?.unique_id && !info?.nickname) {
+        errors.push(`${base}: ${res.data?.msg || "không có hồ sơ"}`);
+        continue;
       }
-      errors.push(`${base}: ${res.data?.msg || "không có dữ liệu"}`);
+
+      const avatar = info.avatarLarger || info.avatarMedium || info.avatarThumb || info.avatar || "";
+      const cardPath = await profile.renderProfile({
+        skin: "tiktok",
+        title: String(info.nickname || username),
+        handle: `@${info.unique_id || username}`,
+        subtitle: info.private_account ? "🔒 Tài khoản riêng tư" : (info.signature ? String(info.signature).slice(0, 46) : undefined),
+        avatar: avatar || undefined,
+        rows: [
+          { icon: "👥", label: "Người theo dõi", value: shortNum(stats?.followerCount) },
+          { icon: "❤️", label: "Lượt thích", value: shortNum(stats?.heartCount || stats?.heart) },
+          { icon: "🎬", label: "Số video", value: shortNum(stats?.videoCount) },
+          { icon: "🤝", label: "Đang theo dõi", value: shortNum(stats?.followingCount) },
+          { icon: "✅", label: "Xác minh", value: info.verified || info.custom_verify ? "Đã xác minh ✅" : "Chưa xác minh" }
+        ],
+        footer: "CARD TIKTOK"
+      });
+
+      try {
+        await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
+        return;
+      } catch (error) {
+        return reply.error(`Có hồ sơ nhưng gửi ảnh thất bại: ${error.message}`);
+      } finally {
+        profile.cleanup(cardPath);
+      }
     } catch (error) {
-      errors.push(`${base}: ${error.message}`);
+      errors.push(`${base}: ${error.response?.data?.msg || error.message}`);
     }
   }
 
-  console.error("Lỗi cardtiktok:", errors.join(" | "));
+  console.error("cardtiktok:", errors.join(" | "));
   return reply.error(
-    `Không lấy được thông tin TikTok của @${username}.\n` +
-    `Chi tiết: ${errors.join(" | ").slice(0, 160)}\n\n` +
-    `💡 Các API TikTok công khai hiện hay chặn. Nếu bạn có API riêng, đặt vào config.yml → services.tiktok_api_url.`
+    `Không lấy được hồ sơ TikTok @${username}.\n` +
+    `Chi tiết: ${errors.join(" | ").slice(0, 150)}\n\n` +
+    `💡 API TikTok công khai hay bị chặn. Nếu bạn có nguồn riêng, đặt vào config.yml → services.tiktok_api_url.`
   );
 };
