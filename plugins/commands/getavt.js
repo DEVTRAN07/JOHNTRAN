@@ -5,7 +5,7 @@
 //   /getavt box          → ảnh đại diện nhóm
 //   /getavt debug        → gửi thông tin chẩn đoán (uid, Zalo trả gì)
 const profile = require("../../core/canvas/profile");
-const { fetchProfile } = require("../../core/zaloProfile");
+const { fetchProfile, pickUser } = require("../../core/zaloProfile");
 
 module.exports.config = {
   name: "getavt",
@@ -27,8 +27,17 @@ function say(api, threadId, type, msg) {
 
 // URL avatar Zalo hợp lệ (Zalo trả "/default" hoặc "" khi chưa đặt ảnh)
 function usableAvatar(user) {
-  const u = String(user?.avatar || "").trim();
-  return /^https?:\/\//i.test(u) ? u : null;
+  // Zalo đổi chỗ chứa ảnh giữa các phiên bản → thử mọi field
+  const candidates = [
+    user?.avatar?.value, user?.avatar?.url, user?.avatarUrl,
+    user?.avatar, user?.avatar_360, user?.avatar_240, user?.avatar_120,
+    user?.bgavatar?.value, user?.bgavatar
+  ];
+  for (const c of candidates) {
+    const u = String(c ?? "").trim();
+    if (/^https?:\/\//i.test(u)) return u;
+  }
+  return null;
 }
 
 // Lấy uid cần xem: uid → tag → chính mình
@@ -57,11 +66,16 @@ module.exports.run = async function ({ api, event, args, reply }) {
     const cpKeys = cp ? (Array.isArray(cp) ? `mảng[${cp.length}]` : Object.keys(cp).join(", ")) : "không có";
     const up = raw?.unchanged_profiles;
     const upKeys = up ? Object.keys(up).join(", ") : "không có";
+    const user = raw ? pickUser(raw, uid) : null;
+    const av = user?.avatar;
+    const avText = av === undefined ? "không có field avatar" : (typeof av === "object" ? `object(${Object.keys(av).join(",")})` : `"${String(av).slice(0, 70)}"`);
     return say(api, threadId, type,
       `🔍 CHẨN ĐOÁN /getavt\n` +
       `• uid gửi lên: ${uid}\n` +
       `• lỗi API: ${err || "không có"}\n` +
-      `• top-level fields: ${keys}\n` +
+      `• tìm được user: ${user ? "CÓ ✅" : "KHÔNG ❌"}\n` +
+      `• giá trị avatar: ${avText}\n` +
+      `• có thể dùng được: ${usableAvatar(user) ? "CÓ ✅" : "KHÔNG ❌"}\n` +
       `• changed_profiles keys: ${cpKeys}\n` +
       `• unchanged_profiles keys: ${upKeys}\n` +
       `💡 Copy nội dung này gửi admin để sửa cho đúng.`
