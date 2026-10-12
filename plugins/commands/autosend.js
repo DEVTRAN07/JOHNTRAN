@@ -12,7 +12,7 @@ module.exports.config = {
   author: 'ShinTHL09',
   description: 'Tự động gửi tin nhắn theo giờ đã cài và tự xóa sau 5 phút',
   category: "Tiện ích",
-  usage: 'autosend [on|off|status]',
+  usage: 'autosend [on|off|status|test]',
   cooldowns: 2
 };
 
@@ -173,6 +173,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
     try {
       const allGroups = await api.getAllGroups();
       const allBoxIDs = Object.keys(allGroups?.gridVerMap || {});
+      console.log(`[AUTOSEND] ${matched.timer} → ${allBoxIDs.length} nhóm được quét`);
 
       let sentCount = 0;
       for (const Group of allBoxIDs) {
@@ -188,6 +189,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
           console.log(`Không gửi được tới threadId ${Thread?.threadId}: ${err.message}`);
         }
       }
+      console.log(`[AUTOSEND] ${hm} → đã gửi ${sentCount}/${allBoxIDs.length} nhóm`);
       if (sentCount === 0) console.log("Autosend: không có nhóm nào bật tính năng này");
     } finally {
       try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
@@ -200,6 +202,25 @@ module.exports.run = async ({ api, event, args, Threads }) => {
 
   if (type === ThreadType.User) return api.sendMessage({ msg: "❌ Lệnh chỉ có thể dùng trong nhóm", plain: true }, threadId, type);
 
+  const action = (args[0] || "").toLowerCase();
+
+  // ===== TEST: gửi NGAY tin thử (không cần đợi khung giờ) =====
+  if (action === "test" || action === "thu") {
+    const current = (await Threads.getData(threadId)).data || {};
+    if (!current.auto_send) {
+      return api.sendMessage({ msg: "⚠️ Nhóm này chưa bật autosend. Gõ `autosend on` trước đã.", plain: true }, threadId, type);
+    }
+    const slot = setting[0];
+    const randomMessage = slot.message[Math.floor(Math.random() * slot.message.length)];
+    const msg = form.replace(/%time_now/g, slot.timer).replace(/%content/g, randomMessage);
+    try {
+      await api.sendMessage({ msg }, threadId, type);
+      return api.sendMessage({ msg: "✅ Đã gửi tin thử autosend. Nếu thấy tin ở trên là tính năng hoạt động.", plain: true, ttl: 60000 }, threadId, type);
+    } catch (error) {
+      return api.sendMessage({ msg: `❌ Gửi thất bại: ${error.message}`, plain: true, ttl: 60000 }, threadId, type);
+    }
+  }
+
   const current = (await Threads.getData(threadId)).data || {};
 
   // Không bật/tắt hàng loạt mọi nhóm — chỉ nhóm đang gọi lệnh mới điều khiển được
@@ -210,7 +231,6 @@ module.exports.run = async ({ api, event, args, Threads }) => {
     );
   }
 
-  const action = (args[0] || "").toLowerCase();
   let status;
 
   if (action === "on" || action === "off") {
@@ -219,7 +239,7 @@ module.exports.run = async ({ api, event, args, Threads }) => {
   } else if (action === "status" || action === "stt") {
     const slots = setting.map((s) => s.timer.replace(/:00\s*(AM|PM)$/i, " $1")).join(", ");
     return api.sendMessage(
-      { msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autosend on / autosend off\n\n⏰ Các khung giờ gửi: ${slots}`, plain: true },
+      { msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\nDùng: autosend on / autosend off\nGõ autosend test để gửi tin thử ngay lập tức.\n\n⏰ Các khung giờ gửi: ${slots}`, plain: true, ttl: 120000 },
       threadId, type
     );
   } else {

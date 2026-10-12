@@ -4,6 +4,7 @@ const os = require("os");
 const { ZaloClient, LoginQRCallbackEventType } = require("zalo-client");
 const Jimp = require("jimp");
 const logger = require("../utils/logger");
+const { registerStickerApi } = require("./stickerFactory");
 const { getJsonData, displayQRCodeInConsole } = require("../utils/index");
 
 const USER_AGENTS = {
@@ -172,6 +173,7 @@ async function loginWithQR() {
             }
         });
 
+        registerStickerApi(api); // gắn API tạo sticker tuỳ biến
         return api;
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng QR: ${error.message || error}`, "error");
@@ -194,6 +196,7 @@ async function loginWithCookie() {
             userAgent: accountData.userAgent
         });
 
+        registerStickerApi(api); // gắn API tạo sticker tuỳ biến
         return api;
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng Cookie: ${error.message || error}`, "error");

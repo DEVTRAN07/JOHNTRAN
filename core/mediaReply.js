@@ -52,6 +52,18 @@ function parseQuote(event) {
   const file = pickUrl(merged, ["fileUrl", "normalUrl", "file", "href", "url"]);
   const thumb = pickUrl(merged, ["thumbUrl", "thumbnailUrl", "thumb", "previewUrl"]);
 
+  // Sticker động: attach.webp = JSON chuỗi {url, width, height} — đây mới là nguồn sticker
+  let webpUrl = null;
+  try {
+    const webp = merged.webp;
+    if (typeof webp === "string" && webp.trim()) {
+      const parsed = JSON.parse(webp);
+      if (parsed?.url) webpUrl = String(parsed.url);
+    } else if (webp && typeof webp === "object" && webp.url) {
+      webpUrl = String(webp.url);
+    }
+  } catch { /* không parse được */ }
+
   // Sticker gốc (reply sticker)
   const stickerId = pickNum(merged, ["stickerId", "id", "sId"]);
   const cateId = pickNum(merged, ["cateId", "cate", "catId"]);
@@ -65,6 +77,7 @@ function parseQuote(event) {
     image,
     file,
     thumb,
+    webpUrl,
     sticker: hasSticker ? { id: stickerId, cateId, type: stickerType || 0 } : null,
     isSticker: hasSticker,
     isGif: /gif/i.test(String(pickUrl(merged, ["ext", "fileExt", "extension"]) || "")) || /\.gif(\?|$)/i.test(String(video || image || file || "")),
