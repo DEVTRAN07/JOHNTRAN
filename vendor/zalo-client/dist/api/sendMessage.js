@@ -95,6 +95,10 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
                 const result = await resolveResponse(ctx, response);
                 // Zalo chỉ trả { msgId } → tự gắn cliMsgId = clientId đã gửi
                 // (ảnh có clientId riêng nên ưu tiên each.clientId)
+                try {
+                    require("fs").appendFileSync(require("path").join(process.cwd(), "data", "recall_debug.log"),
+                        `[vendor-send] cwd=${process.cwd()} file=${require("path").basename(__filename)} clientId=${clientId} eachClientId=${each && each.clientId} result=${JSON.stringify(result)}\n`);
+                } catch { /* bỏ qua */ }
                 if (result && typeof result === "object" && !result.cliMsgId) {
                     result.cliMsgId = each.clientId ? String(each.clientId) : (clientId !== undefined ? String(clientId) : undefined);
                 }
