@@ -12,7 +12,11 @@ const converter = require("./stickerConvert");
 const { buildStickerUrl, stripStickerSuffix, jxlToJpg } = require("./stickerFactory");
 
 const CACHE_DIR = path.join(__dirname, "..", "assets", "cache", "sticker");
-const CATBOX_URL = "https://catbox.moe/user/api.php";
+// Catbox đã chặn anonymous upload (412 "Invalid uploader" mọi request) —
+// chuyển sang Litterbox (cùng hệ sinh thái, tạm thời 72h). Chỉ dùng khi
+// Zalo CDN thất bại — sticker Zalo CDN mới là bền vững.
+const CATBOX_URL = "https://litterbox.catbox.moe/resources/internals/api.php";
+const CATBOX_FIELDS = [["reqtype", "fileupload"], ["time", "72h"]];
 
 function cleanMediaUrl(url) {
   return stripStickerSuffix(jxlToJpg(String(url || "").replace(/\\\//g, "/")));
@@ -25,30 +29,39 @@ function pickMediaUrl(media) {
          cleanMediaUrl(media.image) || cleanMediaUrl(media.file) || null;
 }
 
-// Upload Catbox (multipart thủ công — core/http chỉ nhận string/Buffer body)
+// Upload Litterbox (multipart thủ công — core/http chỉ nhận string/Buffer body)
 async function uploadCatbox(filePath) {
   const fileName = path.basename(filePath);
   const fileBuffer = fs.readFileSync(filePath);
   const boundary = "----JTCatbox" + Date.now().toString(16);
-  const body = Buffer.concat([
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n` +
-      `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; ` +
-      `filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`
-    ),
-    fileBuffer,
-    Buffer.from(`\r\n--${boundary}--\r\n`)
-  ]);
+  const fields = [...CATBOX_FIELDS, ["fileToUpload", null]];
+  const chunks = [];
+
+  for (const [name, value] of fields) {
+    if (value === null) {
+      chunks.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"; ` +
+        `filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+      ));
+      chunks.push(fileBuffer);
+      chunks.push(Buffer.from("\r\n"));
+    } else {
+      chunks.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+      ));
+    }
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
 
   const res = await http.request(CATBOX_URL, {
     method: "POST",
-    timeout: 60000,
+    timeout: 90000,
     headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
-    body
+    body: Buffer.concat(chunks)
   });
 
   const text = res.text().trim();
-  if (!text.startsWith("http")) throw new Error("Catbox trả về: " + text.slice(0, 80));
+  if (!text.startsWith("http")) throw new Error("Litterbox trả về: " + text.slice(0, 80));
   return text;
 }
 
@@ -76,20 +89,20 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
   let via = "zalo";
 
   try {
-    // File nhỏ → Zalo CDN trước (sticker bền vững, không phụ thuộc host ngoài)
-    if (file.size <= converter.SIZE_LIMIT) {
-      try {
-        const uploaded = await api.uploadStickerImage({ filePath: file.path, threadId, threadType: type });
-        const cdnUrl = uploaded?.normalUrl || uploaded?.hdUrl || uploaded?.thumbUrl || uploaded?.url;
-        if (cdnUrl) {
-          // Đổi đuôi .webp cho CDN (GIF vẫn giữ nguyên — hậu tố mới là thứ quyết định)
-          stickerUrl = buildStickerUrl(cdnUrl, file.format === "webp");
-        }
-      } catch (error) {
-        console.error("[stk] Zalo upload lỗi:", error.message);
+    // Zalo CDN trước (mọi kích thước) — sticker bền vững, không phụ thuộc host ngoài
+    try {
+      const uploaded = await api.uploadStickerImage({ filePath: file.path, threadId, threadType: type });
+      const cdnUrl = uploaded?.normalUrl || uploaded?.hdUrl || uploaded?.thumbUrl || uploaded?.url;
+      if (cdnUrl) {
+        // Đổi đuôi .webp cho CDN (GIF vẫn giữ nguyên — hậu tố mới là thứ quyết định)
+        stickerUrl = buildStickerUrl(cdnUrl, file.format === "webp");
+      } else {
+        console.error("[stk] Zalo upload không trả URL:", JSON.stringify(uploaded).slice(0, 200));
       }
+    } catch (error) {
+      console.error("[stk] Zalo upload lỗi:", error.message);
     }
-    // File to / upload lỗi → Catbox
+    // Zalo thất bại → Litterbox (72h)
     if (!stickerUrl) {
       const catboxUrl = await uploadCatbox(file.path);
       stickerUrl = buildStickerUrl(catboxUrl, file.format === "webp");
@@ -101,7 +114,7 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
 
   if (!stickerUrl) {
     const err = new Error("UPLOAD_FAILED");
-    err.userMessage = "❌ Upload sticker thất bại. Thử lại sau.";
+    err.userMessage = "❌ Upload sticker thất bại (cả Zalo CDN và Litterbox). Thử lại sau hoặc đổi file khác.";
     throw err;
   }
 

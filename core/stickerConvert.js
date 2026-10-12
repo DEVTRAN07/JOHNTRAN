@@ -119,7 +119,7 @@ async function convert(inputPath, outPath) {
   let r;
   if (useWebp) {
     r = await run(ffmpegBin, [
-      ...base, "-vcodec", "libwebp", "-loop", "0", "-q:v", "75",
+      ...base, "-vcodec", "libwebp", "-loop", "0", "-q:v", "65",
       "-preset", "default", outFile
     ]);
     if (!r.ok) {
@@ -154,7 +154,7 @@ async function convertStatic(inputPath, outPath) {
     "-t", "2.5",
     "-vf", `fps=${FPS},scale=${TARGET_W}:-1:flags=lanczos`,
     "-vcodec", useWebp ? "libwebp" : "gif",
-    ...(useWebp ? ["-loop", "0", "-q:v", "75"] : ["-loop", "0"]),
+    ...(useWebp ? ["-loop", "0", "-q:v", "65"] : ["-loop", "0"]),
     outFile
   ]);
   if (!r.ok) throw new Error("ffmpeg convert ảnh tĩnh thất bại: " + r.stderr.slice(-200));
