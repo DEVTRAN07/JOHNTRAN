@@ -114,9 +114,17 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
     }
 }
 
-// ===== Gõ "next"/"prev"/"out" KHÔNG CẦN PREFIX (nút trên ảnh chỉ là hình vẽ) =====
-// Chỉ chạy khi menu đã mở (nhóm có menu_page) để khỏi phản hồi linh tinh trong hội thoại.
-module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
+// ===== Gõ "next"/"prev"/"out" KHÔNG CẦN PREFIX =====
+// Điều hướng trần nay do core/listen.js xử lý TRỰC TIẾP (chắc chắn chạy hơn
+// là đi qua handleEvent) nên handleEvent của menu đã tắt để khỏi trả lời 2 lần.
+module.exports.handleEvent = async function () {
+    // Điều hướng trần (next/prev/out) do core/listen.js xử lý TRỰC TIẾP —
+    // bỏ qua ở đây để khỏi trả lời 2 lần cùng một tin.
+    return;
+};
+
+// eslint-disable-next-line no-unused-vars
+module.exports._unusedHandleEvent = async function ({ api, event, Threads, isSelf }) {
     const { threadId, type } = event;          // ← thiếu dòng này gây ReferenceError
     if (isSelf) return;
     if (type !== 1) return; // chỉ nhóm

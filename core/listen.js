@@ -86,23 +86,47 @@ function startListening(api) {
       return;
     }
 
-    // Gõ "next"/"prev"/"out" hoặc số trần (vd "2") → điều hướng kết quả nhạc
-    // gần nhất, không cần /scl ... MENU ĐANG MỞ thì menu ưu tiên (menu.handleEvent
-    // đã xử lý trước đó rồi) nên đây chỉ chạy khi không có menu nào đang mở.
-    const MUSIC_NAV = ["next", "prev", "previous", "back", "out", "exit", "close"];
-    if (canRunCommand && (MUSIC_NAV.includes(content) || /^\d{1,2}$/.test(content))) {
-      const menuOpen = Boolean(threadInfo?.menu_page);
+    // ===== Điều hướng bằng từ TRẦN (không cần prefix): next / prev / out / số =====
+    // Xử lý TRỰC TIẾP tại đây (không đi qua handleEvent) để chắc chắn chạy:
+    //   1) đang mở menu  → lật trang menu
+    //   2) đang có kết quả nhạc → chọn bài / lật trang nhạc
+    //   3) không có gì    → im lặng
+    const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
+    const trimmed = typeof content === "string" ? content.trim() : "";
+    const isNavWord = NAV_WORDS.includes(trimmed.toLowerCase());
+    const isNavNumber = /^\d{1,2}$/.test(trimmed);
+
+    if (canRunCommand && (isNavWord || isNavNumber)) {
+      const nav = trimmed.toLowerCase();
+
+      // 1) MENU đang mở trong nhóm này
+      if (threadInfo?.menu_page) {
+        const wrapped = require("./message").wrapApi(api, event.threadId, event.type, "menu", event);
+        logger.log(`[listen] nhóm ${event.threadId} điều hướng menu "${nav}"`, "info");
+        Promise.resolve()
+          .then(() => global.client.commands.get("menu").run({
+            api: wrapped, event, args: [nav], Threads, reply: wrapped.__reply
+          }))
+          .catch((err) => logger.log(`Lỗi điều hướng menu: ${err.message}`, "error"));
+        return;
+      }
+
+      // 2) Kết quả NHẠC đang chờ
       const music = require("./music");
-      const pending = menuOpen ? null : music.getPending(music.pickKey(event.threadId, data.uidFrom));
+      const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
       if (pending) {
         const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
+        logger.log(`[listen] nhóm ${event.threadId} điều hướng nhạc "${nav}"`, "info");
         Promise.resolve()
           .then(() => require("./music/command").runMusic(pending.providerName, {
-            api: wrapped, event, args: MUSIC_NAV.includes(content) ? [content] : [String(Number(content))], reply: wrapped.__reply
+            api: wrapped, event, args: [nav], reply: wrapped.__reply
           }))
           .catch((err) => logger.log(`Lỗi điều hướng nhạc: ${err.message}`, "error"));
         return;
       }
+
+      // 3) Không có gì đang mở → im lặng (không làm nhiễu nhóm)
+      return;
     }
   };
 
