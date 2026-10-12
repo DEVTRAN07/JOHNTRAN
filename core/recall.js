@@ -63,15 +63,34 @@ function extractIds(response) {
 
 function remember(threadId, key, response) {
   if (!key || !threadId) return;
-  const ids = extractIds(response);
+  // Zalo CHỈ trả { msgId } — cliMsgId phải tra lại qua getGroupChatHistory
+  const ids = extractMsgIdOnly(response);
   if (ids) {
-    memory.set(slot(threadId, key), { ...ids, sentAt: Date.now() });
-    debugFile(`NHỚ TIN | khung=${key} msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} response=${safeJson(response)}`);
+    memory.set(slot(threadId, key), { ...ids, cliMsgId: ids.cliMsgId || "", sentAt: Date.now() });
+    debugFile(`NHỚ TIN | khung=${key} msgId=${ids.msgId} cliMsgId=${ids.cliMsgId || "(sẽ tra lại)"} response=${safeJson(response)}`);
   } else {
-    const line = `KHÔNG ĐỌC ĐƯỢC ID | response=${safeJson(response)}`;
+    const line = `KHÔNG ĐỌC ĐƯỢC msgId | response=${safeJson(response)}`;
     logger.log(`[recall] ${line}`, "warn");
     debugFile(line);
   }
+}
+
+// Chỉ cần msgId là đủ để nhớ (cliMsgId có thể tra lại sau)
+function extractMsgIdOnly(response) {
+  if (!response || typeof response !== "object") return null;
+  const branches = [];
+  if (Array.isArray(response.message)) branches.push(...response.message);
+  else if (response.message) branches.push(response.message);
+  if (Array.isArray(response.attachment)) branches.push(...response.attachment);
+  else if (response.attachment) branches.push(response.attachment);
+  branches.push(response);
+
+  for (const item of branches) {
+    if (!item || typeof item !== "object") continue;
+    const msgId = item.msgId ?? item.messageId ?? item.globalMsgId;
+    if (msgId) return { msgId: String(msgId), cliMsgId: item.cliMsgId ? String(item.cliMsgId) : "" };
+  }
+  return null;
 }
 
 // Thu hồi tin đã nhớ. Trả về: true | "no-id" | "no-message" | "failed"
@@ -82,16 +101,29 @@ async function recall(api, threadId, key, type = 1) {
   memory.delete(slot(threadId, key));
   if (!api) return "failed";
 
+  // Zalo không trả cliMsgId → tra lại trong lịch sử nhóm bằng msgId đã biết
+  let cliMsgId = ids.cliMsgId;
+  if (!cliMsgId) {
+    const found = await findCliMsgId(api, threadId, ids.msgId);
+    if (found) {
+      cliMsgId = found.cliMsgId;
+      debugFile(`TRA LẠI ĐƯỢC | msgId=${ids.msgId} → cliMsgId=${cliMsgId}`);
+    } else {
+      debugFile(`TRA LẠI THẤT BẠI | không thấy msgId=${ids.msgId} trong lịch sử nhóm`);
+      return "no-id";
+    }
+  }
+
   // Cách 1: undo (thu hồi cho MỌI người trong nhóm)
   if (typeof api.undo === "function") {
     try {
-      const result = await api.undo({ msgId: ids.msgId, cliMsgId: ids.cliMsgId }, threadId, type);
-      const line = `undo OK | msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} | kết quả=${safeJson(result)}`;
+      const result = await api.undo({ msgId: ids.msgId, cliMsgId }, threadId, type);
+      const line = `undo OK | msgId=${ids.msgId} cliMsgId=${cliMsgId} | kết quả=${safeJson(result)}`;
       logger.log(`[recall] ${line}`, "info");
       debugFile(line);
       return true;
     } catch (error) {
-      const line = `undo THẤT BẠI | code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} thread=${threadId} type=${type} | phản hồi=${safeJson(error.data ?? error.response ?? null)}`;
+      const line = `undo THẤT BẠI | code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${cliMsgId} thread=${threadId} type=${type} | phản hồi=${safeJson(error.data ?? error.response ?? null)}`;
       logger.log(`[recall] ${line}`, "error");
       debugFile(line);
     }
@@ -111,6 +143,30 @@ async function recall(api, threadId, key, type = 1) {
     }
   }
   return "failed";
+}
+
+// Tra cliMsgId của tin bot vừa gửi bằng cách đọc lịch sử nhóm (Zalo không trả
+// cliMsgId trong response gửi tin). Thử 2 lần cho chắc (server cần index tin).
+async function findCliMsgId(api, threadId, msgId, tries = 2) {
+  if (typeof api.getGroupChatHistory !== "function") return null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const history = await api.getGroupChatHistory(threadId, 100);
+      const msgs = history?.groupMsgs || [];
+      const target = String(msgId);
+      for (const m of msgs) {
+        const d = m?.data || {};
+        if (String(d.msgId) === target) {
+          return { cliMsgId: String(d.cliMsgId ?? ""), uidFrom: String(d.uidFrom ?? "") };
+        }
+      }
+    } catch (error) {
+      logger.log(`[recall] getGroupChatHistory lỗi: ${error.message}`, "warn");
+      debugFile(`LỊCH SỬ NHÓM LỖI: ${error.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  return null;
 }
 
 function forget(threadId, key) {

@@ -60,12 +60,11 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
       replace: "recall_test" // nhớ id của tin này
     }, threadId, type);
 
-    const remembered = recall.memorySize() > 0;
-    if (!remembered) {
-      // Không lấy đủ id → báo rõ (xem log để biết field thiếu)
+    if (!recall.memorySize()) {
+      // Không lấy được cả msgId → không làm gì được
       return reply.error(
-        "❌ Không thu hồi được: Zalo không trả về đủ id (msgId + cliMsgId).\n" +
-        "Xem log bot dòng [recall] để biết chính xác field còn thiếu."
+        "❌ Không thu hồi được: Zalo không trả về id tin nhắn.\n" +
+        "Gõ /recall log rồi gửi nội dung cho admin để kiểm tra."
       );
     }
 
@@ -74,7 +73,11 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
 
     if (result === true) return reply.success("✅ Đã thu hồi tin thử thành công!");
     if (result === "no-message") return reply.error("Không còn tin nào để thu hồi (đã thu hồi trước đó).");
-    return reply.error(`Thu hồi thất bại (${result}). Xem log [recall] để biết lý do.`);
+    if (result === "no-id") return reply.error(
+      "❌ Không tra được cliMsgId trong lịch sử nhóm.\n" +
+      "Có thể bot chưa vào nhóm đủ lâu hoặc API bị chặn — gõ /recall log để xem."
+    );
+    return reply.error(`Thu hồi thất bại (${result}). Gõ /recall log để xem lý do.`);
   }
 
   return reply.error(`Dùng: ${global.config.prefix}recall test | status`);
