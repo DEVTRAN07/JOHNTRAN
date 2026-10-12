@@ -2,7 +2,7 @@
 //   /cardfb zuck  |  /cardfb 4  |  /cardfb https://www.facebook.com/zuck
 // Dữ liệu lấy qua scripts/social_info.py (curl_cffi giả lập TLS Chrome).
 const profile = require("../../core/canvas/profile");
-const { fetchSocial } = require("../../core/socialFetch");
+const { fetchSocial, explain } = require("../../core/socialFetch");
 
 module.exports.config = {
   name: "cardfb",
@@ -48,14 +48,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return api.sendMessage({ plain: true, msg: `❌ Không đọc được username từ: ${raw}` }, threadId, type);
   }
 
-  const info = await fetchSocial("facebook", target);
+  const { data: info, error, code } = await fetchSocial("facebook", target);
   if (!info) {
-    return api.sendMessage({
-      plain: true,
-      msg: `Không lấy được hồ sơ Facebook "${target}".\n` +
-           `Có thể hồ sơ riêng tư, bị hạn chế, hoặc đường dẫn không đúng.\n` +
-           `Thử: username (vd: zuck) hoặc link đầy đủ (facebook.com/zuck).`
-    }, threadId, type);
+    return api.sendMessage({ plain: true, msg: `❌ ${explain(code, target, "facebook")}` }, threadId, type);
   }
 
   const cardPath = await profile.renderProfile({

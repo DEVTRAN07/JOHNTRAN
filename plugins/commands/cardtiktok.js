@@ -3,7 +3,7 @@
 // Dữ liệu lấy qua scripts/social_info.py (curl_cffi giả lập TLS Chrome —
 // Node.js thuần bị Cloudflare chặn nên không lấy được).
 const profile = require("../../core/canvas/profile");
-const { fetchSocial } = require("../../core/socialFetch");
+const { fetchSocial, explain } = require("../../core/socialFetch");
 
 module.exports.config = {
   name: "cardtiktok",
@@ -49,14 +49,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return api.sendMessage({ plain: true, msg: `❌ Không đọc được username từ: ${raw}` }, threadId, type);
   }
 
-  const info = await fetchSocial("tiktok", target);
+  const { data: info, error, code } = await fetchSocial("tiktok", target);
   if (!info) {
-    return api.sendMessage({
-      plain: true,
-      msg: `Không lấy được hồ sơ TikTok @${target}.\n` +
-           `Có thể tài khoản không tồn tại, bị riêng tư, hoặc TikTok đang chặn.\n` +
-           `Thử lại sau ít phút nhé.`
-    }, threadId, type);
+    return api.sendMessage({ plain: true, msg: `❌ ${explain(code, target, "tiktok")}` }, threadId, type);
   }
 
   const cardPath = await profile.renderProfile({

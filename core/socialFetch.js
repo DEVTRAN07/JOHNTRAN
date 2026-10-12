@@ -13,7 +13,8 @@ const SCRIPT = path.join(__dirname, "..", "scripts", "social_info.py");
 /**
  * @param {"tiktok"|"facebook"} platform
  * @param {string} target  username / id / URL
- * @returns {Promise<object|null>}  dữ liệu hồ sơ hoặc null
+ * @returns {Promise<{data?: object, error?: string, code?: string}>}
+ *   code: not_found | empty | private | blocked | unknown
  */
 function fetchSocial(platform, target) {
   return new Promise((resolve) => {
@@ -24,23 +25,41 @@ function fetchSocial(platform, target) {
       const lines = text.split("\n").filter((l) => l.trim().startsWith("{"));
       if (!lines.length) {
         if (stderr) console.error("social_info.py stderr:", stderr.split("\n").slice(-2).join(" "));
-        resolve(null);
+        resolve({ error: "Chưa cài curl_cffi (hoặc Python lỗi)", code: "blocked" });
         return;
       }
       try {
         const parsed = JSON.parse(lines[lines.length - 1]);
         if (parsed.ok && parsed.data) {
           logger.log(`[social] ${platform}/${target} → ${parsed.data.nickname || parsed.data.name || "OK"}`, "verbose");
-          resolve(parsed.data);
+          resolve({ data: parsed.data });
           return;
         }
-        logger.log(`[social] ${platform}/${target} thất bại: ${parsed.error || "không rõ"}`, "warn");
+        logger.log(`[social] ${platform}/${target} thất bại [${parsed.code}]: ${parsed.error}`, "warn");
+        resolve({ error: parsed.error || "Không lấy được hồ sơ", code: parsed.code || "unknown" });
       } catch (error) {
         console.error("social_info.py parse lỗi:", error.message);
+        resolve({ error: "Phản hồi không đọc được", code: "unknown" });
       }
-      resolve(null);
     });
   });
+}
+
+/** Thông điệp lỗi dễ hiểu theo mã lỗi */
+function explain(code, target, platform) {
+  const label = platform === "facebook" ? "Facebook" : "TikTok";
+  switch (code) {
+    case "not_found":
+      return `Không tìm thấy @${target} trên ${label}.\nKiểm tra lại username (phần sau dấu @ trong link profile).`;
+    case "empty":
+      return `@${target} chưa có nội dung công khai hoặc không tồn tại trên ${label}.`;
+    case "private":
+      return `Hồ sơ ${target} ở chế độ riêng tư nên không xem được.`;
+    case "blocked":
+      return `${label} đang chặn yêu cầu (hoặc server chưa cài curl_cffi). Thử lại sau ít phút.`;
+    default:
+      return `Không lấy được hồ sơ ${target} trên ${label}. Thử lại sau ít phút.`;
+  }
 }
 
 // Kiểm tra môi trường có chạy được không (dùng cho /cardtiktok debug)
@@ -58,4 +77,4 @@ function checkEnvironment() {
   });
 }
 
-module.exports = { fetchSocial, checkEnvironment };
+module.exports = { fetchSocial, checkEnvironment, explain };

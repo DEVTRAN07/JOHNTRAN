@@ -47,12 +47,24 @@ def parse_count(value):
     return int(float(m.group(1)) * factor)
 
 
+class SocialError(Exception):
+    """Lỗi kèm mã để Node hiển thị đúng nguyên nhân"""
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def tiktok(username):
     url = f"https://www.tiktok.com/@{username}"
     resp = get(url)
     html = resp.text
-    if resp.status_code != 200 or "Couldn" in html[:3000] and "followerCount" not in html:
-        raise Exception("Khong tim thay tai khoan")
+    # TikTok không tìm thấy user → trả statusCode 10202 trong JSON.
+    # CHÚ Ý: không dùng text "Couldn't find this account" — chuỗi đó nằm sẵn
+    # trong bundle JS của mọi trang (kể cả trang user hợp lệ).
+    if '"statusCode":10202' in html or '"statusCode": 10202' in html:
+        raise SocialError("not_found", f"@{username} khong ton tai tren TikTok")
+    if resp.status_code != 200:
+        raise SocialError("blocked", f"TikTok tra ve HTTP {resp.status_code}")
 
     out = {"source": "tiktok", "username": username}
 
@@ -71,7 +83,7 @@ def tiktok(username):
                     raise Exception(f"@{username} không tồn tại")
                 st = stats if isinstance(stats, dict) else {}
                 if not (st.get("followerCount") or st.get("heartCount") or st.get("videoCount")):
-                    raise Exception(f"@{username} không tồn tại (hồ sơ trống)")
+                    raise SocialError("empty", f"@{username} chua co noi dung cong khai")
                 out.update({
                     "nickname": user.get("nickname"),
                     "username": user.get("uniqueId"),
@@ -108,7 +120,7 @@ def tiktok(username):
     if found and found != username.lower():
         raise Exception(f"@{username} không tồn tại")
     if not (out.get("followers") or out.get("hearts") or out.get("videos")):
-        raise Exception(f"@{username} không tồn tại (hồ sơ trống)")
+        raise SocialError("empty", f"@{username} chua co noi dung cong khai")
     return out
 
 
@@ -137,7 +149,7 @@ def facebook(target):
     out["link"] = url
 
     if not out.get("name") or out["name"] == "Facebook":
-        raise Exception("Khong doc duoc ho so (private/blocked)")
+        raise SocialError("private", "Ho so rieng tu hoac bi han che")
     return out
 
 
@@ -150,8 +162,11 @@ def main():
         info = tiktok(target) if platform.startswith("tiktok") else facebook(target)
         print(json.dumps({"ok": True, "data": info}, ensure_ascii=False))
         return 0
+    except SocialError as e:
+        print(json.dumps({"ok": False, "code": e.code, "error": str(e)[:160]}, ensure_ascii=False))
+        return 2
     except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)[:160]}, ensure_ascii=False))
+        print(json.dumps({"ok": False, "code": "unknown", "error": str(e)[:160]}, ensure_ascii=False))
         return 2
 
 
