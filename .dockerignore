@@ -13,6 +13,4 @@ qr.png
 .env.*
 *.log
 .DS_Store
-# scripts/*.js là test tạm, không cần trong image
-# NHƯNG scripts/social_info.py BẮT BUỘC (lệnh /tiktok và /infofb gọi Python)
-scripts/*.js
+scripts

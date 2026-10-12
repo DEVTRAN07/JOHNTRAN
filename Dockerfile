@@ -15,8 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     ca-certificates \
     && pip3 install --break-system-packages -U --pre yt-dlp \
-    && pip3 install --break-system-packages -U curl_cffi \
-    && rm -rf /var/lib/apt/lists/* && yt-dlp --version && python3 -c "import curl_cffi; print('curl_cffi OK')" 
+    && rm -rf /var/lib/apt/lists/* && yt-dlp --version
 
 WORKDIR /app
 # copy package.json + vendor TRƯỚC để npm ci tìm thấy zalo-client (file:vendor/zalo-client)
