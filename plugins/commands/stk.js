@@ -1,80 +1,79 @@
-// /stk — gửi sticker Zalo theo cateId + stickerId
-//   /stk <cateId> <stickerId>      gửi sticker tĩnh
-//   /stk find <từ khóa>            tìm sticker rồi chọn
-//   /stk list <từ khóa>            danh sách id để dùng
-// Aliases: sticker
-const stickerStore = require("../../core/stickerStore");
+// /stk — Sticker từ ảnh/GIF/video/sticker (reply)
+//   reply sticker  → gửi lại chính sticker đó (sendSticker)
+//   reply ảnh/gif  → gửi lại dạng ảnh/GIF
+//   reply video    → gửi lại dạng video
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { parseQuote, hint } = require("../../core/mediaReply");
 
 module.exports.config = {
   name: "stk",
-  aliases: ["sticker", "stick"],
-  version: "3.0.0",
+  aliases: ["sticker"],
+  version: "4.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Gửi sticker Zalo theo id hoặc tìm sticker",
+  description: "Sticker từ ảnh/GIF/video/sticker (reply)",
   category: "Tiện ích",
-  usage: "stk <cateId> <stickerId> | stk find <từ khóa>",
-  cooldowns: 3,
+  usage: "stk (reply ảnh/gif/video/sticker)",
+  cooldowns: 5,
   dependencies: {}
 };
 
-module.exports.run = async function ({ api, event, args, reply }) {
+// Tải file về rồi gửi lại theo đúng loại
+async function sendFile(api, threadId, type, url, label, gif = false) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jt_stk_"));
+  try {
+    const http = require("../../core/http");
+    const { buffer } = await http.getBuffer(url, { timeout: 90000 });
+    if (!buffer || !buffer.length) throw new Error("File rỗng");
+
+    const ext = gif ? "gif" : (String(url).split("?")[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] || "jpg").toLowerCase();
+    const filePath = path.join(tmpDir, `reply_${Date.now()}.${ext}`);
+    fs.writeFileSync(filePath, buffer);
+
+    await api.sendMessage({ msg: label, attachments: [filePath] }, threadId, type);
+    return true;
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* bỏ qua */ }
+  }
+}
+
+module.exports.run = async function ({ api, event }) {
   const { threadId, type } = event;
 
-  // ===== TÌM STICKER =====
-  const sub = (args[0] || "").toLowerCase();
-  if (["find", "search", "tim"].includes(sub)) {
-    const keyword = args.slice(1).join(" ").trim();
-    if (!keyword) return reply.error("Nhập từ khóa: /stk find <từ khóa>");
-    let list;
+  const media = parseQuote(event);
+  if (!media) {
+    return api.sendMessage({
+      plain: true,
+      msg: "❌ Hãy reply tin ảnh/GIF/video/sticker rồi gõ /stk"
+    }, threadId, type);
+  }
+
+  // 1) Sticker gốc → gửi lại bằng sendSticker (giữ nguyên chất lượng)
+  if (media.isSticker && media.sticker.cateId > 0) {
     try {
-      list = await api.searchSticker(keyword, 15);
+      await api.sendSticker({
+        id: media.sticker.id,
+        cateId: media.sticker.cateId,
+        type: media.sticker.type || 0
+      }, threadId, type);
+      return;
     } catch (error) {
-      console.error("stk find:", error.message);
-      return reply.error(`Tìm sticker thất bại: ${error.message}`);
+      console.error("stk (sticker gốc):", error.message);
+      // rơi xuống gửi file bên dưới nếu có URL
     }
-    if (!Array.isArray(list) || !list.length) return reply.error(`Không tìm thấy sticker cho "${keyword}".`);
-    const shown = list.slice(0, 10).map((s, i) =>
-      `${i + 1}. id=${s.id} cate=${s.cateId} type=${s.type}`
-    ).join("\n");
-    stickerStore.setSearch(event.threadId, event.data.uidFrom, list.slice(0, 10));
-    return reply.info(shown, {
-      title: `🔎 STICKER: ${keyword}`,
-      subtitle: `Gõ /stk <số> để gửi`,
-      footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"
-    });
   }
 
-  // ===== CHỌN TỪ KẾT QUẢ TÌM =====
-  if (/^\d{1,2}$/.test(args[0] || "")) {
-    const list = stickerStore.getSearch(event.threadId, event.data.uidFrom);
-    const index = parseInt(args[0], 10) - 1;
-    const target = list?.[index];
-    if (!target) return reply.error("Số không có trong kết quả. Gõ /stk find <từ khóa> trước.");
-    try {
-      await api.sendSticker({ id: target.id, cateId: target.cateId, type: target.type || 0 }, threadId, type);
-    } catch (error) {
-      return reply.error(`Gửi sticker thất bại: ${error.message}`);
-    }
-    return;
-  }
+  // 2) GIF/video → gửi lại file
+  const url = media.video || media.file || media.image;
+  if (!url) return api.sendMessage({ plain: true, msg: hint("sticker") }, threadId, type);
 
-  // ===== GỬI TRỰC TIẾP: /stk <cateId> <stickerId> =====
-  const [a, b] = args;
-  if (!a || !b) {
-    return reply.error(
-      `Dùng: /stk <cateId> <stickerId>\n` +
-      `Hoặc: /stk find <từ khóa> để tìm id`
-    );
-  }
-  if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) {
-    return reply.error("cateId và stickerId phải là các con số.");
-  }
-
+  const isGif = media.isGif || /\.gif(\?|$)/i.test(url) || /gif/i.test(String(media.ext || ""));
   try {
-    await api.sendSticker({ id: Number(b), cateId: Number(a), type: 0 }, threadId, type);
+    await sendFile(api, threadId, type, url, "", isGif);
   } catch (error) {
     console.error("stk:", error.message);
-    return reply.error(`Gửi sticker thất bại: ${error.message}`);
+    return api.sendMessage({ plain: true, msg: `❌ Gửi sticker thất bại: ${error.message}` }, threadId, type);
   }
 };

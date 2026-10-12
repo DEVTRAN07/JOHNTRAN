@@ -262,11 +262,11 @@ assets/
 |---|---|
 | `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
 | `/cardzalo [uid \| @tag]` | Thẻ hồ sơ người dùng Zalo (ảnh canvas) |
-| `/getlink` (reply tin) hoặc `/getlink <url>` | Lấy link media/URL từ tin nhắn |
-| `/getvideo <url>` | Tải video từ link (yt-dlp) rồi gửi vào nhóm |
-| `/getvoice <url>` | Tải audio từ link rồi gửi dạng voice |
-| `/stk <cateId> <stickerId>` | Gửi sticker Zalo theo id |
-| `/stkvd <cateId> <stickerId>` | Gửi sticker ĐỘNG (video sticker) theo id |
+| `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
+| `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
+| `/getvd` (reply video) | Tải video gốc → upload asyncfile → gửi video gốc (không nén) |
+| `/stk` (reply ảnh/GIF/video/sticker) | Gửi lại dạng sticker |
+| `/stkvd` (reply GIF/video/sticker động) | Gửi sticker động (chỉ loại động) |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm / xem trạng thái (kèm báo API TikTok còn sống) |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |
 | `/events [tên] on\|off` | Bật/tắt **bộ sự kiện tự động** (mặc định tắt) |

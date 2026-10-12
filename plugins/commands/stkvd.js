@@ -1,86 +1,84 @@
-// /stkvd — gửi sticker ĐỘNG (video sticker) theo cateId + stickerId
-//   /stkvd <cateId> <stickerId>
-//   /stkvd find <từ khóa>   tìm sticker động rồi chọn
-// Sticker động Zalo dùng type = 1 (animated) — tìm bằng searchSticker.
-const stickerStore = require("../../core/stickerStore");
+// /stkvd — Sticker ĐỘNG (chỉ GIF / video / sticker động) — reply
+//   reply sticker động → gửi lại bằng sendSticker (type 1)
+//   reply GIF/video    → gửi lại dạng GIF/video
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { parseQuote, hint } = require("../../core/mediaReply");
 
 module.exports.config = {
   name: "stkvd",
-  aliases: ["stkvideo", "stickervd"],
-  version: "3.0.0",
+  aliases: ["stkvideo"],
+  version: "4.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Gửi sticker động (video sticker) theo id",
+  description: "Chỉ GIF / video / sticker động (reply)",
   category: "Tiện ích",
-  usage: "stkvd <cateId> <stickerId> | stkvd find <từ khóa>",
-  cooldowns: 3,
+  usage: "stkvd (reply gif/video/sticker động)",
+  cooldowns: 5,
   dependencies: {}
 };
 
-// Sticker động: Zalo phân loại qua type.
-// type = ảnh tĩnh (0), type = 1 sticker động (animated/video sticker)
+// Sticker động Zalo = type 1
 const ANIMATED_TYPE = 1;
 
-module.exports.run = async function ({ api, event, args, reply }) {
+// Từ chối ảnh tĩnh (không phải GIF/video/sticker động)
+function isStaticImage(url, ext) {
+  return /\.(jpg|jpeg|png|webp|bmp)(\?|$)/i.test(url) && !/gif/i.test(String(ext || ""));
+}
+
+module.exports.run = async function ({ api, event }) {
   const { threadId, type } = event;
 
-  // ===== TÌM STICKER ĐỘNG =====
-  const sub = (args[0] || "").toLowerCase();
-  if (["find", "search", "tim"].includes(sub)) {
-    const keyword = args.slice(1).join(" ").trim();
-    if (!keyword) return reply.error("Nhập từ khóa: /stkvd find <từ khóa>");
-    let list;
+  const media = parseQuote(event);
+  if (!media) {
+    return api.sendMessage({
+      plain: true,
+      msg: "❌ Hãy reply tin GIF/video/sticker động rồi gõ /stkvd"
+    }, threadId, type);
+  }
+
+  // 1) Sticker động gốc → gửi lại nguyên (type 1)
+  if (media.isSticker && media.sticker.cateId > 0 && media.sticker.type === ANIMATED_TYPE) {
     try {
-      list = await api.searchSticker(keyword, 30);
+      await api.sendSticker({
+        id: media.sticker.id,
+        cateId: media.sticker.cateId,
+        type: ANIMATED_TYPE
+      }, threadId, type);
+      return;
     } catch (error) {
-      console.error("stkvd find:", error.message);
-      return reply.error(`Tìm sticker thất bại: ${error.message}`);
+      console.error("stkvd (sticker động):", error.message);
     }
-    if (!Array.isArray(list) || !list.length) return reply.error(`Không tìm thấy sticker cho "${keyword}".`);
-
-    // Chỉ giữ sticker động; nếu API không trả type thì giữ toàn bộ
-    const animated = list.filter((s) => Number(s?.type) === ANIMATED_TYPE);
-    const useList = animated.length ? animated : list;
-    const shown = useList.slice(0, 10).map((s, i) =>
-      `${i + 1}. id=${s.id} cate=${s.cateId} type=${s.type}${Number(s.type) === ANIMATED_TYPE ? " (động)" : ""}`
-    ).join("\n");
-    stickerStore.setSearch(`vd_${threadId}`, event.data.uidFrom, useList.slice(0, 10));
-    return reply.info(shown, {
-      title: `🎞️ STICKER ĐỘNG: ${keyword}`,
-      subtitle: "Gõ /stkvd <số> để gửi",
-      footer: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"
-    });
   }
 
-  // ===== CHỌN TỪ KẾT QUẢ TÌM =====
-  if (/^\d{1,2}$/.test(args[0] || "")) {
-    const list = stickerStore.getSearch(`vd_${threadId}`, event.data.uidFrom);
-    const target = list?.[parseInt(args[0], 10) - 1];
-    if (!target) return reply.error("Số không có trong kết quả. Gõ /stkvd find <từ khóa> trước.");
-    try {
-      await api.sendSticker({ id: Number(target.id), cateId: Number(target.cateId), type: Number(target.type) || ANIMATED_TYPE }, threadId, type);
-    } catch (error) {
-      return reply.error(`Gửi sticker động thất bại: ${error.message}`);
-    }
-    return;
+  const url = media.video || media.file || media.image;
+  if (!url) return api.sendMessage({ plain: true, msg: hint("gif") }, threadId, type);
+
+  // Ảnh tĩnh không phải sticker động → từ chối
+  if (!media.video && isStaticImage(url, media.ext)) {
+    return api.sendMessage({
+      plain: true,
+      msg: "❌ Lệnh này chỉ nhận GIF / video / sticker động.\n" +
+           "Nếu là ảnh tĩnh, dùng /stk."
+    }, threadId, type);
   }
 
-  // ===== GỬI TRỰC TIẾP =====
-  const [a, b] = args;
-  if (!a || !b) {
-    return reply.error(
-      `Dùng: /stkvd <cateId> <stickerId>\n` +
-      `Hoặc: /stkvd find <từ khóa> để tìm id`
-    );
-  }
-  if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) {
-    return reply.error("cateId và stickerId phải là các con số.");
-  }
-
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jt_stkvd_"));
   try {
-    await api.sendSticker({ id: Number(b), cateId: Number(a), type: ANIMATED_TYPE }, threadId, type);
+    const http = require("../../core/http");
+    const { buffer } = await http.getBuffer(url, { timeout: 90000 });
+    if (!buffer || !buffer.length) throw new Error("File rỗng");
+
+    const ext = String(url).split("?")[0].match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase() || (media.video ? "mp4" : "gif");
+    const filePath = path.join(tmpDir, `vd_${Date.now()}.${ext}`);
+    fs.writeFileSync(filePath, buffer);
+
+    await api.sendMessage({ msg: "", attachments: [filePath] }, threadId, type);
   } catch (error) {
     console.error("stkvd:", error.message);
-    return reply.error(`Gửi sticker động thất bại: ${error.message}`);
+    return api.sendMessage({ plain: true, msg: `❌ Gửi sticker động thất bại: ${error.message}` }, threadId, type);
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* bỏ qua */ }
   }
 };
