@@ -47,9 +47,13 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
       const path = require("path");
       // package.json của zalo-client có "exports" nên require.resolve subpath bị chặn
       // → đọc trực tiếp file vendor ĐANG CHẠY (node_modules trước, rồi vendor/)
+      // require("zalo-client") nạp dist/cjs (package.json exports.require)
+      // → kiểm tra file .cjs TRƯỚC, rồi tới .js
       const candidates = [
+        path.join(process.cwd(), "node_modules", "zalo-client", "dist", "cjs", "api", "sendMessage.cjs"),
+        path.join(process.cwd(), "vendor", "zalo-client", "dist", "cjs", "api", "sendMessage.cjs"),
+        path.join(__dirname, "..", "..", "vendor", "zalo-client", "dist", "cjs", "api", "sendMessage.cjs"),
         path.join(process.cwd(), "node_modules", "zalo-client", "dist", "api", "sendMessage.js"),
-        path.join(__dirname, "..", "..", "vendor", "zalo-client", "dist", "api", "sendMessage.js"),
         path.join(process.cwd(), "vendor", "zalo-client", "dist", "api", "sendMessage.js")
       ];
       const vendorFile = candidates.find((f) => fs.existsSync(f));
@@ -58,7 +62,8 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         const logOk = vendorSrc.includes("vendor-send");
         const ganOk = /result\.cliMsgId\s*=/.test(vendorSrc);
         const truyenOk = vendorSrc.split("send(handledData, clientId)").length - 1 >= 2;
-        vendorState = `${logOk && ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (log:${logOk ? "có" : "thiếu"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
+        const isCjs = vendorFile.endsWith(".cjs");
+        vendorState = `${logOk && ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (file:${isCjs ? "cjs" : "js"} log:${logOk ? "có" : "thiếu"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
       }
     } catch { /* bỏ qua */ }
     return api.sendMessage({
