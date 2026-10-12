@@ -66,9 +66,15 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         vendorState = `${logOk && ganOk && truyenOk ? "đã patch ✅" : "CHƯA patch ❌"} (file:${isCjs ? "cjs" : "js"} log:${logOk ? "có" : "thiếu"} gắn-id:${ganOk ? "có" : "thiếu"} truyền-clientId:${truyenOk ? "đủ" : "thiếu"})`;
       }
     } catch { /* bỏ qua */ }
+    // Cho biết bot đang chạy bản code nào (tránh kiểm tra nhầm bản cũ)
+    let build = "không đọc được";
+    try {
+      const bf = require("path").join(__dirname, "..", "..", "BUILD.txt");
+      if (fs.existsSync(bf)) build = fs.readFileSync(bf, "utf8").trim();
+    } catch { /* bỏ qua */ }
     return api.sendMessage({
       plain: true,
-      msg: `🔍 THU HỒI TIN\n• api.undo: ${hasUndo ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• api.deleteMessage: ${hasDelete ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• Tin đang nhớ: ${recall.memorySize()}\n• vendor: ${vendorState}`
+      msg: `🔍 THU HỒI TIN\n• Build: ${build}\n• api.undo: ${hasUndo ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• api.deleteMessage: ${hasDelete ? "sẵn sàng ✅" : "KHÔNG CÓ ❌"}\n• Tin đang nhớ: ${recall.memorySize()}\n• vendor: ${vendorState}`
     }, threadId, type);
   }
 
