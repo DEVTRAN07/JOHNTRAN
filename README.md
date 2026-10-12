@@ -261,7 +261,10 @@ assets/
 | Lệnh | Chức năng |
 |---|---|
 | `/getavt [uid \| @tag \| box]` | Lấy ảnh đại diện người dùng hoặc nhóm |
-| `/card [uid \| @tag]` và `/cardzalo [uid \| @tag]` | Thẻ hồ sơ layout Kenne400k: nền ảnh + **avatar tròn** + cột thông tin bên phải (cyan `#00FFFF` + link xanh lá `#00FF33`) |
+| `/card [uid \| @tag]` | Thẻ hồ sơ Zalo layout Kenne400k: nền ảnh + **avatar tròn** + cột thông tin bên phải (cyan `#00FFFF`, link xanh lá `#00FF33`) |
+| `/tiktok <username>` | Thẻ thông tin TikTok (followers, thích, video, xác minh) |
+| `/tiktok video <link>` / `tiktok music <link>` | Tải video/nhạc TikTok |
+| `/infofb <username \| uid \| link>` | Thẻ thông tin Facebook (không cần token) |
 | `/cardzalo [uid \| @tag]` | Thẻ hồ sơ người dùng Zalo (ảnh canvas) |
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
