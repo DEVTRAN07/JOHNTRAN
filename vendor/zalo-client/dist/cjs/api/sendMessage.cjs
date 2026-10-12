@@ -103,12 +103,7 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
                     body: each.body,
                     headers: each.headers,
                 });
-                const result = await factory.resolveResponse(ctx, response);
-                // Zalo không trả cliMsgId (chỉ có msgId) → gắn = clientId đã gửi
-                if (result && typeof result === "object" && !result.cliMsgId) {
-                    result.cliMsgId = each && each.clientId ? String(each.clientId) : (clientId !== undefined ? String(clientId) : undefined);
-                }
-                return result;
+                return await factory.resolveResponse(ctx, response);
             })());
         }
         return await Promise.all(requests);
@@ -429,6 +424,16 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
      *
      * @throws {ZaloApiError | ZaloApiMissingImageMetadataGetter}
      */
+    // Zalo chỉ trả { msgId } — gắn cliMsgId = clientId đã gửi để sau này thu hồi.
+    // Không được throw: gửi tin là chính, thu hồi là phụ.
+    function attachCliMsgId(target) {
+        try {
+            const items = Array.isArray(target) ? target : [target];
+            items.forEach((item, index) => {
+                if (item && typeof item === "object" && !item.cliMsgId) item.cliMsgId = String(clientId + index);
+            });
+        } catch { }
+    }
     return async function sendMessage(message, threadId, type = Enum.ThreadType.User) {
         if (!message)
             throw new errors.ZaloApiError("Missing message content");
@@ -458,17 +463,20 @@ const sendMessageFactory = factory.apiFactory()((api, ctx, utils$1) => {
                 // send message and attachment separately
                 await handleMessage(message, threadId, type).then(async (data) => {
                     responses.message = (await send(data, clientId))[0];
+                    attachCliMsgId(responses.message);
                 });
                 msg = "";
                 mentions = undefined;
             }
             const handledData = await handleAttachment({ msg, mentions, attachments, quote, ttl, urgency }, threadId, type);
             responses.attachment = await send(handledData, clientId);
+            attachCliMsgId(responses.attachment);
             msg = "";
         }
         if (msg.length > 0) {
             const handledData = await handleMessage(message, threadId, type);
             responses.message = (await send(handledData, clientId))[0];
+            attachCliMsgId(responses.message);
         }
         return responses;
     };

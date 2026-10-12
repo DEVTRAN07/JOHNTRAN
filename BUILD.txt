@@ -1,1 +1,1 @@
-commit: 8bad0f0 (chore: BUILD.txt + /recall status hiện phiên bản đang chạy (tránh kiểm tra nhầm bản cũ))
+commit: d070ffa (fix(vendor): gắn cliMsgId ở tầng ngoài có try/catch — sửa lỗi Assignment to constant trên Render)
