@@ -108,9 +108,14 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
         console.error("Lỗi render menu:", error.message);
         // Báo lỗi ra chat để biết ngay (console.log trên Render khó xem)
         try {
+            const stack = String(error.stack || "")
+                .split("\n")
+                .filter((l) => l.includes("core/canvas") || l.includes("menu"))
+                .slice(0, 3)
+                .join("\n");
             await api.sendMessage({
                 plain: true,
-                msg: `⚠️ Không render được ảnh menu: ${error.message}\n(Dạng text hiển thị tạm)`
+                msg: `⚠️ Không render được ảnh menu: ${error.message}\n${stack}\n(Dạng text hiển thị tạm)`
             }, threadId, type);
         } catch { /* bỏ qua */ }
         await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
