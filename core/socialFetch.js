@@ -52,6 +52,8 @@ function explain(code, target, platform) {
     case "not_found":
       return `Không tìm thấy @${target} trên ${label}.\nKiểm tra lại username (phần sau dấu @ trong link profile).`;
     case "empty":
+    case "not_found":
+    case "blocked":
       if (platform === "tiktok") {
         return `Không tìm thấy @${target} trên TikTok.\n\n` +
                `Có thể do:\n` +

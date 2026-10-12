@@ -260,38 +260,23 @@ def fetch_with_retry(platform, target, tries=2):
         return cached
 
     fn = tiktok if platform == "tiktok" else facebook
-    # TikTok username không cho phép mọi ký tự người dùng hay dùng (dấu chấm,
-    # gạch dưới...) — nếu thất bại thì thử biến thể đã bỏ dấu chấm/gạch dưới.
-    variants = [target]
-    if platform == "tiktok":
-        stripped = re.sub(r"[._]", "", target)
-        if stripped and stripped != target:
-            variants.append(stripped)
-
+    # KHÔNG tự đoán biến thể username (bỏ "_"/"."): tìm nhầm user khác tệ
+    # hơn báo lỗi. Bot chỉ báo "không tìm thấy" và hướng dẫn copy username
+    # chính xác từ link profile.
     last = None
-    for v in variants:
-        blocked = False
-        for i in range(tries):
-            try:
-                data = fn(v)
-                if v != target:
-                    data["_matched_alias"] = v
-                cache_put(f"{platform}:{v.lower()}", data)
-                cache_put(key, data)
-                return data
-            except SocialError as e:
-                last = e
-                # Bị chặn (209002) → KHÔNG thử alias (sẽ tìm nhầm user khác),
-                # đợi lâu hơn rồi thử lại. Chỉ "không tồn tại" (10202) mới thử alias.
-                if e.code == "blocked":
-                    blocked = True
-                    if i < tries - 1:
-                        time.sleep(2.5)
-                    continue
+    for i in range(tries):
+        try:
+            data = fn(target)
+            cache_put(key, data)
+            return data
+        except SocialError as e:
+            last = e
+            if e.code == "blocked":
                 if i < tries - 1:
-                    time.sleep(1.2)
-        if blocked:
-            raise last  # bị chặn → dừng, báo lỗi thay vì đoán user khác
+                    time.sleep(2.5)
+                continue
+            if i < tries - 1:
+                time.sleep(1.2)
     raise last
 
 
