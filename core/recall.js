@@ -14,6 +14,15 @@ const memory = new Map(); // `${threadId}|${key}` → { msgId, cliMsgId, sentAt 
 
 const slot = (threadId, key) => `${threadId}|${key}`;
 
+function safeJson(value) {
+  try {
+    const text = JSON.stringify(value);
+    return text && text.length > 600 ? text.slice(0, 600) + "..." : (text || String(value));
+  } catch {
+    return String(value);
+  }
+}
+
 // Quét MỌI nhánh của response để lấy msgId + cliMsgId (response có 2 nhánh:
 // message — tin text; attachment — ảnh/video/voice).
 function extractIds(response) {
@@ -31,8 +40,8 @@ function extractIds(response) {
     const cliMsgId = item.cliMsgId ?? item.clientMsgId ?? item.clientId ?? item.cliMsgId2;
     if (msgId && cliMsgId) return { msgId: String(msgId), cliMsgId: String(cliMsgId) };
     if (msgId && !cliMsgId) {
-      // Có nửa id → log để biết chính xác field thiếu
-      logger.log(`[recall] Response có msgId=${msgId} nhưng KHÔNG có cliMsgId → không thu hồi được. Field: ${Object.keys(item).join(", ")}`, "warn");
+      // Có nửa id → log NGUYÊN VĂN response để biết chính xác Zalo trả gì
+      logger.log(`[recall] Response có msgId=${msgId} nhưng KHÔNG có cliMsgId. NGUYÊN VĂN RESPONSE: ${safeJson(item)}`, "warn");
       return null;
     }
   }
@@ -45,6 +54,8 @@ function remember(threadId, key, response) {
   if (ids) {
     memory.set(slot(threadId, key), { ...ids, sentAt: Date.now() });
     logger.log(`[recall] Đã nhớ tin ${ids.msgId} (khung "${key}")`, "verbose");
+  } else {
+    logger.log(`[recall] Không đọc được id từ response: ${safeJson(response)}`, "warn");
   }
 }
 
@@ -59,11 +70,11 @@ async function recall(api, threadId, key, type = 1) {
   // Cách 1: undo (thu hồi cho MỌI người trong nhóm)
   if (typeof api.undo === "function") {
     try {
-      await api.undo({ msgId: ids.msgId, cliMsgId: ids.cliMsgId }, threadId, type);
-      logger.log(`[recall] Đã thu hồi tin ${ids.msgId} (khung "${key}")`, "info");
+      const result = await api.undo({ msgId: ids.msgId, cliMsgId: ids.cliMsgId }, threadId, type);
+      logger.log(`[recall] undo OK → ${safeJson(result)}`, "info");
       return true;
     } catch (error) {
-      logger.log(`[recall] undo thất bại (${error.message}) → thử deleteMessage onlyMe`, "warn");
+      logger.log(`[recall] undo THẤT BẠI: code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} | phản hồi: ${safeJson(error.data ?? error.response ?? null)}`, "error");
     }
   }
 
