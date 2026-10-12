@@ -9,6 +9,17 @@
 // Nếu response không trả cliMsgId thì KHÔNG THỂ thu hồi — module sẽ log rõ để
 // biết, chứ không đoán mò.
 const logger = require("../utils/logger");
+const fs = require("fs");
+const path = require("path");
+
+// Ghi debug thu hồi ra file để dễ kiểm tra trên Render/panel (khỏi lục terminal)
+const DEBUG_LOG = path.join(__dirname, "..", "data", "recall_debug.log");
+function debugFile(text) {
+  try {
+    fs.mkdirSync(path.dirname(DEBUG_LOG), { recursive: true });
+    fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${text}\n`);
+  } catch { /* bỏ qua */ }
+}
 
 const memory = new Map(); // `${threadId}|${key}` → { msgId, cliMsgId, sentAt }
 
@@ -41,7 +52,9 @@ function extractIds(response) {
     if (msgId && cliMsgId) return { msgId: String(msgId), cliMsgId: String(cliMsgId) };
     if (msgId && !cliMsgId) {
       // Có nửa id → log NGUYÊN VĂN response để biết chính xác Zalo trả gì
-      logger.log(`[recall] Response có msgId=${msgId} nhưng KHÔNG có cliMsgId. NGUYÊN VĂN RESPONSE: ${safeJson(item)}`, "warn");
+      const line = `THIẾU cliMsgId | msgId=${msgId} | response=${safeJson(item)}`;
+      logger.log(`[recall] ${line}`, "warn");
+      debugFile(line);
       return null;
     }
   }
@@ -53,9 +66,11 @@ function remember(threadId, key, response) {
   const ids = extractIds(response);
   if (ids) {
     memory.set(slot(threadId, key), { ...ids, sentAt: Date.now() });
-    logger.log(`[recall] Đã nhớ tin ${ids.msgId} (khung "${key}")`, "verbose");
+    debugFile(`NHỚ TIN | khung=${key} msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} response=${safeJson(response)}`);
   } else {
-    logger.log(`[recall] Không đọc được id từ response: ${safeJson(response)}`, "warn");
+    const line = `KHÔNG ĐỌC ĐƯỢC ID | response=${safeJson(response)}`;
+    logger.log(`[recall] ${line}`, "warn");
+    debugFile(line);
   }
 }
 
@@ -71,10 +86,14 @@ async function recall(api, threadId, key, type = 1) {
   if (typeof api.undo === "function") {
     try {
       const result = await api.undo({ msgId: ids.msgId, cliMsgId: ids.cliMsgId }, threadId, type);
-      logger.log(`[recall] undo OK → ${safeJson(result)}`, "info");
+      const line = `undo OK | msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} | kết quả=${safeJson(result)}`;
+      logger.log(`[recall] ${line}`, "info");
+      debugFile(line);
       return true;
     } catch (error) {
-      logger.log(`[recall] undo THẤT BẠI: code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} | phản hồi: ${safeJson(error.data ?? error.response ?? null)}`, "error");
+      const line = `undo THẤT BẠI | code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${ids.cliMsgId} thread=${threadId} type=${type} | phản hồi=${safeJson(error.data ?? error.response ?? null)}`;
+      logger.log(`[recall] ${line}`, "error");
+      debugFile(line);
     }
   }
 

@@ -19,3 +19,6 @@ ecosystem.config.cjs
 .env.*
 .env*
 làm các chức năng theo ảnh/
+
+# log debug thu hồi
+data/recall_debug.log
