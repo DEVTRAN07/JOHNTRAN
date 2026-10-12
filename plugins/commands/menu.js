@@ -133,6 +133,8 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
         return navigate({ api, event, Threads, action: content, senderId: event.data.uidFrom });
     }
 
+    logger.log(`[menu] nhóm ${threadId} gõ "${content}" nhưng CHƯA mở menu (thiếu menu_page)`, "warn");
+
     // Menu chưa mở: nếu đang có kết quả NHẠC thì nhường cho nhạc (listen.js xử lý)
     try {
       const music = require("../../core/music");

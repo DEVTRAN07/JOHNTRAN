@@ -38,25 +38,25 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const shown = tracks.slice(0, perPage);
   const rows = Math.max(1, Math.ceil(shown.length / cols));
   const cardW = (W - S(50) - S(18) * (cols - 1)) / cols;
-  const cardH = S(300);
-  const gapX = S(18);
-  const gapY = S(16);
-  const headerH = S(110);
-  const footerH = S(118);
+  const cardH = S(232);
+  const gapX = S(16);
+  const gapY = S(14);
+  const headerH = S(96);
+  const footerH = S(104);
   const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
 
   // ===== Header =====
-  text(ctx, "🔎", S(22), S(52), { size: 32, color: PALETTE.accent });
-  text(ctx, theme.truncate(ctx, query, W - S(130)), W / 2, S(52), {
-    size: 32, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(130)
+  text(ctx, "🔎", S(22), S(46), { size: 28, color: PALETTE.accent });
+  text(ctx, theme.truncate(ctx, query, W - S(130)), W / 2, S(46), {
+    size: 28, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(130)
   });
   text(
     ctx,
     `🎵 ${shown.length} bài  •  📡 ${source || "SoundCloud"}  •  🔥 nghe nhiều nhất`,
-    W / 2, S(84),
+    W / 2, S(74),
     { size: 16, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 
@@ -110,17 +110,17 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   });
 
   // ===== Footer điều hướng: 3 nút emoji =====
-  const footY = H - footerH + S(16);
+  const footY = H - footerH + S(12);
   const btnW = (W - S(50) - S(20)) / 3;
-  button(ctx, S(25), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
-  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(30), { size: 22, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
-  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
+  button(ctx, S(25), footY, btnW, S(42), "⬅ PREV", PALETTE.gold);
+  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(27), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
+  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(42), "❌ OUT", PALETTE.red);
+  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(42), "NEXT ➡", PALETTE.green);
 
   text(
     ctx,
     `⌨️ ${global.config.prefix}scl <số> để tải bài  •  gõ trần next / prev / out`,
-    W / 2, footY + S(84),
+    W / 2, footY + S(74),
     { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 

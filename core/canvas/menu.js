@@ -16,23 +16,23 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   const cols = 3;
   const rows = Math.ceil(Math.min(commands.page.length, perPage) / cols);
   const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
-  const cardH = S(170);
-  const gapX = S(24);
-  const gapY = S(18);
-  const headerH = S(120);
-  const footerH = S(118);
+  const cardH = S(142);
+  const gapX = S(22);
+  const gapY = S(14);
+  const headerH = S(104);
+  const footerH = S(104);
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
 
   // ===== Header: icon + tên bot (font Display) + info (font Mono) =====
-  text(ctx, "⚡", S(22), S(56), { size: 34, color: PALETTE.accent });
-  text(ctx, botName, W / 2, S(56), { size: 38, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
+  text(ctx, "⚡", S(22), S(50), { size: 30, color: PALETTE.accent });
+  text(ctx, botName, W / 2, S(50), { size: 33, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
   ctx.font = font(17, "JT-Mono");
   ctx.fillStyle = PALETTE.ink2;
   ctx.textAlign = "center";
-  ctx.fillText(`🕐 ${uptimeText}  •  🔑 ${prefix}  •  📋 ${commands.total} lệnh`, W / 2, S(92));
+  ctx.fillText(`🕐 ${uptimeText}  •  🔑 ${prefix}  •  📋 ${commands.total} lệnh`, W / 2, S(82));
   ctx.textAlign = "left";
 
   // avatar tròn góc phải
@@ -41,18 +41,18 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
       const { buffer } = await require("../http").getBuffer(avatarUrl, { timeout: 12000, retries: 1 });
       const { loadImage } = require("canvas");
       const img = await loadImage(buffer);
-      const size = S(78);
+      const size = S(64);
       const ax = W - S(22) - size;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(ax + size / 2, S(20) + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.arc(ax + size / 2, S(16) + size / 2, size / 2, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(img, ax, S(20), size, size);
+      ctx.drawImage(img, ax, S(16), size, size);
       ctx.restore();
       ctx.strokeStyle = PALETTE.accent;
       ctx.lineWidth = S(2.5);
       ctx.beginPath();
-      ctx.arc(ax + size / 2, S(20) + size / 2, size / 2 + 2, 0, Math.PI * 2);
+      ctx.arc(ax + size / 2, S(16) + size / 2, size / 2 + 2, 0, Math.PI * 2);
       ctx.stroke();
     } catch { /* bỏ qua */ }
   }
@@ -68,34 +68,34 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
     panel(ctx, x, y, cardW, cardH, S(14));
 
     // emoji + tên lệnh (font Round cho thân thiện)
-    text(ctx, commandEmoji(cmd.name), x + S(16), y + S(44), { size: 26 });
-    text(ctx, cmd.name, x + S(56), y + S(42), { size: 25, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(80) });
+    text(ctx, commandEmoji(cmd.name), x + S(16), y + S(40), { size: 24 });
+    text(ctx, cmd.name, x + S(52), y + S(38), { size: 22, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(76) });
 
     // cách dùng (font Mono cho rõ prefix)
-    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + S(16), y + S(84), { size: 16, family: "JT-Mono", color: PALETTE.mute, maxWidth: cardW - S(32) });
+    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + S(16), y + S(76), { size: 14, family: "JT-Mono", color: PALETTE.mute, maxWidth: cardW - S(32) });
 
     // nhóm lệnh
-    text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(118), { size: 13, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
+    text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(108), { size: 12, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
   });
 
   // ===== Footer điều hướng: 3 nút emoji =====
-  const footY = H - footerH + S(16);
+  const footY = H - footerH + S(12);
   const btnW = (W - S(50) - S(20)) / 3;
-  button(ctx, S(25), footY, btnW, S(46), "⬅ PREV", PALETTE.gold);
-  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(30), { size: 22, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(46), "❌ OUT", PALETTE.red);
-  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(46), "NEXT ➡", PALETTE.green);
+  button(ctx, S(25), footY, btnW, S(42), "⬅ PREV", PALETTE.gold);
+  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(27), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
+  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(42), "❌ OUT", PALETTE.red);
+  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(42), "NEXT ➡", PALETTE.green);
 
   text(
     ctx,
     `⌨️ ${prefix}menu next • prev • <số> • out  (hoặc gõ trần next/prev/out)`,
-    W / 2, footY + S(86),
+    W / 2, footY + S(76),
     { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
   text(
     ctx,
     `💡 Gõ trần next / prev / out (khỏi prefix) — nhớ gõ ${prefix}menu trước đã nhé`,
-    W / 2, footY + S(110),
+    W / 2, footY + S(96),
     { size: 14, color: PALETTE.mute, align: "center" }
   );
 
