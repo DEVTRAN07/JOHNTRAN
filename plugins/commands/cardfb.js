@@ -1,19 +1,19 @@
-// /cardfb — thẻ hồ sơ người dùng Facebook (ảnh canvas, kiểu mới)
-//   /cardfb <username | uid>   (vd: zuck hoặc 4)
-// Cần token Graph API: config.yml → services.facebook_access_token hoặc env FB_ACCESS_TOKEN.
+// /cardfb — thẻ hồ sơ Facebook (ảnh canvas)
+//   /cardfb zuck  |  /cardfb 4  |  /cardfb https://www.facebook.com/zuck
+// Dữ liệu lấy qua scripts/social_info.py (curl_cffi giả lập TLS Chrome).
 const profile = require("../../core/canvas/profile");
-const services = require("../../core/services");
+const { fetchSocial } = require("../../core/socialFetch");
 
 module.exports.config = {
   name: "cardfb",
   aliases: ["fb", "facebook"],
-  version: "2.1.0",
+  version: "3.0.0",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
   description: "Thẻ hồ sơ người dùng Facebook",
   category: "Tiện ích",
-  usage: "cardfb <username | uid>",
-  cooldowns: 5,
+  usage: "cardfb <username | uid | link>",
+  cooldowns: 10,
   dependencies: {}
 };
 
@@ -24,66 +24,62 @@ function shortNum(n) {
   return String(v);
 }
 
+function parseTarget(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^@/, "")
+    .replace(/^https?:\/\/(www\.|m\.|web\.|business\.)?facebook\.com\//, "")
+    .replace(/\?.*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/\/.*$/, "")
+    .replace(/profile\.php\?id=/, "")
+    .trim();
+}
+
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type } = event;
+
   const raw = (args[0] || "").trim();
-  if (!raw) return reply.error(`Cách dùng: ${global.config.prefix}cardfb <username hoặc uid>`);
-
-  const username = raw.replace(/^@/, "").replace(/^https?:\/\/(www\.|m\.|web\.)?facebook\.com\//, "").replace(/\/.*$/, "").replace(/\/+$/, "");
-
-  const token = services.serviceUrl("facebook_access_token") || process.env.FB_ACCESS_TOKEN;
-  const base = services.serviceUrl("facebook_api_url") || "https://graph.facebook.com/v19.0";
-
-  if (!token) {
-    return reply.error(
-      "Thiếu Facebook Graph API token.\n\n" +
-      "💡 config.yml → services.facebook_access_token: \"EAA...\"\n" +
-      "Lấy token: developers.facebook.com → Graph API Explorer"
-    );
+  if (!raw) {
+    return api.sendMessage({ plain: true, msg: `Cách dùng: ${global.config.prefix}cardfb <username, uid hoặc link>` }, threadId, type);
+  }
+  const target = parseTarget(raw);
+  if (!target || target.length < 1) {
+    return api.sendMessage({ plain: true, msg: `❌ Không đọc được username từ: ${raw}` }, threadId, type);
   }
 
+  const info = await fetchSocial("facebook", target);
+  if (!info) {
+    return api.sendMessage({
+      plain: true,
+      msg: `Không lấy được hồ sơ Facebook "${target}".\n` +
+           `Có thể hồ sơ riêng tư, bị hạn chế, hoặc đường dẫn không đúng.\n` +
+           `Thử: username (vd: zuck) hoặc link đầy đủ (facebook.com/zuck).`
+    }, threadId, type);
+  }
+
+  const cardPath = await profile.renderProfile({
+    skin: "facebook",
+    title: String(info.name || target),
+    handle: info.username ? `@${info.username}` : (info.fb_id ? `🆔 ${info.fb_id}` : undefined),
+    subtitle: info.category ? String(info.category).slice(0, 40) : undefined,
+    avatar: info.avatar || undefined,
+    rows: [
+      { icon: "👤", label: "Tên", value: info.name || "—" },
+      { icon: "📄", label: "Người theo dõi", value: shortNum(info.followers) },
+      { icon: "💬", label: "Giới thiệu", value: info.about ? String(info.about).slice(0, 60) : "Không công khai" },
+      { icon: "🏷️", label: "Loại trang", value: info.category || "Cá nhân" },
+      { icon: "✅", label: "Xác minh", value: info.verified ? "Đã xác minh ✅" : "Chưa xác minh" },
+      { icon: "🆔", label: "ID", value: info.fb_id || target }
+    ],
+    footer: "CARD FACEBOOK"
+  });
+
   try {
-    const res = await require("axios").get(`${base}/${encodeURIComponent(username)}`, {
-      params: {
-        fields: "id,name,username,picture.width(800),cover,followers_count,fan_count,about,link,gender,birthday,location,is_verified",
-        access_token: token
-      },
-      timeout: 30000
-    });
-    const info = res.data || {};
-    if (!info.id) return reply.error(`Không tìm thấy người dùng Facebook: ${username}`);
-
-    const avatar = info.picture?.data?.url || info.picture?.url || "";
-    const cardPath = await profile.renderProfile({
-      skin: "facebook",
-      title: String(info.name || username),
-      handle: `@${info.username || info.id}`,
-      subtitle: info.link ? String(info.link).replace(/^https?:\/\/(www\.)?/, "") : undefined,
-      avatar: avatar || undefined,
-      rows: [
-        { icon: "👥", label: "Người theo dõi", value: shortNum(info.followers_count) },
-        { icon: "📄", label: "Lượt thích trang", value: shortNum(info.fan_count) },
-        { icon: "⚧", label: "Giới tính", value: info.gender || "Không công khai" },
-        { icon: "🎂", label: "Ngày sinh", value: info.birthday || "Không công khai" },
-        { icon: "📍", label: "Địa điểm", value: info.location?.name || "Không công khai" },
-        { icon: "✅", label: "Xác minh", value: info.is_verified ? "Đã xác minh ✅" : "Chưa xác minh" },
-        { icon: "🆔", label: "ID", value: String(info.id) }
-      ],
-      footer: "CARD FACEBOOK"
-    });
-
-    try {
-      await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
-    } catch (error) {
-      return reply.error(`Có hồ sơ nhưng gửi ảnh thất bại: ${error.message}`);
-    } finally {
-      profile.cleanup(cardPath);
-    }
+    await api.sendMessage({ msg: "", attachments: cardPath, ttlKind: "card" }, threadId, type);
   } catch (error) {
-    const code = error.response?.status;
-    const msg = error.response?.data?.error?.message || error.message;
-    console.error("cardfb:", code, msg);
-    if (code === 190 || code === 400) return reply.error(`Facebook từ chối token (${code}): ${msg}`);
-    return reply.error(`Không lấy được hồ sơ Facebook: ${String(msg).slice(0, 130)}`);
+    return api.sendMessage({ plain: true, msg: `Có hồ sơ nhưng gửi ảnh thất bại: ${error.message}` }, threadId, type);
+  } finally {
+    profile.cleanup(cardPath);
   }
 };
