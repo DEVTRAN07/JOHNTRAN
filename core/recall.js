@@ -67,7 +67,7 @@ function remember(threadId, key, response) {
   const ids = extractMsgIdOnly(response);
   if (ids) {
     memory.set(slot(threadId, key), { ...ids, cliMsgId: ids.cliMsgId || "", sentAt: Date.now() });
-    debugFile(`NHỚ TIN | khung=${key} msgId=${ids.msgId} cliMsgId=${ids.cliMsgId || "(sẽ tra lại)"} response=${safeJson(response)}`);
+
   } else {
     const line = `KHÔNG ĐỌC ĐƯỢC msgId | response=${safeJson(response)}`;
     logger.log(`[recall] ${line}`, "warn");
@@ -113,9 +113,6 @@ async function recall(api, threadId, key, type = 1) {
   if (typeof api.undo === "function") {
     try {
       const result = await api.undo({ msgId: ids.msgId, cliMsgId }, threadId, type);
-      const line = `undo OK | msgId=${ids.msgId} cliMsgId=${cliMsgId} | kết quả=${safeJson(result)}`;
-      logger.log(`[recall] ${line}`, "info");
-      debugFile(line);
       return true;
     } catch (error) {
       const line = `undo THẤT BẠI | code=${error.code ?? "?"} msg=${error.message} | gửi: msgId=${ids.msgId} cliMsgId=${cliMsgId} thread=${threadId} type=${type} | phản hồi=${safeJson(error.data ?? error.response ?? null)}`;
