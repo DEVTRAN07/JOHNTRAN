@@ -185,8 +185,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
         await setReactions([Reactions.CRY]);
         return api.sendMessage({
             msg: `❌ Không tải được video TikTok.\n${sanitizeError("API TikTok đang lỗi hoặc bị chặn")}\n\n` +
-                 `💡 Admin: đặt API khác vào config.yml → services.tiktok_api_url.`,
-            ttl: 60000
+                 `💡 Admin: đặt API khác vào config.yml → services.tiktok_api_url.`
         }, threadId, type);
     }
 
@@ -200,8 +199,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
             if (!services.serviceUrl("media_downloader_url")) {
                 await setReactions([Reactions.CRY]);
                 return api.sendMessage({
-                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}${errorHint(url, error.message)}`,
-                    ttl: 60000
+                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}${errorHint(url, error.message)}`
                 }, threadId, type);
             }
         }
@@ -216,15 +214,15 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     } catch (error) {
         if (error.notConfigured) {
             await setReactions([Reactions.CRY]);
-            return api.sendMessage({ msg: `❌ ${error.message}`, ttl: 60000 }, threadId, type);
+            return api.sendMessage({ msg: `❌ ${error.message}` }, threadId, type);
         }
         await setReactions([Reactions.CRY]);
-        return api.sendMessage({ msg: "❌ Lỗi khi tải xuống media", ttl: 60000 }, threadId, type);
+        return api.sendMessage({ msg: "❌ Lỗi khi tải xuống media" }, threadId, type);
     }
 
     if (!apiData || !Array.isArray(apiData.medias) || apiData.medias.length === 0) {
         await setReactions([Reactions.WOW]);
-        return api.sendMessage({ msg: "❓ Không tìm thấy media để tải xuống", ttl: 60000 }, threadId, type);
+        return api.sendMessage({ msg: "❓ Không tìm thấy media để tải xuống" }, threadId, type);
     }
 
     await sendApiMedia(apiData, api, threadId, type, setReactions);
@@ -257,8 +255,7 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
                 thumbnailUrl: videoData.thumbnailUrl,
                 duration: videoData.metadata.duration,
                 width: videoData.metadata.width,
-                height: videoData.metadata.height,
-                ttl: 60000
+                height: videoData.metadata.height
             }, threadId, type);
             await setReactions([Reactions.HEART]);
             return;
@@ -270,11 +267,11 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
             for (const image of images) {
                 attachments.push(await downloadToFile(image.url, `image_${Date.now()}_${attachments.length}.jpg`));
             }
-            await api.sendMessage({ msg: messageBody, attachments, ttl: 60000 }, threadId, type);
+            await api.sendMessage({ msg: messageBody, attachments }, threadId, type);
             if (audioToSend) {
                 const audioPath = await downloadToFile(audioToSend.url, `audio_${Date.now()}.mp3`);
                 const voiceUrl = await processAudio(audioPath, threadId, type, api);
-                await api.sendVoice({ voiceUrl, ttl: 60000 }, threadId, type);
+                await api.sendVoice({ voiceUrl }, threadId, type);
             }
             attachments.forEach((filePath) => { try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ } });
             await setReactions([Reactions.HEART]);
@@ -285,15 +282,15 @@ async function sendApiMedia(apiData, api, threadId, type, setReactions) {
         if (audioToSend) {
             const audioPath = await downloadToFile(audioToSend.url, `audio_${Date.now()}.mp3`);
             const voiceUrl = await processAudio(audioPath, threadId, type, api);
-            await api.sendMessage({ msg: `${messageBody}\n\n🎵 Audio:`, ttl: 60000 }, threadId, type);
-            await api.sendVoice({ voiceUrl, ttl: 60000 }, threadId, type);
+            await api.sendMessage({ msg: `${messageBody}\n\n🎵 Audio:` }, threadId, type);
+            await api.sendVoice({ voiceUrl }, threadId, type);
             await setReactions([Reactions.HEART]);
             return;
         }
     } catch (err) {
         console.error("Lỗi xử lý media:", err.message);
         await setReactions([Reactions.CRY]);
-        return api.sendMessage({ msg: "❌ Lỗi xử lý media (tải được nhưng gửi thất bại).", ttl: 60000 }, threadId, type);
+        return api.sendMessage({ msg: "❌ Lỗi xử lý media (tải được nhưng gửi thất bại)." }, threadId, type);
     }
 
     return api.sendMessage({ msg: "📭 Không thể tải xuống media" }, threadId, type);
@@ -311,8 +308,7 @@ async function downloadTikTok(url, api, threadId, type, setReactions) {
         thumbnailUrl: videoData.thumbnailUrl,
         duration: videoData.metadata.duration,
         width: videoData.metadata.width,
-        height: videoData.metadata.height,
-        ttl: 60000
+        height: videoData.metadata.height
     }, threadId, type);
     await setReactions([Reactions.HEART]);
     return;
@@ -330,8 +326,8 @@ async function downloadWithYtDlp(url, api, threadId, type, setReactions) {
         const audioPath = path.join(tempDir(), `audio_${Date.now()}.mp3`);
         await ytdlp.downloadAudio(url, audioPath);
         const voiceUrl = await processAudio(audioPath, threadId, type, api);
-        await api.sendMessage({ msg: messageBody, ttl: 60000 }, threadId, type);
-        await api.sendVoice({ voiceUrl, ttl: 60000 }, threadId, type);
+        await api.sendMessage({ msg: messageBody }, threadId, type);
+        await api.sendVoice({ voiceUrl }, threadId, type);
         await setReactions([Reactions.HEART]);
         return;
     }
@@ -346,8 +342,7 @@ async function downloadWithYtDlp(url, api, threadId, type, setReactions) {
         thumbnailUrl: videoData.thumbnailUrl,
         duration: videoData.metadata.duration,
         width: videoData.metadata.width,
-        height: videoData.metadata.height,
-        ttl: 60000
+        height: videoData.metadata.height
     }, threadId, type);
     await setReactions([Reactions.HEART]);
     return;
@@ -357,7 +352,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadId, type } = event;
 
     if (type === ThreadType.User) {
-        return api.sendMessage({ msg: "❌ Autodown chỉ hoạt động trong nhóm.", plain: true, ttl: 60000 }, threadId, type);
+        return api.sendMessage({ msg: "❌ Autodown chỉ hoạt động trong nhóm.", plain: true }, threadId, type);
     }
 
     const action = (args[0] || "help").toLowerCase();
@@ -373,8 +368,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
                 `Trạng thái: ${action === "on" ? "ĐÃ BẬT ✅" : "ĐÃ TẮT ❌"}\n` +
                 (action === "on"
                     ? "Gửi link hỗ trợ (Tiktok, Youtube, Facebook, Instagram...) vào nhóm là bot tự tải."
-                    : "Bot sẽ không tự tải link trong nhóm này nữa."),
-            ttl: 60000
+                    : "Bot sẽ không tự tải link trong nhóm này nữa.")
         }, threadId, type);
     }
 
@@ -386,8 +380,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             plain: true,
             msg: `📥 Autodown nhóm này: ${thread.auto_down ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\n` +
                  `Dùng: autodown on / autodown off\n` +
-                 `Tiktok API: ${tiktokOk ? "hoạt động ✅" : "đang lỗi ❌ (Youtube/Facebook vẫn dùng yt-dlp)"}`,
-            ttl: 60000
+                 `Tiktok API: ${tiktokOk ? "hoạt động ✅" : "đang lỗi ❌ (Youtube/Facebook vẫn dùng yt-dlp)"}`
         }, threadId, type);
     }
 
@@ -403,7 +396,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             '❤️ - Tải thành công\n' +
             '😢 - Lỗi khi tải\n' +
             '😮 - Không tìm thấy media\n\n' +
-            '⚙️ Admin bot: autodown on / autodown off / autodown status',
-        ttl: 60000
+            '⚙️ Admin bot: autodown on / autodown off / autodown status'
     }, threadId, type);
 };

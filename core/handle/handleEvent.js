@@ -38,7 +38,6 @@ function handleEvent(eventType, eventData, api, isSelf = false) {
           msgId: eventData.data?.msgId,
           cliMsgId: eventData.data?.cliMsgId,
           ts: eventData.data?.ts,
-          ttl: eventData.data?.ttl
         };
         // async reject phải được bắt, không được làm crash process
         Promise.resolve()
@@ -59,7 +58,6 @@ function handleEvent(eventType, eventData, api, isSelf = false) {
         msgId: eventData.data?.msgId,
         cliMsgId: eventData.data?.cliMsgId,
         ts: eventData.data?.ts,
-        ttl: eventData.data?.ttl
       };
       Promise.resolve()
         .then(() => commandModule.handleEvent({ api: wrapped, event: eventData, eventType, isSelf, reply, Users, Threads, replyData }))

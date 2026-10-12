@@ -47,8 +47,7 @@ module.exports.run = async ({ args, event, api, Users }) => {
       duration: videoData.metadata.duration,
       width: videoData.metadata.width,
       height: videoData.metadata.height,
-      msg: "🎥 Video gái ngẫu nhiên",
-      ttl: 60000
+      msg: "🎥 Video gái ngẫu nhiên"
     }, threadId, type);
   } catch (err) {
     console.error("Lỗi xử lý video:", err.message);

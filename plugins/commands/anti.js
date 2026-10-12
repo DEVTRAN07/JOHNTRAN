@@ -85,8 +85,7 @@ module.exports.handleEvent = async function ({ event, api, Threads, eventType, i
         const msg = `🚫 @${name}, không được gửi link trong nhóm này!`;
         return api.sendMessage({
           msg,
-          mentions: [{ pos: 3, uid: userId, len: name.length + 1 }],
-          ttl: 60000
+          mentions: [{ pos: 3, uid: userId, len: name.length + 1 }]
         }, threadId, type);
       }
     }
@@ -122,8 +121,7 @@ module.exports.handleEvent = async function ({ event, api, Threads, eventType, i
         const msg = `🚫 @${name}, vui lòng không spam!`;
         return api.sendMessage({
           msg,
-          mentions: [{ pos: 3, uid: userId, len: name.length + 1 }],
-          ttl: 60000
+          mentions: [{ pos: 3, uid: userId, len: name.length + 1 }]
         }, threadId, type);
       }
     }

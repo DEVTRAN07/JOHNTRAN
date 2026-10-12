@@ -97,7 +97,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   const command = resolveCommand(commandName);
   if (!command) {
     if (api && threadId && type) {
-      await api.sendMessage({ msg: "⚠️ Lệnh không tồn tại!", ttl: 60000 }, threadId, type);
+      await api.sendMessage({ msg: "⚠️ Lệnh không tồn tại!" }, threadId, type);
     }
     return;
   }
@@ -106,15 +106,14 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   const disabledCommands = threadInfo?.disabled_commands;
   if (Array.isArray(disabledCommands) && disabledCommands.includes(commandName)) {
     if (api && threadId && type) {
-      await api.sendMessage({ msg: `🚫 Lệnh '${commandName}' đã bị tắt trong nhóm này.`, ttl: 60000 }, threadId, type);
+      await api.sendMessage({ msg: `🚫 Lệnh '${commandName}' đã bị tắt trong nhóm này.` }, threadId, type);
     }
     return;
   }
 
   if (!checkSpam(UIDUsage)) {
     return api.sendMessage({
-      msg: "🚫 Bạn đang gửi lệnh quá nhanh. Vui lòng chậm lại!",
-      ttl: 60000
+      msg: "🚫 Bạn đang gửi lệnh quá nhanh. Vui lòng chậm lại!"
     }, threadId, type);
   }
 
@@ -123,12 +122,12 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   const isSupport = global.users?.support?.includes(UIDUsage);
 
   if ((role === 2 && !isBotAdmin) || (role === 1 && !isBotAdmin && !isSupport)) {
-    return api.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này.", ttl: 60000 }, threadId, type);
+    return api.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này." }, threadId, type);
   }
 
   const groupCheck = await checkGroupPermissions({ api, threadId, type, UIDUsage, threadInfo });
   if (groupCheck.denied) {
-    return api.sendMessage({ msg: groupCheck.denied, ttl: 60000 }, threadId, type);
+    return api.sendMessage({ msg: groupCheck.denied }, threadId, type);
   }
 
   const cdTime = (command.config.cooldowns || 0) * 1000;
@@ -146,8 +145,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
     if (lastUsed && Date.now() - lastUsed < cdTime) {
       const timeLeft = ((cdTime - (Date.now() - lastUsed)) / 1000).toFixed(1);
       return api.sendMessage({
-        msg: `⏳ Vui lòng chờ ${timeLeft}s để dùng lại lệnh '${commandName}'`,
-        ttl: 60000
+        msg: `⏳ Vui lòng chờ ${timeLeft}s để dùng lại lệnh '${commandName}'`
       }, threadId, type);
     }
     cdMap.set(UIDUsage, Date.now());
@@ -162,7 +160,6 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
       msgId: event.data.msgId,
       cliMsgId: event.data.cliMsgId,
       ts: event.data.ts,
-      ttl: event.data.ttl
     };
     const wrappedApi = wrapApi(api, threadId, type, commandName, event);
     metrics.track("command", { command: commandName });

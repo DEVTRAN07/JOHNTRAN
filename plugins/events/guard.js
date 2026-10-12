@@ -106,14 +106,12 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
     } catch (error) {
       console.error("Không kick được thành viên:", error.message);
       await api.sendMessage({
-        msg: `🚫 ${reason}\n⚠️ Cảnh cáo ${warns}/${WARN_LIMIT} (không kick được: ${error.message})`,
-        ttl: 60000
+        msg: `🚫 ${reason}\n⚠️ Cảnh cáo ${warns}/${WARN_LIMIT} (không kick được: ${error.message})`
       }, threadId, event.type);
       return;
     }
     await api.sendMessage({
-      msg: `⛔ Đã kick thành viên vi phạm ${WARN_LIMIT} lần.\nLý do: ${reason}`,
-      ttl: 120000
+      msg: `⛔ Đã kick thành viên vi phạm ${WARN_LIMIT} lần.\nLý do: ${reason}`
     }, threadId, event.type);
     return;
   }
@@ -127,7 +125,6 @@ module.exports.run = async function ({ api, event, Threads, isSelf }) {
     });
   } catch { /* bỏ qua */ }
   await api.sendMessage({
-    msg: `🚨 ${reason}\n⚠️ Cảnh cáo ${warns}/${WARN_LIMIT} — đủ ${WARN_LIMIT} lần sẽ bị kick.`,
-    ttl: 60000
+    msg: `🚨 ${reason}\n⚠️ Cảnh cáo ${warns}/${WARN_LIMIT} — đủ ${WARN_LIMIT} lần sẽ bị kick.`
   }, threadId, event.type);
 };

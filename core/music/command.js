@@ -6,8 +6,8 @@ const logger = require("../../utils/logger");
 
 let nextPageCursor = null; // "zing|2"
 
-function send(api, threadId, type, msg, ttl = 300000) {
-  return api.sendMessage({ msg, ttl }, threadId, type);
+function send(api, threadId, type, msg) {
+  return api.sendMessage({ msg }, threadId, type);
 }
 
 function usage(provider, reply) {

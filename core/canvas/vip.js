@@ -70,20 +70,6 @@ async function renderVipCard(spec = {}) {
     size: 33, family: "JT-Display-Bold", color: palette.ink, maxWidth: WIDTH - PADDING * 2 - S(110)
   });
 
-  // Chip hiển thị TTL (tin tự xoá sau bao lâu) — cùng kiểu chip ở mọi thẻ
-  const ttlMs = Number(spec.ttl) || 0;
-  const ttlText = ttlMs > 0 ? `⏳ ${Math.round(ttlMs / 1000)}s` : "♾️ không tự xoá";
-  ctx.font = theme.font(14, "JT-Bold");
-  const chipW = ctx.measureText(ttlText).width + S(22);
-  ctx.fillStyle = "rgba(255,255,255,.08)";
-  theme.roundRect(ctx, WIDTH - PADDING - chipW, y - S(24), chipW, S(27), S(14));
-  ctx.fill();
-  ctx.strokeStyle = accent;
-  ctx.globalAlpha = 0.4;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  theme.text(ctx, ttlText, WIDTH - PADDING - chipW / 2, y - S(5), { size: 14, family: "JT-Bold", color: accent, align: "center" });
   y += S(42);
 
   // ===== Mô tả ngắn =====

@@ -3,9 +3,7 @@ const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
 
-// TTL (tự xoá tin) nay chỉ là tuỳ chọn THÔ: lệnh nào muốn tin tự xoá thì
-// truyền ttl (ms, Zalo chỉ nhận >= 60000), không truyền thì tin nằm lại.
-// Không còn hệ thống ttlKind/config nữa — tránh rườm rà.
+// Tin nhắn KHÔNG còn tự xoá (đã bỏ toàn bộ hệ thống TTL theo yêu cầu).
 
 class Reply {
   constructor(api, threadId, type, commandName, event = null) {
@@ -151,8 +149,6 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetThreadId = threadId || tid;
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
-    delete content.ttlKind;   // không còn cơ chế ttl theo loại tin
-    delete content.replace;    // không còn thu hồi tin cũ
     if (content.plain) delete content.plain;
     return api.sendMessage(content, targetThreadId, targetType);
   });

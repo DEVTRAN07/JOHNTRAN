@@ -40,7 +40,7 @@ module.exports.run = async ({ args, event, api, Users }) => {
 
     fs.writeFileSync(filePath, res.data);
 
-    await api.sendMessage({ msg: "📷 Ảnh gái ngẫu nhiên", attachments: filePath, ttl: 60000 }, threadId, type);
+    await api.sendMessage({ msg: "📷 Ảnh gái ngẫu nhiên", attachments: filePath }, threadId, type);
 
     fs.unlinkSync(filePath);
   } catch (error) {

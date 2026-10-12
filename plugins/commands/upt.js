@@ -249,8 +249,7 @@ module.exports.run = async ({ event, api, args }) => {
 
     await api.sendMessage({
       msg: '',
-      attachments: [imagePath],
-      ttl: 120000
+      attachments: [imagePath]
     }, event.threadId, event.type);
 
     fs.unlinkSync(imagePath);
