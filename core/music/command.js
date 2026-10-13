@@ -105,7 +105,7 @@ async function renderCached(key, renderFn) {
 }
 
 async function showResults(api, threadId, type, provider, query, tracks, page) {
-  const perPage = 8;
+  const perPage = 7; // khớp renderer hàng ngang (7 dải/trang)
   const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const slice = tracks.slice((safePage - 1) * perPage, safePage * perPage);
@@ -183,7 +183,7 @@ async function runMusic(providerName, { api, event, args, reply }) {
       return reply.success(`Đã đóng danh sách nhạc "${pending.query || ""}". Gõ ${global.config.prefix}${provider.name} <từ khóa> để tìm lại.`);
     }
 
-    const perPage = 8;
+    const perPage = 7;
     const totalPages = Math.max(1, Math.ceil(pending.tracks.length / perPage));
     const current = pending.page || 1;
     const page = nav === "next"

@@ -33,17 +33,15 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text } = theme;
 
-  const perPage = 8;
-  const cols = W >= 1100 ? 4 : 2; // 750px (Zalo nguyên bản) → 2 cột cho đọc rõ
+  // ===== HÀNG NGANG: mỗi bài 1 dải rộng — ảnh bìa TRÁI, thông tin PHẢI =====
+  const perPage = 7;
   const shown = tracks.slice(0, perPage);
-  const rows = Math.max(1, Math.ceil(shown.length / cols));
-  const cardW = (W - S(50) - S(18) * (cols - 1)) / cols;
-  const cardH = S(232);
-  const gapX = S(16);
-  const gapY = S(14);
+  const cover = S(96);            // ảnh bìa vuông
+  const rowH = cover + S(24);     // cao mỗi hàng
+  const gapY = S(10);
   const headerH = S(96);
   const footerH = S(104);
-  const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
+  const H = headerH + shown.length * rowH + Math.max(0, shown.length - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
@@ -60,56 +58,61 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
     { size: 16, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 
-  // Nạp sẵn ảnh bìa (không await trong forEach được)
+  // Nạp ảnh bìa
   const covers = [];
   for (const track of shown) covers.push(await fetchThumb(track.thumbnail));
 
-  // ===== Lưới bài hát (4 cột) =====
+  // ===== Danh sách hàng ngang =====
   shown.forEach((track, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = S(25) + col * (cardW + gapX);
-    const y = headerH + row * (cardH + gapY);
+    const x = S(25);
+    const y = headerH + index * (rowH + gapY);
+    const rowW = W - S(50);
+    panel(ctx, x, y, rowW, rowH, S(14));
 
-    panel(ctx, x, y, cardW, cardH, S(14));
-
-    // ảnh bìa (vuông, chiếm trên nửa thẻ)
-    const coverSize = cardW - S(36);
-    const cover = covers[index];
-    if (cover) {
+    // ảnh bìa bên TRÁI
+    const coverX = x + S(12);
+    const coverY = y + S(12);
+    if (covers[index]) {
       ctx.save();
-      theme.roundRect(ctx, x + S(18), y + S(18), coverSize, coverSize, S(12));
+      theme.roundRect(ctx, coverX, coverY, cover, cover, S(10));
       ctx.clip();
-      ctx.drawImage(cover, x + S(18), y + S(18), coverSize, coverSize);
+      ctx.drawImage(covers[index], coverX, coverY, cover, cover);
       ctx.restore();
     } else {
       ctx.fillStyle = "rgba(56, 189, 248, .12)";
-      theme.roundRect(ctx, x + S(18), y + S(18), coverSize, coverSize, S(12));
+      theme.roundRect(ctx, coverX, coverY, cover, cover, S(10));
       ctx.fill();
-      text(ctx, "🎵", x + S(18) + coverSize / 2, y + S(18) + coverSize / 2 + S(20), { size: 40, color: PALETTE.accent, align: "center" });
+      text(ctx, "🎵", coverX + cover / 2, coverY + cover / 2 + S(12), { size: 30, color: PALETTE.accent, align: "center" });
     }
 
     // số thứ tự nổi trên ảnh bìa
-    ctx.fillStyle = "rgba(7, 10, 20, .82)";
-    theme.roundRect(ctx, x + S(28), y + S(28), S(40), S(30), S(8));
+    ctx.fillStyle = "rgba(7, 10, 20, .85)";
+    theme.roundRect(ctx, coverX + S(6), coverY + S(6), S(34), S(26), S(8));
     ctx.fill();
-    text(ctx, String(index + 1), x + S(48), y + S(51), { size: 20, family: "JT-Bold", color: PALETTE.accent, align: "center" });
+    text(ctx, String(index + 1), coverX + S(23), coverY + S(24), { size: 16, family: "JT-Bold", color: PALETTE.accent, align: "center" });
 
-    // tên bài + ca sĩ + lượt nghe
-    const infoX = x + S(18);
-    const infoW = cardW - S(36);
-    const textY = y + S(18) + coverSize + S(30);
-    text(ctx, track.title, infoX, textY, { size: 18, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: infoW });
-    text(ctx, `♫ ${track.artist} • ${formatDuration(track.duration)}`, infoX, textY + S(30), { size: 14, family: "JT-Mono", color: PALETTE.ink2, maxWidth: infoW });
-    text(
-      ctx,
-      `👤 ${shortPlays(track.plays)}  •  ❤️ ${shortPlays(track.likes)}`,
-      infoX, textY + S(58),
-      { size: 14, family: "JT-Bold", color: PALETTE.green, maxWidth: infoW }
-    );
+    // thông tin bên PHẢI
+    const infoX = coverX + cover + S(16);
+    const infoW = rowW - (infoX - x) - S(14);
+    const centerY = y + rowH / 2;
+
+    text(ctx, theme.truncate(ctx, track.title, infoW), infoX, y + S(28), {
+      size: 21, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: infoW
+    });
+    text(ctx, `♫ ${theme.truncate(ctx, track.artist, infoW - S(80))} • ${formatDuration(track.duration)}`, infoX, y + S(62), {
+      size: 15, family: "JT-Mono", color: PALETTE.ink2, maxWidth: infoW
+    });
+
+    // lượt nghe / like hàng ngang + nút phát nhìn như chip
+    const chipY = y + S(78);
+    text(ctx, `👤 ${shortPlays(track.plays)}`, infoX, chipY, { size: 14, family: "JT-Bold", color: PALETTE.green });
+    text(ctx, `❤️ ${shortPlays(track.likes)}`, infoX + S(72), chipY, { size: 14, family: "JT-Bold", color: PALETTE.red });
+    // nút PLAY bên phải
+    const btnW = S(72), btnH = S(34);
+    button(ctx, x + rowW - btnW - S(12), centerY - btnH / 2, btnW, btnH, "▶ PHÁT", PALETTE.accent);
   });
 
-  // ===== Footer điều hướng: 3 nút emoji =====
+  // ===== Footer điều hướng =====
   const footY = H - footerH + S(12);
   const btnW = (W - S(50) - S(20)) / 3;
   button(ctx, S(25), footY, btnW, S(42), "⬅ PREV", PALETTE.gold);
