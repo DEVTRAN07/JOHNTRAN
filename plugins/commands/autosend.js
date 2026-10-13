@@ -11,40 +11,60 @@ module.exports.config = {
   cooldowns: 2
 };
 
-// Mỗi nhóm bật autosend nhận 1 tin/giờ. Thời điểm gửi ghi vào data nhóm
-// (Supabase) nên restart bot không gửi lại, không bỏ lỡ.
-const SEND_INTERVAL = 60 * 60 * 1000; // 1 tiếng
+// Mỗi nhóm bật autosend nhận 1 tin/GIỜ — câu chữ THEO GIỜ CỐ ĐỊNH
+// (6h câu gì, 7h câu gì...), không random. Giờ không có trong bảng
+// (1-5h sáng) → bot im lặng cho yên.
 const TICK_INTERVAL = 60 * 1000;     // quét mỗi phút
 const INITIAL_DELAY = 5 * 1000;      // chờ bot ổn định sau khi bật
 
-// Kho tin nhắn — random mỗi lần gửi
-const MESSAGES = [
-  'Chúc mọi người buổi sáng vui vẻ😉',
-  'Buổi sáng đầy năng lượng nhaa các bạn😙',
-  'Dậy đi học và đi làm nào mọi người ơi😁',
-  'Dậy sớm thành công rồi đó, cố lên nhé!💪',
-  'Chúc mọi người buổi trưa vui vẻ😋',
-  'Cả sáng mệt mỏi rùi nghỉ ngơi nạp năng lượng nào!!😴',
-  'Đến giờ ăn trưa rồi nè, đừng bỏ bữa nhé🍱',
-  'Chúc mọi người buổi chiều vui vẻ🙌',
-  'Chúc mọi người buổi chiều đầy năng lượng😼',
-  'Nghỉ trưa xíu rồi bắt đầu buổi chiều nha😇',
-  'Hết giờ làm rồi về nhà thôi mọi người 😎',
-  'Chiều rồi, xả stress thôi nào 🎉',
-  'Đi làm hay đi học về nhớ tắm rửa ăn uống nha 🚿🍚',
-  'Tối rồi, nghỉ ngơi đi mọi người 🥱',
-  'Tối nay có ai rảnh đi chơi hông nè? 😜',
-  'Nhớ ăn tối đầy đủ nhé, giữ sức khỏe 💪',
-  'Khuya ròi ngủ đuy😴',
-  'Tới giờ lên giường ngủ rùi😇',
-  'Ngủ sớm cho da đẹp dáng xinh nha💤',
-  'Chúc mọi người ngủ ngon😴',
-  'Khuya rùi ngủ ngon nhé các bạn😇',
-  'Tắt điện thoại và đi ngủ thôi 📴🛌'
-];
+const HOURLY_MESSAGES = {
+  0: "Khuya ròi, chúc ai còn thức một đêm an yên nhé🌙 Ngủ ngon cả nhà😴",
+  6: "Chúc mọi người buổi sáng vui vẻ😉 Dậy sớm thành công rồi, cố lên nhé!💪",
+  7: "Buổi sáng đầy năng lượng nhaa các bạn😙 Đi học đi làm thôi nào!",
+  8: "Dậy đê ngủ như heo😒 Tính nướng tới bao giờ đây😠 Đi muộn giờ đó nha!",
+  9: "Sáng năng suất rồi đó mọi người☕ Tập trung làm việc nào!",
+  10: "Giờ làm việc chắc chắn rồi💼 Nhớ uống nước và nghỉ mắt nhé!",
+  11: "Sắp đến giờ nghỉ trưa rồi🍱 Cố gắng lên nha!",
+  12: "Chúc mọi người buổi trưa vui vẻ😋 Đừng bỏ bữa nhé!",
+  13: "Nghỉ trưa xíu rồi bắt đầu buổi chiều nha😇",
+  14: "Chúc mọi người buổi chiều vui vẻ🙌",
+  15: "Buổi chiều đầy năng lượng😼 Chiều làm gì thì làm nào!",
+  16: "Chiều rồi, xả stress thôi 🎉",
+  17: "Hết giờ làm rồi về nhà thôi mọi người 😎",
+  18: "Về nhà nhớ tắm rửa ăn uống nha 🚿🍚",
+  19: "Tối rồi, nghỉ ngơi đi mọi người 🥱",
+  20: "Tối nay có ai rảnh đi chơi hông nè? 😜",
+  21: "Nhớ ăn tối đầy đủ nhé, giữ sức khỏe 💪",
+  22: "Tối rồi, tắt điện thoại và đi ngủ thôi 📴🛌",
+  23: "Khuya rùi ngủ ngon nhé các bạn😇 Ngủ sớm cho da đẹp dáng xinh nha💤"
+};
+
+function hourMessage() {
+  const hour = vnTime().getHours();
+  return HOURLY_MESSAGES[hour] || null;
+}
+
+function autoMessage() {
+  const body = hourMessage();
+  if (!body) return null; // giờ im lặng → không gửi
+  const t = vnTime();
+  return `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n` +
+    `➝ Bây Giờ Là: ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}\n` +
+    `➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n` +
+    `━━━━━━━━━━\n` +
+    `[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${body}`;
+}
+
+// Khoá giờ đã gửi — "2026-10-13-14": mỗi nhóm chỉ nhận 1 tin/giờ
+function hourKey() {
+  const t = vnTime();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}-${String(t.getHours()).padStart(2, "0")}`;
+}
 
 function randomMessage() {
-  return MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  // Chỉ dùng cho /autosend test — chọn 1 câu bất kỳ trong bảng theo giờ
+  const pool = Object.values(HOURLY_MESSAGES);
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function vnTime() {
@@ -52,13 +72,16 @@ function vnTime() {
 }
 
 // Thời gian còn lại tới lần gửi kế tiếp (cho lệnh status)
-function nextSendText(last) {
-  if (!last) return "sắp gửi (trong vài phút tới)";
-  const remain = SEND_INTERVAL - (Date.now() - Number(last));
-  if (remain <= 0) return "sắp gửi (trong vài phút tới)";
-  const minutes = Math.ceil(remain / 60000);
-  return minutes >= 60 ? `${Math.floor(minutes / 60)} tiếng ${minutes % 60} phút nữa` : `${minutes} phút nữa`;
+function nextSendText(lastHourKey) {
+  if (lastHourKey === hourKey()) {
+    return `đã gửi ${HOURLY_LABEL[localHour()] || "giờ này"} — lần kế tiếp: ${((localHour() + 1) % 24).toString().padStart(2, "0")}:00`;
+  }
+  return "sắp gửi (trong vài phút tới)";
 }
+
+const HOURLY_LABEL = {};
+for (const h of Object.keys(HOURLY_MESSAGES)) HOURLY_LABEL[Number(h)] = `giờ ${h}`;
+function localHour() { return vnTime().getHours(); }
 
 module.exports.onLoad = async function ({ api, Threads }) {
   let sending = false; // chặn tick chồng nhau nếu tick trước chưa xong
@@ -75,6 +98,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
       if (allBoxIDs.length === 0) return;
 
       const now = Date.now();
+      const currentHour = hourKey();
       let sentCount = 0;
 
       for (const groupId of allBoxIDs) {
@@ -82,22 +106,17 @@ module.exports.onLoad = async function ({ api, Threads }) {
           const thread = await Threads.getData(groupId);
           if (!thread?.data?.auto_send) continue;
 
-          const last = Number(thread.data.auto_send_last) || 0;
-          if (now - last < SEND_INTERVAL) continue; // chưa tới giờ
+          // Đã gửi giờ này rồi → bỏ qua (mỗi nhóm 1 tin/giờ)
+          if (thread.data.auto_send_hour === currentHour) continue;
 
-          const t = vnTime();
-          const msg =
-            `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n` +
-            `➝ Bây Giờ Là: ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}\n` +
-            `➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n` +
-            `━━━━━━━━━━\n` +
-            `[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${randomMessage()}`;
+          const msg = autoMessage();
+          if (!msg) continue; // giờ im lặng (1-5h sáng)
 
           // Supabase row chỉ có id, KHÔNG có threadId — dùng thẳng groupId
           await api.sendMessage({ msg }, groupId, ThreadType.Group);
 
-          // GHI NHỚ thời điểm gửi — restart/deploy không gửi lại
-          thread.data.auto_send_last = Date.now();
+          // GHI NHỚ giờ đã gửi — restart/deploy không gửi lại
+          thread.data.auto_send_hour = currentHour;
           await Threads.setData(groupId, thread.data);
           sentCount++;
         } catch (err) {
@@ -164,7 +183,7 @@ module.exports.run = async ({ api, event, args, Threads }) => {
     return api.sendMessage(
       {
         msg: `📩 Autosend nhóm này: ${current.auto_send ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\n` +
-             `⏱️ Nhịp gửi: 1 tiếng/lần — lần kế tiếp: ${nextSendText(current.auto_send_last)}\n` +
+             `⏱️ Nhịp gửi: 1 tiếng/lần — lần kế tiếp: ${nextSendText(current.auto_send_hour)}\n` +
              `Gõ autosend test để gửi tin thử ngay.`,
         plain: true,
         ttl: 120000
@@ -177,27 +196,17 @@ module.exports.run = async ({ api, event, args, Threads }) => {
 
   const data = (await Threads.getData(threadId)).data || {};
   data.auto_send = status;
-  if (status && !data.auto_send_last) {
-    // Bật lần đầu: ghi mốc "đã gửi" nhẹ nhàng — tin đầu tiên sẽ tới sau
-    // 1 giây của tick kế tiếp (INITIAL_DELAY/TICK), không spam ngay.
-    data.auto_send_last = Date.now();
+  if (status) {
+    // Ghi giờ hiện tại là "đã gửi" — tick tự động sẽ gửi lại từ giờ kế tiếp
+    data.auto_send_hour = hourKey();
   }
   await Threads.setData(threadId, data);
 
   // Bật xong gửi ngay 1 tin để người dùng THẤY nó chạy (lần đầu mỗi nhóm)
   if (status && !wasEnabled) {
     try {
-      const t = vnTime();
-      await api.sendMessage(
-        {
-          msg: `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n` +
-               `➝ Bây Giờ Là: ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}\n` +
-               `➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n` +
-               `━━━━━━━━━━\n` +
-               `[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${randomMessage()}`
-        },
-        threadId, type
-      );
+      const msg = autoMessage() || `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n━━━━━━━━━━\n[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${randomMessage()}`;
+      await api.sendMessage({ msg }, threadId, type);
     } catch (error) {
       console.log("Autosend: gửi tin bật lập tức thất bại:", error.message);
     }

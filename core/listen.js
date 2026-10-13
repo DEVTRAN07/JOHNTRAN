@@ -99,7 +99,23 @@ function startListening(api) {
     if (canRunCommand && (isNavWord || isNavNumber)) {
       const nav = trimmed.toLowerCase();
 
-      // 1) MENU đang mở trong nhóm này
+      // 1) Kết quả NHẠC đang chờ — ƯU TIÊN TRƯỚC menu.
+      // Người dùng tìm nhạc xong gõ số là muốn chọn bài; nếu để menu_page
+      // (còn sót từ lần mở menu trước) chặn trước thì rơi vào menu nhầm.
+      const music = require("./music");
+      const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
+      if (pending) {
+        const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
+        logger.log(`[listen] nhóm ${event.threadId} chọn nhạc "${nav}"`, "info");
+        Promise.resolve()
+          .then(() => require("./music/command").runMusic(pending.providerName, {
+            api: wrapped, event, args: [nav], reply: wrapped.__reply
+          }))
+          .catch((err) => logger.log(`Lỗi điều hướng nhạc: ${err.message}`, "error"));
+        return;
+      }
+
+      // 2) MENU đang mở trong nhóm này
       if (threadInfo?.menu_page) {
         const wrapped = require("./message").wrapApi(api, event.threadId, event.type, "menu", event);
         logger.log(`[listen] nhóm ${event.threadId} điều hướng menu "${nav}"`, "info");
@@ -108,20 +124,6 @@ function startListening(api) {
             api: wrapped, event, args: [nav], Threads, reply: wrapped.__reply
           }))
           .catch((err) => logger.log(`Lỗi điều hướng menu: ${err.message}`, "error"));
-        return;
-      }
-
-      // 2) Kết quả NHẠC đang chờ
-      const music = require("./music");
-      const pending = music.getPending(music.pickKey(event.threadId, data.uidFrom));
-      if (pending) {
-        const wrapped = require("./message").wrapApi(api, event.threadId, event.type, pending.providerName, event);
-        logger.log(`[listen] nhóm ${event.threadId} điều hướng nhạc "${nav}"`, "info");
-        Promise.resolve()
-          .then(() => require("./music/command").runMusic(pending.providerName, {
-            api: wrapped, event, args: [nav], reply: wrapped.__reply
-          }))
-          .catch((err) => logger.log(`Lỗi điều hướng nhạc: ${err.message}`, "error"));
         return;
       }
 

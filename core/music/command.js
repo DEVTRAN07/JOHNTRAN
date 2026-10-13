@@ -3,6 +3,7 @@ const music = require("./index");
 const models = require("./models");
 const ui = require("./ui");
 const logger = require("../../utils/logger");
+const Threads = require("../controller/controllerThreads");
 
 let nextPageCursor = null; // "zing|2"
 
@@ -147,6 +148,16 @@ async function runMusic(providerName, { api, event, args, reply }) {
   }
 
   music.setPending(key, providerName, tracks, query, 1);
+
+  // Tìm nhạc xong → xoá trạng thái menu đang mở (nếu có): từ giờ gõ số
+  // trần là chọn bài, không bị điều hướng menu chặn nữa.
+  try {
+    const threadData = (await Threads.getData(threadId)).data || {};
+    if (threadData.menu_page) {
+      delete threadData.menu_page;
+      await Threads.setData(threadId, threadData);
+    }
+  } catch { /* DB lỗi thì thôi, việc chính vẫn chạy */ }
   if (options.quality) {
     const entry = music.getPending(key);
     if (entry) entry.quality = options.quality;

@@ -11,9 +11,9 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text, font } = theme;
 
-  // ===== Bố cục CŨ: 9 lệnh/trang (3 cột x 3 hàng) =====
+  // ===== Bố cục: 9 lệnh/trang, 3 CỘT x 3 HÀNG (vuông, không dài) =====
   const perPage = 9;
-  const cols = W >= 1100 ? 3 : 2; // 750px (Zalo nguyên bản) → 2 cột cho chữ đọc rõ
+  const cols = 3; // 3x3 — 2 cột trước đây thành ảnh cao và dài
   const rows = Math.ceil(Math.min(commands.page.length, perPage) / cols);
   const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
   const cardH = S(142);
@@ -69,13 +69,13 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
 
     // emoji + tên lệnh (font Round cho thân thiện)
     text(ctx, commandEmoji(cmd.name), x + S(16), y + S(40), { size: 24 });
-    text(ctx, cmd.name, x + S(52), y + S(38), { size: 22, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(76) });
+    text(ctx, cmd.name, x + S(52), y + S(38), { size: 19, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(76) });
 
     // cách dùng (font Mono cho rõ prefix)
-    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + S(16), y + S(76), { size: 14, family: "JT-Mono", color: PALETTE.mute, maxWidth: cardW - S(32) });
+    text(ctx, `*${prefix}${cmd.usage || cmd.name}`, x + S(16), y + S(76), { size: 12, family: "JT-Mono", color: PALETTE.mute, maxWidth: cardW - S(32) });
 
     // nhóm lệnh
-    text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(108), { size: 12, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
+    text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(108), { size: 11, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
   });
 
   // ===== Footer điều hướng: 3 nút emoji =====
