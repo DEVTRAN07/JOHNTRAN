@@ -415,10 +415,42 @@ function startPanel({ manager, config }) {
         }
       }
 
+      // ===== CHAT (Zalo thu nhỏ): proxy sang cầu nối localhost của bot =====
+      if (pathname.startsWith("/api/chat")) {
+        const match = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/(threads|messages|health)$/);
+        const sendMatch = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/send$/);
+        const botName = match?.[1] || sendMatch?.[1];
+        if (!botName) return sendJson(res, 400, { error: "Thiếu tên bot" });
+        const bot = manager.list().find((b) => b.name === botName);
+        if (!bot?.bridgePort) return sendJson(res, 404, { error: "Chưa biết cổng cầu nối của bot" });
+        if (bot.status !== "online") return sendJson(res, 409, { error: `Bot ${botName} chưa chạy` });
+
+        const route = match?.[2] || "send"; // threads | messages | health | send
+        let target = `http://127.0.0.1:${bot.bridgePort}/${route}`;
+        if (route === "messages" && url.search) target += url.search;
+
+        const proxyReq = http.request(target, { method: req.method }, (proxyRes) => {
+          let body = "";
+          proxyRes.on("data", (c) => { body += c; });
+          proxyRes.on("end", () => {
+            res.writeHead(proxyRes.statusCode, { "Content-Type": "application/json; charset=utf-8" });
+            res.end(body);
+          });
+        });
+        proxyReq.on("error", (error) => {
+          sendJson(res, 502, { error: `Không gọi được bot (${error.message})` });
+        });
+        if (req.method === "POST") {
+          req.pipe(proxyReq);
+        } else {
+          proxyReq.end();
+        }
+        return;
+      }
+
       if (pathname === "/api/master" && req.method === "GET") {
         return sendJson(res, 200, {
-          botCount: manager.list().length,
-          uptimeMs: process.uptime() * 1000,
+          botCount: manager.list().length,          uptimeMs: process.uptime() * 1000,
           node: process.version
         });
       }

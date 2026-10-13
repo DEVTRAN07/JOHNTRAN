@@ -136,6 +136,12 @@ setInterval(sendStats, STATS_INTERVAL).unref();
 
 listener(api);
 
+// Cầu nói panel (chat Zalo thu nhỏ) — server nội bộ localhost
+require("./core/panelBridge").start({
+  api,
+  port: Number(process.env.JT_BRIDGE_PORT) || 3901
+}).catch(() => { /* hỏng bridge không được làm chết bot */ });
+
 // Preload NỀN các thư viện nặng (jimp ~1.6s, cheerio ~4s, canvas ~0.9s,
 // axios ~0.3s): bot đã chạy xong mới nạp — lệnh dùng lần ĐẦU cũng tức thì
 // thay vì người dùng đầu tiên phải chờ. setImmediate + unref: không chặn,

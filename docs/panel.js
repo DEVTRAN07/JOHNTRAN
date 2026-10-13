@@ -3,7 +3,7 @@ const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
 let API = "", TOKEN = "";
 let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null;
 let allCommands = [], allStatus = [];
-const VIEW_TITLES = { bots: "Bot", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
+const VIEW_TITLES = { bots: "Bot", chat: "Chat với bot", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +18,7 @@ function showView(name) {
   if (name === "profile") loadBotStats();
   if (name === "system") loadSystem();
   if (name === "commands") { if (!allCommands.length) loadCommandList(); loadCommandStatus(); }
+  if (name === "chat") { loadThreads(); } else { clearInterval(chatTimer); chatTimer = null; }
 }
 
 /* ---------- cấu hình kết nối ---------- */
@@ -442,6 +443,109 @@ async function showQr(name) {
   load();
   clearInterval(logTimer);
   logTimer = setInterval(load, 5000);
+}
+
+
+/* ---------- CHAT ZALO THU NHỎ ---------- */
+const CHAT_BOT = "main";
+let chatThreads = { friends: { list: [] }, groups: { list: [] } };
+let chatCurrent = null; // { id, type, name, avatar, isGroup }
+let chatTimer = null;
+
+async function loadThreads() {
+  try {
+    const data = await api(`/api/chat/${CHAT_BOT}/threads`);
+    chatThreads = data;
+    renderThreadList();
+  } catch (e) {
+    $("chatThreads").innerHTML = `<div class="empty">${escapeHtml(e.message)}<br><br>Bot chưa bật cầu nối chat hoặc chưa chạy.</div>`;
+  }
+}
+
+function renderThreadList() {
+  const q = ($("chatSearch").value || "").trim().toLowerCase();
+  const friends = (chatThreads.friends?.list || []).filter((f) => !q || (f.displayName || "").toLowerCase().includes(q) || f.uid.includes(q));
+  const groups = (chatThreads.groups?.list || []).filter((g) => !q || (g.name || "").toLowerCase().includes(q) || g.id.includes(q));
+  const rows = [
+    ...groups.map((g) => ({ id: g.id, type: 1, name: g.name || g.id, avatar: g.avatar || "", sub: `nhóm • ${g.totalMember || 0} thành viên`, isGroup: true })),
+    ...friends.map((f) => ({ id: f.uid, type: 0, name: f.displayName || f.uid, avatar: f.avatar || "", sub: "bạn bè", isGroup: false }))
+  ];
+  $("chatThreads").innerHTML = rows.length ? rows.map((t) => `
+    <button class="thread ${chatCurrent?.id === t.id ? "active" : ""}" onclick="openThread('${escapeAttr(t.id)}', ${t.type}, '${escapeAttr(t.name)}', '${escapeAttr(t.avatar)}', ${t.isGroup})">
+      ${t.avatar ? `<img src="${escapeAttr(t.avatar)}" alt="">` : '<span style="width:38px;height:38px;border-radius:99px;background:#1a2338;display:grid;place-items:center;flex-shrink:0">' + (t.isGroup ? "👥" : "👤") + "</span>"}
+      <span class="tx">
+        <span class="nm">${escapeHtml(t.name)}</span><br>
+        <span class="tp ${t.isGroup ? "group" : ""}">${t.sub}</span>
+      </span>
+    </button>`).join("") : '<div class="empty">Không có hội thoại khớp tìm kiếm.</div>';
+}
+
+async function openThread(id, type, name, avatar, isGroup) {
+  chatCurrent = { id, type, name, avatar, isGroup };
+  $("chatLayout").classList.add("opened");
+  $("chatBack").style.display = "";
+  $("chatTitle").textContent = name;
+  $("chatSub").textContent = isGroup ? "nhóm" : "bạn bè";
+  if (avatar) $("chatAvatar").src = avatar;
+  $("chatInput").disabled = false;
+  $("chatSendBtn").disabled = false;
+  renderThreadList();
+  await loadChatMessages();
+  clearInterval(chatTimer);
+  chatTimer = setInterval(loadChatMessages, 2500);
+}
+
+function closeThread() {
+  chatCurrent = null;
+  clearInterval(chatTimer);
+  $("chatLayout").classList.remove("opened");
+  $("chatBack").style.display = "none";
+  $("chatTitle").textContent = "Chọn hội thoại";
+  $("chatSub").textContent = "bạn bè hoặc nhóm bên trái";
+  $("chatInput").disabled = true;
+  $("chatSendBtn").disabled = true;
+  $("chatMsgs").innerHTML = '<div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm bên trái để xem tin nhắn và chat trực tiếp.</div>';
+  renderThreadList();
+}
+
+async function loadChatMessages() {
+  if (!chatCurrent) return;
+  try {
+    const data = await api(`/api/chat/${CHAT_BOT}/messages?threadId=${encodeURIComponent(chatCurrent.id)}&limit=60`);
+    renderChatMessages(data.messages || []);
+  } catch { /* bỏ qua */ }
+}
+
+function renderChatMessages(messages) {
+  if (!messages.length) {
+    $("chatMsgs").innerHTML = '<div class="empty">Chưa có tin nhắn nào trong hội thoại này.</div>';
+    return;
+  }
+  const box = $("chatMsgs");
+  box.innerHTML = messages.map((m) => {
+    const tm = new Date(m.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    if (m.isSelf) {
+      return `<div class="bubble out"><div class="tm">${tm}</div></div>`;
+    }
+    const who = `${escapeHtml(m.name || m.from || "?")}${m.from && m.from !== "me" ? ` <span style="opacity:.6">(${escapeHtml(m.from)})</span>` : ""}`;
+    return `<div class="bubble in"><div class="who">${who}</div>${escapeHtml(m.text || "")}<div class="tm">${tm}</div></div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight; // luôn ở tin mới nhất
+}
+
+async function sendChat(e) {
+  e.preventDefault();
+  if (!chatCurrent) return;
+  const msg = $("chatInput").value.trim();
+  if (!msg) return;
+  $("chatInput").value = "";
+  try {
+    await api(`/api/chat/${CHAT_BOT}/send`, {
+      method: "POST",
+      body: JSON.stringify({ threadId: chatCurrent.id, type: chatCurrent.type, msg })
+    });
+    await loadChatMessages();
+  } catch (error) { toast(error.message); }
 }
 
 /* ---------- khởi động ---------- */

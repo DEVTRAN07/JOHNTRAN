@@ -108,4 +108,4 @@ function invalidate() {
   groupsCache = null;
 }
 
-module.exports = { collectStats, invalidate };
+module.exports = { collectStats, invalidate, getFriends, getGroups, getProfile };

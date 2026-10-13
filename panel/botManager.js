@@ -47,6 +47,8 @@ function botPaths(name) {
 
 class BotInstance {
   constructor(name, options = {}) {
+    // Cổng cầu nối chat nội bộ — bot con tăng dần từ 3902
+    this.bridgePort = Number(options.bridgePort) || (name === "main" ? 3901 : 0);
     this.name = name;
     this.autoRestart = options.autoRestart !== false;
     this.process = null;
@@ -87,6 +89,7 @@ class BotInstance {
       JT_ACCOUNT_FILE: paths.accountFile,
       JT_QRCODE_PATH: paths.qrFile,
       JT_PANEL_CHILD: "1",
+      JT_BRIDGE_PORT: String(this.bridgePort || 3901),
       // Chuẩn bị sẵn phiên đăng nhập cho bot con (nếu host set sẵn qua env)
       ...(process.env.JT_ACCOUNT_JSON ? { JT_ACCOUNT_JSON: process.env.JT_ACCOUNT_JSON } : {}),
       ...(process.env.JT_COOKIE_JSON ? { JT_COOKIE_JSON: process.env.JT_COOKIE_JSON } : {})
@@ -179,7 +182,8 @@ class BotInstance {
       restarts: this.restarts,
       flapping: this.flapping,
       hasQr: fs.existsSync(botPaths(this.name).qrFile),
-      lastLogs: this.logs.slice(-20)
+      lastLogs: this.logs.slice(-20),
+      bridgePort: this.bridgePort || 3901
     };
   }
 }
@@ -209,7 +213,14 @@ class BotManager {
     if (this.bots.has(name)) {
       throw new Error(`Bot '${name}' đã tồn tại`);
     }
-    const bot = new BotInstance(name, options);
+    let bridgePort = options.bridgePort;
+    if (!bridgePort) {
+      // cấp cổng trống tiếp theo từ 3902
+      bridgePort = 3902;
+      const used = new Set([3901, ...[...this.bots.values()].map((b) => b.bridgePort).filter(Boolean)]);
+      while (used.has(bridgePort)) bridgePort += 1;
+    }
+    const bot = new BotInstance(name, { ...options, bridgePort });
     this.bots.set(name, bot);
     this.persist();
     return bot;

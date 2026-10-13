@@ -5,6 +5,7 @@ const { updateMessageCache, getMessageCache } = require("../utils/index");
 const { ThreadType } = require("zalo-client");
 
 const Threads = require("./controller/controllerThreads");
+const panelBridge = require("./panelBridge");
 
 const RECONNECT_BASE_DELAY = 5000;
 const RECONNECT_MAX_DELAY = 60000;
@@ -48,6 +49,11 @@ function startListening(api) {
     } catch (err) {
       logger.log(`Lỗi updateMessageCache (bỏ qua): ${err.message}`, "warn");
     }
+
+    // Panel chat: ghi tin vào bộ nhớ để panel xem/gửi tiếp
+    try {
+      panelBridge.recordIncoming(event);
+    } catch { /* bỏ qua */ }
 
     let threadData = null;
     try {
