@@ -79,29 +79,55 @@
         </div>
       </section>
 
-      <!-- ===== CHAT ZALO THU NHỎ ===== -->
+      <!-- ===== CHAT (kiểu Zalo PC) ===== -->
       <section class="view" id="view-chat">
         <div class="chat-layout" id="chatLayout">
           <!-- Danh sách hội thoại -->
-          <div class="chat-side card" id="chatSide">
-            <div class="row" style="margin-bottom:10px">
-              <input id="chatSearch" placeholder="🔍 Tìm bạn bè / nhóm..." oninput="renderThreadList()" style="flex:1">
+          <div class="chat-side">
+            <div class="chat-search">
+              <input id="chatSearch" placeholder="Tìm kiếm" oninput="renderThreadList()">
             </div>
             <div class="chat-threads" id="chatThreads"><div class="empty">Đang tải...</div></div>
           </div>
           <!-- Khung chat -->
-          <div class="chat-main card" id="chatMain">
-            <div class="chat-head">
-              <button class="small" id="chatBack" onclick="closeThread()" style="display:none">←</button>
-              <img id="chatAvatar" class="avatar sm" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%230d1220'/%3E%3C/svg%3E">
-              <div style="min-width:0">
+          <div class="chat-main">
+            <div class="chat-head" id="chatHead">
+              <button class="icon small" id="chatBack" onclick="closeThread()" style="display:none">←</button>
+              <img id="chatAvatar" class="avatar" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%230d1220'/%3E%3C/svg%3E">
+              <div class="chat-head-tx" onclick="openThreadInfo()">
                 <b id="chatTitle">Chọn hội thoại</b>
-                <div class="sub" id="chatSub" style="font-size:11.5px">bạn bè hoặc nhóm bên trái</div>
+                <div class="sub" id="chatSub">bạn bè hoặc nhóm</div>
               </div>
             </div>
-            <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm bên trái để xem tin nhắn và chat trực tiếp.</div></div>
+            <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div></div>
+            <!-- Thanh kiểu chữ -->
+            <div class="chat-stylebar" id="chatStylebar">
+              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})">
+                <option value="">Cỡ chữ</option>
+                <option value="13px">Nhỏ</option>
+                <option value="15px" selected>Trung bình</option>
+                <option value="17px">Lớn</option>
+                <option value="19px">Rất lớn</option>
+              </select>
+              <div class="style-btns">
+                <button class="stbtn" data-k="b" onclick="toggleStyle('b')"><b>B</b></button>
+                <button class="stbtn" data-k="i" onclick="toggleStyle('i')"><i>I</i></button>
+                <button class="stbtn" data-k="u" onclick="toggleStyle('u')"><u>U</u></button>
+                <button class="stbtn" data-k="s" onclick="toggleStyle('s')"><s>S</s></button>
+              </div>
+              <div class="color-dots" id="colorDots">
+                <button class="cdot" data-c="#7c5cff" style="--c:#7c5cff" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+                <button class="cdot" data-c="#f43f5e" style="--c:#f43f5e" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+                <button class="cdot" data-c="#22c55e" style="--c:#22c55e" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+                <button class="cdot" data-c="#f59e0b" style="--c:#f59e0b" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+                <button class="cdot" data-c="#f97316" style="--c:#f97316" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+                <button class="cdot" data-c="#e5e7eb" style="--c:#e5e7eb" onclick="setChatStyle({color:this.dataset.c},this)"></button>
+              </div>
+            </div>
             <form class="chat-input" id="chatForm" onsubmit="sendChat(event)">
-              <input id="chatInput" placeholder="Nhập tin nhắn..." autocomplete="off" disabled>
+              <button type="button" class="icon" onclick="openStylePanel()" title="Kiểu chữ">🎨</button>
+              <button type="button" class="icon" title="Đính kèm (chưa hỗ trợ)" onclick="toastSoon()">📎</button>
+              <input id="chatInput" placeholder="Nhắn tin hoặc gõ / để dùng lệnh..." autocomplete="off" disabled>
               <button class="primary" type="submit" id="chatSendBtn" disabled>Gửi</button>
             </form>
           </div>
@@ -197,6 +223,30 @@
       <button class="small" onclick="closeModal()">Đóng</button>
     </header>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Modal thông tin nhóm / hồ sơ người dùng -->
+<div class="modal" id="infoModal" onclick="if(event.target===this) closeInfoModal()">
+  <div class="modal-box" style="max-width:460px">
+    <header>
+      <strong id="infoTitle">Thông tin</strong>
+      <div style="flex:1"></div>
+      <button class="small" onclick="closeInfoModal()">Đóng</button>
+    </header>
+    <div class="modal-body" id="infoBody"></div>
+  </div>
+</div>
+
+<!-- Modal kiểu chữ -->
+<div class="modal" id="styleModal" onclick="if(event.target===this) closeStylePanel()">
+  <div class="modal-box" style="max-width:420px">
+    <header>
+      <strong>🎨 Kiểu chữ</strong>
+      <div style="flex:1"></div>
+      <button class="small" onclick="closeStylePanel()">Đóng</button>
+    </header>
+    <div class="modal-body" id="styleBody"></div>
   </div>
 </div>
 

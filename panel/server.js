@@ -417,7 +417,7 @@ function startPanel({ manager, config }) {
 
       // ===== CHAT (Zalo thu nhỏ): proxy sang cầu nối localhost của bot =====
       if (pathname.startsWith("/api/chat")) {
-        const match = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/(threads|messages|health)$/);
+        const match = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/(threads|messages|health|thread-info|action)$/);
         const sendMatch = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/send$/);
         const botName = match?.[1] || sendMatch?.[1];
         if (!botName) return sendJson(res, 400, { error: "Thiếu tên bot" });
@@ -425,9 +425,10 @@ function startPanel({ manager, config }) {
         if (!bot?.bridgePort) return sendJson(res, 404, { error: "Chưa biết cổng cầu nối của bot" });
         if (bot.status !== "online") return sendJson(res, 409, { error: `Bot ${botName} chưa chạy` });
 
-        const route = match?.[2] || "send"; // threads | messages | health | send
+        const route = match?.[2] || "send"; // threads | messages | health | thread-info | action | send
         let target = `http://127.0.0.1:${bot.bridgePort}/${route}`;
-        if (route === "messages" && url.search) target += url.search;
+        // GET (messages, thread-info) giữ nguyên query string
+        if (req.method === "GET" && url.search) target += url.search;
 
         const proxyReq = http.request(target, { method: req.method }, (proxyRes) => {
           let body = "";

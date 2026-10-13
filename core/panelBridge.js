@@ -144,7 +144,16 @@ async function handleRequest(req, res, url) {
       stats.getGroups(apiRef),
       stats.getProfile(apiRef)
     ]);
-    return json(200, { friends, groups, profile });
+    // Kèm tin cuối (từ ring) để panel hiện preview giống Zalo
+    const withLast = (item, key) => {
+      const last = getMessages(String(item[key]), 1)[0];
+      return { ...item, lastMessage: last ? { text: last.text, ts: last.ts, name: last.name } : null };
+    };
+    return json(200, {
+      friends: { ...friends, list: (friends.list || []).map((f) => withLast(f, "uid")) },
+      groups: { ...groups, list: (groups.list || []).map((g) => withLast(g, "gid")) },
+      profile
+    });
   }
 
   // Tin nhắn gần đây của 1 thread (nhóm: kéo thêm lịch sử từ Zalo)
@@ -161,6 +170,78 @@ async function handleRequest(req, res, url) {
     }
     historyApi = messages.length > 0 && type === 1 && (historyAt.get(threadId) || 0) > 0;
     return json(200, { messages, historyApi });
+  }
+
+  // Thông tin hội thoại (người dùng hoặc nhóm + thành viên)
+  if (route === "/thread-info") {
+    const threadId = url.searchParams.get("threadId") || "";
+    const type = Number(url.searchParams.get("type")) || 0;
+    if (!threadId) return json(400, { error: "Thiếu threadId" });
+    try {
+      if (type === 1) {
+        const info = await apiRef.getGroupInfo(threadId);
+        const g = info?.gridInfoMap?.[threadId] || {};
+        const members = (g.currentMems || []).map((m) => ({
+          uid: String(m.id || m.userId || ""),
+          name: m.dName || m.displayName || "",
+          avatar: m.avatar || "",
+          isAdmin: (g.adminIds || []).includes(String(m.id || m.userId))
+        })).filter((m) => m.uid);
+        return json(200, {
+          isGroup: true, id: threadId,
+          name: g.name || "", avatar: g.avt || "",
+          totalMember: g.totalMember || members.length,
+          members
+        });
+      }
+      const info = await apiRef.getUserInfo(threadId);
+      const u = info?.changedProfiles?.[threadId] || info?.profiles?.[threadId] || {};
+      return json(200, {
+        isGroup: false, id: threadId,
+        name: u.displayName || u.zaloName || threadId,
+        avatar: u.avatar || "",
+        uid: threadId,
+        status: u.status || ""
+      });
+    } catch (error) {
+      return json(500, { error: error.message });
+    }
+  }
+
+  // Hành động: rời nhóm / xoá-chặn người / đổi tên nhóm...
+  if (route === "/action" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => { body += c; if (body.length > 1e6) req.destroy(); });
+    req.on("end", async () => {
+      try {
+        const { action, threadId, uid, value } = JSON.parse(body || "{}");
+        if (!action) return json(400, { error: "Thiếu action" });
+        const api = apiRef;
+        switch (action) {
+          case "leave-group":
+            await api.leaveGroup(threadId);
+            break;
+          case "remove-user":
+            await api.removeUserFromGroup(uid, threadId);
+            break;
+          case "block-user":
+            await api.blockUser(uid);
+            break;
+          case "block-group-user":
+            await api.addGroupBlockedMember(uid, threadId);
+            break;
+          case "rename-group":
+            await api.changeGroupName(String(value || ""), threadId);
+            break;
+          default:
+            return json(400, { error: "Hành động không hỗ trợ: " + action });
+        }
+        return json(200, { ok: true });
+      } catch (error) {
+        return json(500, { error: error.message });
+      }
+    });
+    return;
   }
 
   // Gửi tin tới 1 thread (bạn bè hoặc nhóm)
