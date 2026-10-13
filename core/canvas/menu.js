@@ -9,7 +9,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text, font } = theme;
+  const { PALETTE, panel, button, text, font, label, foil } = theme;
 
   // ===== Bố cục: 9 lệnh/trang, 3 CỘT x 3 HÀNG (vuông, không dài) =====
   const perPage = 9;
@@ -27,8 +27,9 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   await theme.paintBackground(ctx, W, H);
 
   // ===== Header: icon + tên bot (font Display) + info (font Mono) =====
-  text(ctx, "⚡", S(22), S(50), { size: 30, color: PALETTE.accent });
-  text(ctx, botName, W / 2, S(50), { size: 33, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
+  label(ctx, "ᴶᴼᴴᴺ ᵀᴿᴬᴺ • MENU", W / 2, S(34), { align: "center", size: 14 });
+  text(ctx, botName, W / 2, S(66), { size: 33, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
+  foil(ctx, W / 2 - S(60), S(78), S(120));
   ctx.font = font(17, "JT-Mono");
   ctx.fillStyle = PALETTE.ink2;
   ctx.textAlign = "center";
@@ -102,7 +103,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   return theme.save(canvas, "menu");
 }
 
-const COMMAND_EMOJI = ["🔥", "🎵", "🎮", "🚀", "⭐", "🎲", "💎", "🧩", "📌", "🛠️", "💬", "📊", "🔧", "🎯", "🧠", "📥", "🎬", "🌐"];
+const COMMAND_EMOJI = ["✚", "★", "♪", "▲", "●", "◆", "■", "♞", "✦", "♦", "⬢", "✿", "☰", "◈", "⬟", "✵", "◉", "▶", "✜", "✱", "❖", "☀", "☂", "☑", "✂"];
 function commandEmoji(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 17 + name.charCodeAt(i)) | 0;

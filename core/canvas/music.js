@@ -31,7 +31,7 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text } = theme;
+  const { PALETTE, panel, button, text, label, foil } = theme;
 
   // ===== HÀNG NGANG: mỗi bài 1 dải rộng — ảnh bìa TRÁI, thông tin PHẢI =====
   const perPage = 7;
@@ -47,10 +47,11 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   await theme.paintBackground(ctx, W, H);
 
   // ===== Header =====
-  text(ctx, "🔎", S(22), S(46), { size: 28, color: PALETTE.accent });
-  text(ctx, theme.truncate(ctx, query, W - S(130)), W / 2, S(46), {
+  label(ctx, `TÌM NHẠC • ${source || "SOUNDCLOUD"}`, W / 2, S(34), { align: "center", size: 13 });
+  text(ctx, theme.truncate(ctx, query, W - S(130)), W / 2, S(68), {
     size: 28, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(130)
   });
+  foil(ctx, W / 2 - S(70), S(80), S(140));
   text(
     ctx,
     `🎵 ${shown.length} bài  •  📡 ${source || "SoundCloud"}  •  🔥 nghe nhiều nhất`,

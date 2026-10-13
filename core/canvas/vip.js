@@ -52,7 +52,13 @@ function measure(spec) {
 
 async function renderVipCard(spec = {}) {
   const palette = theme.PALETTE;
-  const themeColors = THEMES[spec.theme] || THEMES.brand;
+  // Preset editorial: thẻ brand/music/ai dùng NHŨ VÀNG + BẠC (giữ nguyên
+  // success/error/warn vì đó là màu ngữ nghĩa).
+  const rawTheme = THEMES[spec.theme] || THEMES.brand;
+  const editorialRecolor = theme.THEME_STYLE.foil && !["success", "error", "warn"].includes(spec.theme);
+  const themeColors = editorialRecolor
+    ? { ...rawTheme, accent: palette.accent, accent2: palette.accent2 }
+    : rawTheme;
   const accent = themeColors.accent || palette.accent;
   const accent2 = themeColors.accent2 || palette.accent2;
 
@@ -84,12 +90,14 @@ async function renderVipCard(spec = {}) {
 
   let y = S(74);
 
-  // ===== Tiêu đề =====
+  // ===== Kicker + Tiêu đề + vệt nhũ =====
   const icon = spec.icon || (spec.theme === "error" ? "❌" : spec.theme === "success" ? "✅" : spec.theme === "music" ? "🎵" : spec.theme === "info" ? "💡" : "⚡");
+  theme.label(ctx, "ᴶᴼᴴᴺ ᵀᴿᴬᴺ", PADDING, y - S(28), { size: 13, color: accent });
   theme.text(ctx, sanitizeEmoji(icon), PADDING, y, { size: 34, color: accent });
   theme.text(ctx, String(spec.title || "").toUpperCase(), PADDING + S(52), y, {
     size: 33, family: "JT-Display-Bold", color: palette.ink, maxWidth: WIDTH - PADDING * 2 - S(110)
   });
+  theme.foil(ctx, PADDING, y + S(14), S(90));
 
   y += S(42);
 

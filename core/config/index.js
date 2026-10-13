@@ -187,6 +187,7 @@ const DEFAULTS = {
   },
   // Cỡ ảnh canvas: 1280 = lớn rõ, 750 = Zalo gửi nguyên bản (không resize)
   canvas: {
+    theme: "editorial",
     width: 750,
     quality: 100
   },
