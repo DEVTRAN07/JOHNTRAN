@@ -325,10 +325,15 @@ async function handleRequest(req, res, url) {
     req.on("data", (c) => { body += c; if (body.length > 1e6) req.destroy(); });
     req.on("end", async () => {
       try {
-        const { threadId, type, msg } = JSON.parse(body || "{}");
+        const { threadId, type, msg, styles } = JSON.parse(body || "{}");
         if (!threadId || !msg) return json(400, { error: "Thiếu threadId hoặc msg" });
+        // styles: kiểu chữ gửi LUÔN lên Zalo (bold/màu/cỡ chữ...) — Zalo chỉ
+        // hỗ trợ b/i/u/s + 4 màu + 2 cỡ chữ nên panel lọc trước khi gửi.
+        const safeStyles = (Array.isArray(styles) ? styles : [])
+          .filter((st) => st && Number.isFinite(st.start) && Number.isFinite(st.len) && typeof st.st === "string")
+          .slice(0, 8);
         await apiRef.sendMessage(
-          { msg: String(msg) },
+          { msg: String(msg), ...(safeStyles.length ? { styles: safeStyles } : {}) },
           threadId,
           Number(type) === 1 ? ThreadType.Group : ThreadType.User
         );

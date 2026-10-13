@@ -672,6 +672,21 @@ function copyMsg(el) {
   toast("Đã copy tin nhắn");
 }
 
+// Zalo chỉ hỗ trợ: b/i/u/s + 4 màu + 2 cỡ chữ → quy đổi kiểu chữ panel
+const ZALO_COLOR = { "#f43f5e": "c_db342e", "#f97316": "c_f27806", "#f59e0b": "c_f7b503", "#22c55e": "c_15a85f" };
+const ZALO_FONT = { "13px": "f_13", "19px": "f_18" };
+function zaloStyles(msg) {
+  const styles = [];
+  const push = (st) => styles.push({ start: 0, len: String(msg).length, st });
+  if (chatStyle.bold) push("b");
+  if (chatStyle.italic) push("i");
+  if (chatStyle.underline) push("u");
+  if (chatStyle.strike) push("s");
+  if (chatStyle.color && ZALO_COLOR[chatStyle.color]) push(ZALO_COLOR[chatStyle.color]);
+  if (chatStyle.font && ZALO_FONT[chatStyle.font]) push(ZALO_FONT[chatStyle.font]);
+  return styles;
+}
+
 async function sendChat(e) {
   e.preventDefault();
   if (!chatCurrent) return;
@@ -679,11 +694,15 @@ async function sendChat(e) {
   if (!msg) return;
   $("chatInput").value = "";
   try {
+    const styles = zaloStyles(msg);
     await api("/api/chat/" + CHAT_BOT + "/send", {
       method: "POST",
-      body: JSON.stringify({ threadId: chatCurrent.id, type: chatCurrent.type, msg })
+      body: JSON.stringify({ threadId: chatCurrent.id, type: chatCurrent.type, msg, styles })
     });
     await loadChatMessages();
+    if (chatStyle.fontFamily || chatStyle.glow) {
+      toast("Font chữ/phát sáng chỉ hiển thị trên panel — Zalo không hỗ trợ");
+    }
   } catch (error) { toast(error.message); }
 }
 
