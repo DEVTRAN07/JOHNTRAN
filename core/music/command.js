@@ -2,6 +2,7 @@ const fs = require("fs");
 const music = require("./index");
 const models = require("./models");
 const ui = require("./ui");
+const cards = require("../canvas/music");
 const logger = require("../../utils/logger");
 const Threads = require("../controller/controllerThreads");
 
@@ -12,9 +13,23 @@ function send(api, threadId, type, msg) {
 }
 
 function usage(provider, reply) {
-  // Styled text — tức thì, không render canvas
-  const styled = ui.usageList(provider.name, provider.label, global.config.prefix);
-  return reply.text(styled.msg, { plain: true, styles: styled.styles });
+  // Thẻ canvas VIP (render cache trong core/message → lần 2 là 0ms)
+  return reply.card({
+    theme: "music",
+    title: `Nhạc • ${provider.label}`,
+    subtitle: "Bài nhiều người nghe nhất lên đầu",
+    rows: [{
+      icon: "list",
+      label: "Cách dùng",
+      lines: [
+        `${global.config.prefix}${provider.name} <từ khóa> — tìm bài`,
+        `${global.config.prefix}${provider.name} <số> — tải bài đã tìm`,
+        `${global.config.prefix}${provider.name} next | prev — chuyển trang`,
+        `${global.config.prefix}${provider.name} out — đóng danh sách`
+      ]
+    }],
+    footer: models.BRAND
+  });
 }
 
 function friendlyError(error, reply) {
@@ -37,10 +52,17 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
     filePath = await music.downloadToFile(streamUrl, "mp3");
     const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
 
-    // NOW PLAYING — styled text tức thì (không render ảnh)
+    // NOW PLAYING — canvas card (cache) — hỏng thì rơi về text
     try {
-      const styled = ui.nowPlaying(track, provider.label.toUpperCase());
-      await api.sendMessage({ ...styled }, threadId, type);
+      const key = `np|${providerName}|${track.id}`;
+      const cardPath = await renderCached(key, () =>
+        cards.renderNowPlaying(track, provider.label.toUpperCase())
+      );
+      if (cardPath) await api.sendMessage({ msg: "", attachments: cardPath }, threadId, type);
+      else {
+        const styled = ui.nowPlaying(track, provider.label.toUpperCase());
+        await api.sendMessage({ ...styled }, threadId, type);
+      }
     } catch { /* hỏng thì thôi */ }
 
     await api.sendVoice({ voiceUrl }, threadId, type);
@@ -56,13 +78,50 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
   }
 }
 
+// ===== CACHE ẢNH CANVAS NHẠC =====
+// Canvas render 0.5-1.5s/lần. Ảnh cùng nội dung (cùng trang kết quả) giữ
+// lại 10 phút — lật next/prev quay lại hoặc tìm lại là gửi ngay từ đĩa.
+const CARD_TTL = 10 * 60 * 1000;
+const CARD_MAX = 40;
+const cardCache = new Map(); // key → { path, at }
+
+async function renderCached(key, renderFn) {
+  const hit = cardCache.get(key);
+  if (hit && Date.now() - hit.at < CARD_TTL && fs.existsSync(hit.path)) {
+    hit.at = Date.now();
+    return hit.path;
+  }
+  const filePath = await renderFn();
+  if (!filePath) return null;
+  if (cardCache.size >= CARD_MAX) {
+    const oldest = [...cardCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) {
+      try { fs.unlinkSync(oldest[1].path); } catch { /* bỏ qua */ }
+      cardCache.delete(oldest[0]);
+    }
+  }
+  cardCache.set(key, { path: filePath, at: Date.now() });
+  return filePath;
+}
+
 async function showResults(api, threadId, type, provider, query, tracks, page) {
   const perPage = 8;
   const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const slice = tracks.slice((safePage - 1) * perPage, safePage * perPage);
 
-  // Styled text — tức thì, không render canvas
+  // Canvas card (cache 10 phút) — hỏng thì rơi về text
+  try {
+    const key = `${provider.name}|${query}|${safePage}`;
+    const gridPath = await renderCached(key, () =>
+      cards.renderSearchGrid(query, slice, { page: safePage, totalPages, source: provider.label.toUpperCase() })
+    );
+    if (gridPath) return api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
+  } catch (error) {
+    console.error("[music] render grid lỗi:", error.message);
+  }
+
+  // Fallback: text
   const styled = ui.searchList({
     providerLabel: provider.label.toUpperCase(),
     query,
