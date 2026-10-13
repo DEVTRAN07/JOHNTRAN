@@ -296,6 +296,18 @@ async function handleRequest(req, res, url) {
           case "rename-group":
             await api.changeGroupName(String(value || ""), threadId);
             break;
+          case "add-user":
+            // thêm thành viên vào nhóm (bot cần key)
+            await api.addUserToGroup(uid, threadId);
+            break;
+          case "set-deputy":
+            // đặt/gỡ phó nhóm
+            await api.addGroupDeputy(uid, threadId);
+            break;
+          case "disperse-group":
+            // giải tán nhóm (bot cần là chủ nhóm)
+            await api.disperseGroup(threadId);
+            break;
           default:
             return json(400, { error: "Hành động không hỗ trợ: " + action });
         }

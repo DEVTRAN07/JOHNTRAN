@@ -697,43 +697,43 @@ async function openThreadInfo() {
 
 function renderGroupInfo(g) {
   const uid = g.id || "";
+  const hasKey = isAdminGroup(uid);
   $("infoBody").innerHTML = `
     <div class="info-ava">
       ${g.avatar ? '<img src="' + escapeAttr(g.avatar) + '" alt="">' : '<div class="ph">👥</div>'}
-      <b>${escapeHtml(g.name || uid)}</b>
-      <div class="sub">Thành viên • ID ${escapeHtml(uid)} • ${g.totalMember || 0} thành viên</div>
+      <b>${escapeHtml(g.name || uid)}${hasKey ? ' <span style="color:var(--yellow)">👑</span>' : ""}</b>
+      <div class="sub">${hasKey ? "Bot CẦM KEY nhóm này • quản trị viên" : "Bot chỉ là thành viên"} • ${g.totalMember || 0} thành viên • ID ${escapeHtml(uid)}</div>
     </div>
     <div class="info-grid">
-      <button class="info-act" onclick="groupAction('pin')"><span class="ic">📌</span>Ghim nhóm</button>
-      <button class="info-act" onclick="groupAction('pinned')"><span class="ic">📍</span>Tin đã ghim</button>
-      <button class="info-act" onclick="groupAction('priority')"><span class="ic">↩️</span>Chuyển sang Ưu tiên</button>
+      ${hasKey ? `
+        <button class="info-act" onclick="groupAction('rename')"><span class="ic">✏️</span>Đổi tên nhóm</button>
+        <button class="info-act" onclick="groupAction('adduser')"><span class="ic">➕</span>Thêm thành viên</button>
+        <button class="info-act" onclick="groupAction('pinned')"><span class="ic">📍</span>Tin đã ghim</button>
+        <button class="info-act" onclick="groupAction('priority')"><span class="ic">↩️</span>Chuyển sang Ưu tiên</button>` : `
+        <button class="info-act" onclick="groupAction('info')"><span class="ic">🧾</span>Thông tin nhóm</button>
+        <button class="info-act" onclick="groupAction('viewmsgs')"><span class="ic">💬</span>Xem tin nhắn</button>`}
+      <button class="info-act" onclick="toggleMute('${escapeAttr(uid)}')"><span class="ic">🔕</span>${isMuted(uid) ? "Bỏ ẩn nhóm" : "Ẩn nhóm khỏi panel"}</button>
+      <button class="info-act" onclick="toggleAdminGroup('${escapeAttr(uid)}')"><span class="ic">👑</span>${hasKey ? "Bỏ đánh dấu cầm key" : "Đánh dấu bot cầm key"}</button>
       <button class="info-act danger" onclick="groupAction('leave')"><span class="ic">🚪</span>Rời nhóm</button>
-      <button class="info-act full" onclick="groupAction('avatar')"><span class="ic">🖼️</span>Đổi avatar nhóm</button>
-      <button class="info-act full" onclick="toggleMute('${escapeAttr(uid)}')"><span class="ic">🔕</span>${isMuted(uid) ? "Bỏ ẩn nhóm" : "Ẩn nhóm khỏi panel"}</button>
-      <button class="info-act full" onclick="toggleAdminGroup('${escapeAttr(uid)}')"><span class="ic">👑</span>${isAdminGroup(uid) ? "Bỏ đánh dấu cầm key" : "Đánh dấu bot cầm key ở nhóm này"}</button>
+      ${hasKey ? `<button class="info-act full danger" onclick="groupAction('disperse')"><span class="ic">💥</span>Giải tán nhóm (không hoàn tác được)</button>` : ""}
     </div>
-    <div class="info-sec">Bot trong nhóm</div>
-    <div class="member-row"><span class="ph">👑</span><span class="nm">Bot chính (bạn)</span><span class="crown">quản trị</span></div>
-    ${(g.members || []).slice(0, 20).map((m) => `
-      <div class="member-row" style="margin-top:6px">
-        ${m.avatar ? '<img src="' + escapeAttr(m.avatar) + '" alt="">' : '<span class="ph">👤</span>'}
-        <span class="nm">${escapeHtml(m.name || ("UID " + m.uid))}${m.isAdmin ? ' <span class="crown">👑</span>' : ""}</span>
-        <button class="small danger" onclick="userAction('remove', '${escapeAttr(m.uid)}')">Xoá</button>
-        <button class="small danger" onclick="userAction('blockgroup', '${escapeAttr(m.uid)}')">Chặn</button>
-      </div>`).join("")}
-    ${(g.members || []).length > 20 ? '<div class="sub" style="margin-top:8px">...và ' + (g.members.length - 20) + " thành viên khác</div>" : ""}
-    ${!(g.members || []).length ? '<div class="sub" style="margin:8px 0">Zalo không trả danh sách thành viên cho nhóm này (nhóm lớn/nhóm lạ) — nhập UID bên dưới để xoá/chặn chính xác.</div>' : ""}
-    <div class="row" style="margin-top:10px">
-      <input id="memberUidInput" placeholder="UID thành viên" style="flex:1;min-width:150px">
+    ${hasKey ? `
+    <div class="info-sec">Quản lý thành viên (nhập UID)</div>
+    <div class="row">
+      <input id="memberUidInput" placeholder="UID thành viên" style="flex:1;min-width:130px">
       <button class="small danger" onclick="userAction('remove', $('memberUidInput').value.trim())">Xoá</button>
       <button class="small danger" onclick="userAction('blockgroup', $('memberUidInput').value.trim())">Chặn</button>
-    </div>
+      <button class="small" onclick="userAction('deputy', $('memberUidInput').value.trim())">👑 Phó nhóm</button>
+      <button class="small" onclick="groupAction('adduser', $('memberUidInput').value.trim())">Thêm</button>
+    </div>` : `
+    <div class="sub" style="margin-top:12px">Bot chưa cầm key nhóm này — chỉ có thể rời nhóm và ẩn khỏi panel. Đánh dấu 👑 khi bạn tự cấp quyền quản trị cho bot trong Zalo.</div>`}
   `;
 }
 
 function renderUserInfo(u) {
   const uid = u.uid || u.id || "";
   const inGroup = chatCurrent?.isGroup;
+  const hasKey = chatCurrent?.isGroup ? isAdminGroup(chatCurrent.id) : false;
   $("infoBody").innerHTML = `
     <div class="info-ava">
       ${u.avatar ? '<img src="' + escapeAttr(u.avatar) + '" alt="">' : '<div class="ph">👤</div>'}
@@ -742,13 +742,15 @@ function renderUserInfo(u) {
     </div>
     <div class="info-grid">
       <button class="info-act" onclick="userAction('check')"><span class="ic">🧾</span>Check profile</button>
-      <button class="info-act" onclick="userAction('addfriend')"><span class="ic">➕</span>Kết bạn</button>
-      <button class="info-act" onclick="userAction('call')"><span class="ic">📞</span>Gọi thoại</button>
       <button class="info-act" onclick="copyUid('${escapeAttr(uid)}')"><span class="ic">🆔</span>Get UID</button>
-      <button class="info-act danger" onclick="userAction('block')"><span class="ic">🚫</span>Chặn</button>
-      ${inGroup ? `<button class="info-act danger" onclick="userAction('remove', '${escapeAttr(uid)}')"><span class="ic">🗑️</span>Xoá khỏi nhóm</button>` : ""}
-      ${inGroup ? `<button class="info-act danger" onclick="userAction('blockgroup', '${escapeAttr(uid)}')"><span class="ic">⛔</span>Chặn khỏi nhóm</button>` : ""}
-    </div>`;
+      ${inGroup && hasKey ? `
+        <button class="info-act danger" onclick="userAction('remove', '${escapeAttr(uid)}')"><span class="ic">🗑️</span>Xoá khỏi nhóm</button>
+        <button class="info-act danger" onclick="userAction('blockgroup', '${escapeAttr(uid)}')"><span class="ic">⛔</span>Chặn khỏi nhóm</button>
+        <button class="info-act" onclick="userAction('deputy', '${escapeAttr(uid)}')"><span class="ic">👑</span>Đặt phó nhóm</button>` : `
+        <button class="info-act danger" onclick="userAction('block')"><span class="ic">🚫</span>Chặn người dùng</button>`}
+    </div>
+    ${inGroup && !hasKey ? '<div class="sub" style="margin-top:12px">Bot chưa cầm key nhóm này — chỉ có thể chặn người dùng, không xoá khỏi nhóm được.</div>' : ""}
+  `;
 }
 
 function closeInfoModal() { $("infoModal").classList.remove("open"); }
@@ -788,9 +790,45 @@ function toggleMute(id) {
   renderThreadList();
 }
 
-async function groupAction(action) {
+async function groupAction(action, uid) {
   const soon = () => toast("Tính năng này chưa hỗ trợ");
-  if (action === "pin" || action === "pinned" || action === "priority" || action === "avatar") return soon();
+  if (action === "pin" || action === "priority" || action === "avatar") return soon();
+  if (action === "info" || action === "viewmsgs") return soon();
+  if (action === "pinned") return soon();
+  // rời nhóm: ai cũng làm được; công cụ quản trị: chỉ khi bot cầm key
+  if (action !== "leave" && !isAdminGroup(chatCurrent?.id)) return toast("Bot chưa cầm key nhóm này — không có công cụ quản trị");
+  if (action === "rename") {
+    const name = prompt("Tên mới cho nhóm:", chatCurrent?.name || "");
+    if (!name || !name.trim()) return;
+    try {
+      await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "rename-group", threadId: chatCurrent.id, value: name.trim() }) });
+      toast("Đã đổi tên nhóm");
+      chatCurrent.name = name.trim();
+      openThreadInfo();
+    } catch (e) { toast(e.message); }
+    return;
+  }
+  if (action === "adduser") {
+    const target = (uid || (typeof $("memberUidInput") !== "undefined" && $("memberUidInput") ? $("memberUidInput").value : "") || "").trim();
+    if (!target) return toast("Nhập UID cần thêm");
+    try {
+      await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "add-user", threadId: chatCurrent.id, uid: target }) });
+      toast("Đã gửi lời mời thêm thành viên");
+      openThreadInfo();
+    } catch (e) { toast(e.message); }
+    return;
+  }
+  if (action === "disperse") {
+    if (!confirm("GIẢI TÁN nhóm này? KHÔNG hoàn tác được!")) return;
+    if (!confirm("Chắc chắn chứ? Nhóm sẽ mất hoàn toàn.")) return;
+    try {
+      await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "disperse-group", threadId: chatCurrent.id }) });
+      toast("Đã giải tán nhóm");
+      closeInfoModal();
+      loadThreads();
+    } catch (e) { toast(e.message); }
+    return;
+  }
   if (action === "leave") {
     if (!confirm('Rời nhóm "' + chatCurrent?.name + '"? Hành động này thật trên Zalo.')) return;
     try {
@@ -806,6 +844,19 @@ async function userAction(action, uid) {
   const targetUid = uid || chatCurrent?.id;
   const soon = () => toast("Tính năng này chưa hỗ trợ");
   if (action === "check" || action === "addfriend" || action === "call") return soon();
+  if (action === "deputy") {
+    if (!confirm("Đặt " + targetUid + " làm phó nhóm?")) return;
+    try {
+      await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "set-deputy", threadId: chatCurrent.id, uid: targetUid }) });
+      toast("Đã đặt phó nhóm");
+      openThreadInfo();
+    } catch (e) { toast(e.message); }
+    return;
+  }
+  // xoá/chặn khỏi nhóm cần bot cầm key
+  if (action === "remove" || action === "blockgroup") {
+    if (chatCurrent?.isGroup && !isAdminGroup(chatCurrent.id)) return toast("Bot chưa cầm key nhóm này — không xoá/chặn thành viên được");
+  }
   if (action === "block") {
     if (!confirm("Chặn người dùng " + targetUid + "? Hành động này thật trên Zalo.")) return;
     try {
