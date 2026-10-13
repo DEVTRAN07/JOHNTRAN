@@ -27,7 +27,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   await theme.paintBackground(ctx, W, H);
 
   // ===== Header: icon + tên bot (font Display) + info (font Mono) =====
-  label(ctx, "ᴶᴼᴴᴺ ᵀᴿᴬᴺ • MENU", W / 2, S(34), { align: "center", size: 14 });
+  label(ctx, "JOHN TRAN • MENU", W / 2, S(34), { align: "center", size: 14 });
   text(ctx, botName, W / 2, S(66), { size: 33, family: "JT-Display-Bold", color: PALETTE.ink, align: "center", maxWidth: W - S(150) });
   foil(ctx, W / 2 - S(60), S(78), S(120));
   ctx.font = font(17, "JT-Mono");

@@ -256,7 +256,7 @@ async function renderProfile(o = {}) {
   ctx.font = "bold 16px PB";
   ctx.fillStyle = "#8b9ab8";
   ctx.textAlign = "right";
-  ctx.fillText(String(o.footer || "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"), WIDTH - PAD, H - 22);
+  ctx.fillText(String(o.footer || "JOHN TRAN"), WIDTH - PAD, H - 22);
   ctx.textAlign = "left";
 
   return save(canvas);

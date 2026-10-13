@@ -92,7 +92,7 @@ async function renderVipCard(spec = {}) {
 
   // ===== Kicker + Tiêu đề + vệt nhũ =====
   const icon = spec.icon || (spec.theme === "error" ? "❌" : spec.theme === "success" ? "✅" : spec.theme === "music" ? "🎵" : spec.theme === "info" ? "💡" : "⚡");
-  theme.label(ctx, "ᴶᴼᴴᴺ ᵀᴿᴬᴺ", PADDING, y - S(28), { size: 13, color: accent });
+  theme.label(ctx, "JOHN TRAN", PADDING, y - S(28), { size: 13, color: accent });
   theme.text(ctx, sanitizeEmoji(icon), PADDING, y, { size: 34, color: accent });
   theme.text(ctx, String(spec.title || "").toUpperCase(), PADDING + S(52), y, {
     size: 33, family: "JT-Display-Bold", color: palette.ink, maxWidth: WIDTH - PADDING * 2 - S(110)

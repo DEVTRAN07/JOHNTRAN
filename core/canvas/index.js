@@ -175,7 +175,7 @@ function renderCard(spec = {}) {
 
   // header chip
   ctx.font = `bold 24px ${baseFont}`;
-  const chipText = sanitize(`${spec.chip || "ᴶᴼᴴᴺ ᵀᴿᴬᴺ"} • ${brand}`);
+  const chipText = sanitize(`${spec.chip || "JOHN TRAN"} • ${brand}`);
   const chipWidth = Math.min(ctx.measureText(chipText).width + 48, contentWidth);
   ctx.fillStyle = theme.chip;
   roundRect(ctx, padding, y - 40, chipWidth, 52, 12);

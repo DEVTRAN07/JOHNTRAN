@@ -92,6 +92,9 @@ resolveTheme();
 // node-canvas vẽ chữ bằng font JT (Arial/DejaVu) — KHÔNG có glyph emoji,
 // mọi emoji sẽ thành ô vuông/¶. Map emoji → ký hiệu có trong font.
 const GLYPH_FALLBACK = {
+  // Chữ small-caps Unicode: font canvas (Arial/DejaVu) THIẾU glyph → rơi chữ
+  "ᴶᴼᴴᴺ ᵀᴿᴬᴺ": "JOHN TRAN",
+  "ᴶᴼᴴᴺ": "JOHN", "ᵀᴿᴬᴺ": "TRAN",
   "⌨️": "»", "⌨": "»", "🔗": "»", "📄": "»", "📡": "#", "📺": "▶",
   "❌": "×", "🚫": "×", "✖": "×", "❎": "×",
   "🎵": "♪", "🎧": "♫", "🎼": "♪",
@@ -119,6 +122,8 @@ function sanitizeGlyphs(text) {
   }
   // XOÁ emoji còn lại (surrogate pairs + variation selectors) — tránh ô vuông
   out = out.replace(/[\u{1F000}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{2600}-\u{26CF}\u{2700}-\u{27BF}]/gu, "");
+  // Small-caps/superscript Unicode (thiếu glyph → rơi chữ trong tên bot)
+  out = out.replace(/[\u{1D00}-\u{1D7F}\u{2070}-\u{209F}]/gu, "");
   return out;
 }
 
@@ -151,24 +156,15 @@ function foil(ctx, x, y, w) {
 }
 
 // Label IN HOA giãn chữ (kiểu tạp chí)
-function label(ctx, str, x, y, { size = 15, color = PALETTE.accent, align = "left", spacing = 2.5 } = {}) {
+function label(ctx, str, x, y, { size = 15, color = PALETTE.accent, align = "left" } = {}) {
   ensureTheme();
   ctx.font = font(size, "JT-Bold");
   ctx.fillStyle = color;
   ctx.textAlign = align;
-  const text = sanitizeGlyphs(str).toUpperCase();
-  if (ctx.letterSpacing !== undefined) {
-    ctx.letterSpacing = `${spacing}px`;
-    ctx.fillText(text, x, y);
-    ctx.letterSpacing = "0px";
-  } else {
-    // fallback: vẽ từng chữ một nếu canvas cũ không có letterSpacing
-    let cx = align === "center" ? x - (ctx.measureText(text).width + spacing * text.length) / 2 : x;
-    for (const ch of text) {
-      ctx.fillText(ch, cx, y);
-      cx += ctx.measureText(ch).width + spacing;
-    }
-  }
+  // Giãn chữ bằng HAIR SPACE (U+200A — có trong Arial/DejaVu) chèn giữa các
+  // chữ: 1 lần fillText, không vẽ từng chữ → không lệch glyph, cân giữa đúng.
+  const text = sanitizeGlyphs(str).toUpperCase().split("").join("\u200A");
+  ctx.fillText(text, x, y);
   ctx.textAlign = "left";
 }
 
