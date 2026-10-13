@@ -3,7 +3,7 @@ const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
 let API = "", TOKEN = "";
 let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null;
 let allCommands = [], allStatus = [];
-const VIEW_TITLES = { dashboard: "Tổng quan", bots: "Bot con", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
+const VIEW_TITLES = { bots: "Bot", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -87,18 +87,57 @@ async function refresh() {
     autoRefresh = setInterval(() => { if (!$("modal").classList.contains("open")) refresh(); }, 10000);
   } catch (e) {
     setConn(false, e.message);
-    $("botGridQuick").innerHTML = `<div class="empty">Không kết nối được: ${escapeHtml(e.message)}</div>`;
-    $("botGrid").innerHTML = "";
+    $("mainBotCard").innerHTML = `<div class="empty">Không kết nối được: ${escapeHtml(e.message)}</div>`;
+    $("childGrid").innerHTML = "";
   }
 }
 
 function renderBots(bots) {
-  $("bot-count").textContent = bots.length;
-  const nav = $("navBotCount");
-  nav.style.display = bots.length ? "" : "none";
-  nav.textContent = bots.length;
+  const main = bots.find((b) => b.name === "main") || bots[0];
+  const children = bots.filter((b) => b !== main);
+  $("child-count").textContent = children.length;
+  const nav = $("navCmdCount");
 
-  const html = bots.length ? bots.map((b) => {
+  // ===== Bot chính: thẻ trạng thái lớn =====
+  if (!main) {
+    $("mainBotCard").innerHTML = '<div class="empty">Không có bot nào đang chạy. Bấm "Khởi động lại" hoặc kiểm tra host.</div>';
+    $("mainBotBadge").textContent = "offline";
+    $("mainBotBadge").className = "badge off";
+  } else {
+    const st = STATUS_LABEL[main.status] || ["offline", main.status];
+    const online = st[0] === "online";
+    $("mainBotBadge").textContent = st[1];
+    $("mainBotBadge").className = "badge " + (online ? "on" : "off");
+    $("mainBotCard").innerHTML = `
+      <div class="bot-main">
+        <div class="bt">
+          <span class="dot ${st[0]}"></span>
+          <div>
+            <b>${escapeHtml(main.name)}</b>
+            <div class="sub">${st[1]} • pid <b>${main.pid || "–"}</b> • uptime <b>${uptime(main.uptimeMs || 0)}</b> • restart <b>${main.restarts || 0}</b> lần</div>
+          </div>
+        </div>
+        <div class="badges">
+          <span class="badge ${main.autoRestart ? "on" : "off"}">auto-restart ${main.autoRestart ? "ON" : "OFF"}</span>
+          ${main.hasQr ? '<span class="badge qr">có QR</span>' : ""}
+          ${main.flapping ? '<span class="badge crit">crash liên tục</span>' : ""}
+        </div>
+        <div class="actions">
+          <button class="primary" onclick="botAction('${escapeAttr(main.name)}','restart')">🔄 Khởi động lại</button>
+          <button onclick="botAction('${escapeAttr(main.name)}','start')">▶ Chạy</button>
+          <button onclick="botAction('${escapeAttr(main.name)}','stop')">⏹ Dừng</button>
+          <button onclick="showLogs('${escapeAttr(main.name)}')">📜 Logs</button>
+          <button onclick="showQr('${escapeAttr(main.name)}')">📱 QR đăng nhập</button>
+        </div>
+        <label class="row" style="gap:9px;font-size:12.5px;color:var(--sub);margin-top:2px">
+          <span class="switch"><input type="checkbox" ${main.autoRestart ? "checked" : ""} onchange="setAutoRestart('${escapeAttr(main.name)}', this.checked)"><span class="tr"></span></span>
+          Tự khởi động lại khi crash
+        </label>
+      </div>`;
+  }
+
+  // ===== Bot con: danh sách thu gọn =====
+  $("childGrid").innerHTML = children.length ? children.map((b) => {
     const st = STATUS_LABEL[b.status] || ["offline", b.status];
     return `
     <div class="bot">
@@ -107,11 +146,6 @@ function renderBots(bots) {
         <span style="flex:1"></span>
         <span class="badge ${st[0] === "online" ? "on" : "off"}">${st[1]}</span>
       </header>
-      <div class="badges">
-        <span class="badge ${b.autoRestart ? "on" : "off"}">auto-restart ${b.autoRestart ? "ON" : "OFF"}</span>
-        ${b.hasQr ? '<span class="badge qr">có QR</span>' : ""}
-        ${b.flapping ? '<span class="badge crit">crash liên tục</span>' : ""}
-      </div>
       <div class="stats">
         <div><div class="k">Uptime</div><div class="v">${uptime(b.uptimeMs || 0)}</div></div>
         <div><div class="k">Restart</div><div class="v">${b.restarts || 0}</div></div>
@@ -130,10 +164,14 @@ function renderBots(bots) {
         Tự khởi động lại khi crash
       </label>
     </div>`;
-  }).join("") : '<div class="empty" style="grid-column:1/-1">Chưa có bot con nào. Tạo bot đầu tiên ở tab "Bot con"!</div>';
+  }).join("") : '<div class="empty" style="grid-column:1/-1">Chưa có bot con nào — bot chính ở trên là tài khoản Zalo của bạn.</div>';
+}
 
-  $("botGrid").innerHTML = html;
-  $("botGridQuick").innerHTML = html;
+function toggleChildren() {
+  const panel = $("childPanel");
+  const open = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "grid";
+  $("childToggle").textContent = open ? "Mở rộng" : "Thu gọn";
 }
 
 async function botAction(name, action) {
@@ -203,6 +241,9 @@ async function loadCommandList() {
     const { commands, total } = await api("/api/commands");
     allCommands = commands;
     $("cmd-total").textContent = total;
+    const nav = $("navCmdCount");
+    nav.style.display = total ? "" : "none";
+    nav.textContent = total;
     const cats = [...new Set(commands.map((c) => c.category))].sort();
     $("cmdCategory").innerHTML = '<option value="">Tất cả nhóm</option>' + cats.map((c) => `<option>${escapeHtml(c)}</option>`).join("");
     renderCommands();
@@ -408,4 +449,4 @@ loadConfig();
 if (!TOKEN) toggleDrawer(); // lần đầu: mở sẵn ô cấu hình
 refresh();
 loadCommandList();
-showView("dashboard");
+showView("bots");

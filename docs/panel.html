@@ -14,8 +14,7 @@
   <!-- ===== Sidebar / bottom nav ===== -->
   <aside class="sidebar">
     <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ<small>BOT PANEL</small></div>
-    <button class="navbtn active" data-view="dashboard" onclick="showView('dashboard')"><span class="ico">📊</span>Tổng quan</button>
-    <button class="navbtn" data-view="bots" onclick="showView('bots')"><span class="ico">🤖</span>Bot con<span class="pill" id="navBotCount" style="display:none"></span></button>
+    <button class="navbtn active" data-view="bots" onclick="showView('bots')"><span class="ico">🤖</span>Bot</button>
     <button class="navbtn" data-view="commands" onclick="showView('commands')"><span class="ico">⌘</span>Lệnh</button>
     <button class="navbtn" data-view="groups" onclick="showView('groups')"><span class="ico">👥</span>Theo nhóm</button>
     <button class="navbtn" data-view="profile" onclick="showView('profile')"><span class="ico">🪪</span>Hồ sơ</button>
@@ -52,34 +51,31 @@
     </div>
 
     <main>
-      <!-- ===== TỔNG QUAN ===== -->
-      <section class="view active" id="view-dashboard">
+      <!-- ===== BOT ===== -->
+      <section class="view active" id="view-bots">
         <div class="metrics" id="metricsBar"></div>
-        <div class="two">
-          <div class="card">
-            <h2>⚡ Bot con <span class="count" id="bot-count">0</span></h2>
-            <div class="bots" id="botGridQuick"></div>
-          </div>
-          <div class="card">
-            <h2>🏆 Top lệnh hôm nay</h2>
-            <table class="info" id="topCommands"><tr><td colspan="2" class="sub">(chưa tải)</td></tr></table>
-          </div>
-        </div>
-      </section>
 
-      <!-- ===== BOT CON ===== -->
-      <section class="view" id="view-bots">
+        <!-- Bot chính -->
         <div class="card">
-          <div class="row between">
-            <h2 style="margin:0">➕ Tạo bot con</h2>
-          </div>
-          <div class="row" style="margin-top:12px">
-            <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32" style="flex:1;min-width:180px">
-            <button class="primary" onclick="createBot()">Tạo</button>
-          </div>
-          <div class="sub" style="margin-top:8px">Bot con chạy độc lập, có dữ liệu/QR/đăng nhập riêng.</div>
+          <h2>🤖 Bot chính <span class="badge" id="mainBotBadge" style="text-transform:none">—</span></h2>
+          <div id="mainBotCard"><div class="empty">Đang tải trạng thái bot...</div></div>
         </div>
-        <div class="bots" id="botGrid"></div>
+
+        <!-- Bot con (nâng cao) -->
+        <div class="card">
+          <div class="row between" style="margin-bottom:4px">
+            <h2 style="margin:0">👥 Bot con <span class="count" id="child-count">0</span></h2>
+            <button class="small" onclick="toggleChildren()" id="childToggle">Mở rộng</button>
+          </div>
+          <div class="sub" style="margin-bottom:12px">Tùy chọn nâng cao: chạy thêm tài khoản Zalo khác, mỗi bot con có dữ liệu + đăng nhập riêng.</div>
+          <div id="childPanel" style="display:none">
+            <div class="row" style="margin-bottom:12px">
+              <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32" style="flex:1;min-width:180px">
+              <button class="primary" onclick="createBot()">+ Tạo bot con</button>
+            </div>
+            <div class="bots" id="childGrid"><div class="empty">Chưa có bot con nào.</div></div>
+          </div>
+        </div>
       </section>
 
       <!-- ===== LỆNH ===== -->

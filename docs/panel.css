@@ -123,6 +123,15 @@ main { padding: 22px; display: grid; gap: 18px; align-content: start; }
 .metric.bad .v { color: var(--red); }
 .metric.warn .v { color: var(--yellow); }
 
+/* Bot chính — thẻ trạng thái lớn */
+.bot-main { display: grid; gap: 13px; }
+.bot-main .bt { display: flex; align-items: center; gap: 13px; }
+.bot-main .bt .dot { width: 12px; height: 12px; }
+.bot-main .bt b { font-size: 16.5px; display: block; }
+.bot-main .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.bot-main .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bot-main .actions button { flex: 1; min-width: 104px; padding: 11px 14px; }
+
 /* Bot cards */
 .bots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .bot { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; transition: border-color .15s; }

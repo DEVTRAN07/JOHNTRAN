@@ -378,7 +378,13 @@ function startPanel({ manager, config }) {
           const db = require("../utils/db");
           const rows = db.allData("BotStats");
           const stats = {};
-          for (const row of rows) stats[row.name] = row.data;
+          for (const row of rows) {
+            // JsonStore lưu idField "name"; Supabase chỉ có cột "id" — lấy
+            // key từ cả hai để cả local lẫn deploy đều đúng.
+            const key = row?.name || row?.id;
+            if (!key || key === "soundcloud_client_id") continue; // bỏ row config
+            stats[key] = row.data || {};
+          }
           return sendJson(res, 200, { stats });
         } catch (error) {
           return sendJson(res, 500, { error: error.message });
