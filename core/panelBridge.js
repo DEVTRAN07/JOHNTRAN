@@ -53,6 +53,41 @@ function recordIncoming(event) {
 
 let server = null;
 let apiRef = null;
+const historyAt = new Map(); // threadId → ts lần cuối kéo lịch sử nhóm
+
+// Zalo trả ts GIÂY cho lịch sử nhóm, ms cho tin realtime — quy về ms
+function normTs(ts) {
+  const n = Number(ts) || 0;
+  return n < 1e12 ? n * 1000 : n;
+}
+
+// Kéo lịch sử tin nhắn NHÓM từ Zalo; giữ tin LIVE mới hơn lịch sử
+async function loadGroupHistory(threadId, limit) {
+  if (typeof apiRef?.getGroupChatHistory !== "function") return null;
+  const cachedAt = historyAt.get(threadId) || 0;
+  const current = getMessages(threadId, limit);
+  // Mới kéo lịch sử < 30s và đã có tin → khỏi kéo lại
+  if (Date.now() - cachedAt < 30000 && current.length) return current;
+
+  try {
+    const history = await apiRef.getGroupChatHistory(threadId, 80);
+    const list = (history?.groupMsgs || []).map((m) => ({
+      ts: normTs(m?.data?.ts),
+      from: String(m?.data?.uidFrom || ""),
+      name: m?.data?.dName || "",
+      text: contentToText(m?.data?.content),
+      isSelf: Boolean(m?.isSelf)
+    })).filter((m) => m.ts > 0);
+    if (!list.length) return current;
+    const live = current.filter((m) => m.ts > list[list.length - 1].ts);
+    ring.set(threadId, [...list, ...live]);
+    historyAt.set(threadId, Date.now());
+    return getMessages(threadId, limit);
+  } catch (error) {
+    logger.log(`[bridge] lịch sử nhóm ${threadId} lỗi: ${error.message}`, "warn");
+    return current;
+  }
+}
 
 // ===== HTTP server nội bộ =====
 async function handleRequest(req, res, url) {
@@ -74,12 +109,18 @@ async function handleRequest(req, res, url) {
     return json(200, { friends, groups, profile });
   }
 
-  // Tin nhắn gần đây của 1 thread
+  // Tin nhắn gần đây của 1 thread (nhóm: kéo thêm lịch sử từ Zalo)
   if (route === "/messages") {
     const threadId = url.searchParams.get("threadId") || "";
+    const type = Number(url.searchParams.get("type")) || 0;
     if (!threadId) return json(400, { error: "Thiếu threadId" });
     const limit = Math.min(Number(url.searchParams.get("limit")) || 60, 100);
-    return json(200, { messages: getMessages(threadId, limit) });
+    let messages = getMessages(threadId, limit);
+    if (type === 1) {
+      const merged = await loadGroupHistory(threadId, limit);
+      if (merged) messages = merged;
+    }
+    return json(200, { messages, hasHistory: type === 1 });
   }
 
   // Gửi tin tới 1 thread (bạn bè hoặc nhóm)

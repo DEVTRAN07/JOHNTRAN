@@ -467,7 +467,7 @@ function renderThreadList() {
   const friends = (chatThreads.friends?.list || []).filter((f) => !q || (f.displayName || "").toLowerCase().includes(q) || f.uid.includes(q));
   const groups = (chatThreads.groups?.list || []).filter((g) => !q || (g.name || "").toLowerCase().includes(q) || g.id.includes(q));
   const rows = [
-    ...groups.map((g) => ({ id: g.id, type: 1, name: g.name || g.id, avatar: g.avatar || "", sub: `nhóm • ${g.totalMember || 0} thành viên`, isGroup: true })),
+    ...groups.map((g) => ({ id: g.gid || g.id, type: 1, name: g.name || g.gid || g.id, avatar: g.avatar || "", sub: `nhóm • ${g.totalMember || 0} thành viên`, isGroup: true })),
     ...friends.map((f) => ({ id: f.uid, type: 0, name: f.displayName || f.uid, avatar: f.avatar || "", sub: "bạn bè", isGroup: false }))
   ];
   $("chatThreads").innerHTML = rows.length ? rows.map((t) => `
@@ -511,7 +511,7 @@ function closeThread() {
 async function loadChatMessages() {
   if (!chatCurrent) return;
   try {
-    const data = await api(`/api/chat/${CHAT_BOT}/messages?threadId=${encodeURIComponent(chatCurrent.id)}&limit=60`);
+    const data = await api(`/api/chat/${CHAT_BOT}/messages?threadId=${encodeURIComponent(chatCurrent.id)}&type=${chatCurrent.type}&limit=80`);
     renderChatMessages(data.messages || []);
   } catch { /* bỏ qua */ }
 }
