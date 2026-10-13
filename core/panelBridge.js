@@ -181,17 +181,29 @@ async function handleRequest(req, res, url) {
       if (type === 1) {
         const info = await apiRef.getGroupInfo(threadId);
         const g = info?.gridInfoMap?.[threadId] || {};
-        const members = (g.currentMems || []).map((m) => ({
-          uid: String(m.id || m.userId || ""),
-          name: m.dName || m.displayName || "",
-          avatar: m.avatar || "",
-          isAdmin: (g.adminIds || []).includes(String(m.id || m.userId))
-        })).filter((m) => m.uid);
+        const adminIds = g.adminIds || [];
+        // currentMems = chi tiết (tên+avatar); memberIds = mọi uid (nhóm lớn
+        // Zalo chỉ trả ids) → ghép lại, ưu tiên bản chi tiết.
+        const seen = new Set();
+        const members = [];
+        for (const m of (g.currentMems || [])) {
+          const uid = String(m.id || m.userId || "");
+          if (!uid || seen.has(uid)) continue;
+          seen.add(uid);
+          members.push({ uid, name: m.dName || m.zaloName || "", avatar: m.avatar || "", isAdmin: adminIds.includes(uid) });
+        }
+        for (const uid of (g.memberIds || [])) {
+          const id = String(uid);
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          members.push({ uid: id, name: "", avatar: "", isAdmin: adminIds.includes(id) });
+        }
         return json(200, {
           isGroup: true, id: threadId,
-          name: g.name || "", avatar: g.avt || "",
+          name: g.name || "", avatar: g.avt || g.fullAvt || "",
           totalMember: g.totalMember || members.length,
-          members
+          members,
+          hasMoreMember: Boolean(g.hasMoreMember)
         });
       }
       const info = await apiRef.getUserInfo(threadId);

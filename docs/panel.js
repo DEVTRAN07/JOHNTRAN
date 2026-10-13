@@ -685,14 +685,16 @@ function renderGroupInfo(g) {
     </div>
     <div class="info-sec">Bot trong nhóm</div>
     <div class="member-row"><span class="ph">👑</span><span class="nm">Bot chính (bạn)</span><span class="crown">quản trị</span></div>
-    ${(g.members || []).slice(0, 8).map((m) => `
+    <div class="sub" style="margin:-4px 0 10px">Danh sách thành viên (chỉ hiện trên panel)</div>
+    ${(g.members || []).slice(0, 20).map((m) => `
       <div class="member-row" style="margin-top:6px">
         ${m.avatar ? '<img src="' + escapeAttr(m.avatar) + '" alt="">' : '<span class="ph">👤</span>'}
-        <span class="nm">${escapeHtml(m.name || m.uid)}${m.isAdmin ? ' <span class="crown">👑</span>' : ""}</span>
+        <span class="nm">${escapeHtml(m.name || ("UID " + m.uid))}${m.isAdmin ? ' <span class="crown">👑</span>' : ""}</span>
         <button class="small danger" onclick="userAction('remove', '${escapeAttr(m.uid)}')">Xoá</button>
         <button class="small danger" onclick="userAction('blockgroup', '${escapeAttr(m.uid)}')">Chặn</button>
       </div>`).join("")}
-    ${(g.members || []).length > 8 ? '<div class="sub" style="margin-top:8px">...và ' + (g.members.length - 8) + " thành viên khác</div>" : ""}
+    ${(g.members || []).length > 20 ? '<div class="sub" style="margin-top:8px">...và ' + (g.members.length - 20) + " thành viên khác</div>" : ""}
+    ${g.hasMoreMember ? '<div class="sub" style="margin-top:6px">Nhóm lớn — Zalo chỉ trả một phần danh sách.</div>' : ""}
   `;
 }
 
