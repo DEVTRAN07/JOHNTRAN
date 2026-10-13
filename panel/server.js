@@ -247,6 +247,45 @@ setInterval(refresh, 5000);
 </body>
 </html>`;
 
+// ===== Đọc danh sách lệnh trực tiếp từ file (process panel không có global.client) =====
+const COMMANDS_DIR = path.resolve(__dirname, "..", "plugins", "commands");
+
+function loadCommandsFromFiles(config) {
+  const commands = [];
+  let files = [];
+  try { files = fs.readdirSync(COMMANDS_DIR).filter((f) => f.endsWith(".js")); } catch { return commands; }
+
+  const previousConfig = global.config;
+  global.config = config || {}; // một số lệnh đọc global.config lúc load
+  try {
+    for (const file of files) {
+      try {
+        const mod = require(path.join(COMMANDS_DIR, file));
+        const cfg = mod?.config;
+        if (!cfg?.name) continue;
+        commands.push({
+          name: cfg.name,
+          aliases: cfg.aliases || [],
+          description: cfg.description || "",
+          category: cfg.category || "Khác",
+          role: cfg.role || 0,
+          usage: cfg.usage || cfg.name,
+          cooldowns: cfg.cooldowns || 0,
+          requires: Array.isArray(cfg.requires) ? cfg.requires : []
+        });
+      } catch { /* lệnh hỏng không được làm hỏng danh sách */ }
+    }
+  } finally {
+    global.config = previousConfig;
+  }
+  return commands.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function commandStatusFromFiles(config) {
+  const audit = require("../core/commands/audit");
+  return loadCommandsFromFiles(config).map((cmd) => audit.commandStatus(cmd.name, cmd));
+}
+
 function startPanel({ manager, config }) {
   const token = config?.panel?.token || "";
   // Koyeb/Railway inject PORT — panel phải bind đúng port đó để health check + routing
@@ -349,26 +388,21 @@ function startPanel({ manager, config }) {
       // ===== Quản lý lệnh =====
       if (pathname === "/api/commands" && req.method === "GET") {
         try {
-          const commands = Array.from(global.client.commands.values()).map((cmd) => ({
-            name: cmd.config.name,
-            aliases: cmd.config.aliases || [],
-            description: cmd.config.description || "",
-            category: cmd.config.category || "Khác",
-            role: cmd.config.role || 0,
-            usage: cmd.config.usage || cmd.config.name,
-            cooldowns: cmd.config.cooldowns || 0
-          })).sort((a, b) => a.name.localeCompare(b.name));
+          // global.client chỉ tồn tại trong process BOT CON — panel (process cha)
+          // đọc trực tiếp config từ file lệnh để luôn hiển thị đúng.
+          const commands = loadCommandsFromFiles(config);
           return sendJson(res, 200, { commands, total: commands.length });
         } catch (error) {
           return sendJson(res, 500, { error: error.message });
         }
       }
 
-      // ===== Trạng thái lệnh (thiếu API / endpoint gì) =====
       if (pathname === "/api/commands/status" && req.method === "GET") {
         try {
           const audit = require("../core/commands/audit");
-          const list = audit.getAllCommandStatus();
+          const list = audit.getAllCommandStatus()?.length
+            ? audit.getAllCommandStatus()
+            : commandStatusFromFiles(config);
           return sendJson(res, 200, { ...audit.summarize(list), commands: list });
         } catch (error) {
           return sendJson(res, 500, { error: error.message });

@@ -58,4 +58,4 @@ function summarize(list) {
   };
 }
 
-module.exports = { getAllCommandStatus, summarize };
+module.exports = { getAllCommandStatus, summarize, commandStatus };

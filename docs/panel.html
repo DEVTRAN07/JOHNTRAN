@@ -2,135 +2,173 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070a12">
 <title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Panel quản lý</title>
 <link rel="stylesheet" href="panel.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 </head>
 <body>
-<div class="glow a"></div><div class="glow b"></div>
+<div class="app">
 
-<main>
-  <header class="topbar">
-    <div>
-      <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ • PANEL</div>
-      <div class="tag">Điều khiển bot Zalo + bot con từ xa • GitHub Pages (UI tĩnh) → API trên Koyeb</div>
+  <!-- ===== Sidebar / bottom nav ===== -->
+  <aside class="sidebar">
+    <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ<small>BOT PANEL</small></div>
+    <button class="navbtn active" data-view="dashboard" onclick="showView('dashboard')"><span class="ico">📊</span>Tổng quan</button>
+    <button class="navbtn" data-view="bots" onclick="showView('bots')"><span class="ico">🤖</span>Bot con<span class="pill" id="navBotCount" style="display:none"></span></button>
+    <button class="navbtn" data-view="commands" onclick="showView('commands')"><span class="ico">⌘</span>Lệnh</button>
+    <button class="navbtn" data-view="groups" onclick="showView('groups')"><span class="ico">👥</span>Theo nhóm</button>
+    <button class="navbtn" data-view="profile" onclick="showView('profile')"><span class="ico">🪪</span>Hồ sơ</button>
+    <button class="navbtn" data-view="system" onclick="showView('system')"><span class="ico">⚙️</span>Hệ thống</button>
+    <div class="foot">
+      <a class="btn" href="index.html" style="text-align:center;border:1px solid var(--border);border-radius:12px;padding:9px;font-size:13px;color:var(--sub)">📡 Trang trạng thái</a>
     </div>
-    <div class="conn">
-      <span class="dot" id="connDot"></span>
-      <span id="connText">chưa kết nối</span>
-    </div>
-  </header>
+  </aside>
 
-  <!-- Thanh cấu hình kết nối -->
-  <section class="card config">
-    <div class="row">
-      <label>REMOTE PANEL URL
-        <input id="remoteUrl" size="36" placeholder="https://ten-service.koyeb.app">
-      </label>
-      <label>TOKEN
-        <input id="token" size="22" placeholder="panel.token trong config.yml">
-      </label>
-      <button class="primary" onclick="saveConfig()">Kết nối</button>
-      <button onclick="refresh()">Làm mới</button>
-      <span class="spacer"></span>
-      <a class="btn ghost" href="index.html">Trạng thái</a>
-    </div>
-    <div class="hint" id="hintBox">
-      Panel này chỉ là <b>giao diện</b>. API điều khiển chạy trên host bot (Koyeb): set
-      <code>panel.enabled: true</code> + <code>panel.token</code> mạnh, rồi điền URL + token ở trên.
-      Cấu hình lưu trong localStorage — lần sau tự kết nối.
-    </div>
-  </section>
+  <!-- ===== Content ===== -->
+  <div class="content">
+    <header class="topbar">
+      <h1 id="viewTitle">Tổng quan</h1>
+      <div class="spacer"></div>
+      <div class="conn"><span class="dot" id="connDot"></span><span id="connText">chưa kết nối</span></div>
+      <button class="icon" onclick="toggleDrawer()" title="Cấu hình kết nối">⚙️</button>
+      <button class="icon" onclick="refresh()" title="Làm mới">🔄</button>
+    </header>
 
-  <!-- Metrics tổng -->
-  <section class="metrics" id="metricsBar"></section>
-
-  <!-- Hồ sơ bot -->
-  <section class="card profile-card">
-    <div class="row" style="gap:20px;align-items:flex-start">
-      <img id="botAvatar" class="avatar" alt="avatar" src="data:image/svg+xml,%3Csvg xmlns=\x27http://www.w3.org/2000/svg\x27 width=\x2780\x27 height=\x2780\x27%3E%3Crect width=\x2780\x27 height=\x2780\x27 fill=\x27%23121826\x27/%3E%3C/svg%3E">
-      <div style="flex:1;min-width:220px">
-        <h2 style="margin-bottom:8px">Hồ sơ bot <span class="badge on" id="botStateBadge">—</span></h2>
-        <table class="info" id="profileInfo">
-          <tr><td colspan="2" style="color:var(--sub)">(chưa tải — cần bot con gửi thống kê)</td></tr>
-        </table>
+    <!-- Config drawer -->
+    <div class="drawer" id="drawer">
+      <div class="card">
+        <label>REMOTE PANEL URL
+          <input id="remoteUrl" placeholder="https://johntran.onrender.com">
+        </label>
+        <label>TOKEN
+          <input id="token" placeholder="panel.token trong config.yml">
+        </label>
+        <div class="row">
+          <button class="primary" onclick="saveConfig()">Kết nối</button>
+          <span class="sub">Cấu hình lưu trong localStorage — lần sau tự kết nối.</span>
+        </div>
       </div>
     </div>
-  </section>
 
-  <!-- Bạn bè & Nhóm -->
-  <section class="two-col">
-    <div class="card">
-      <h2>Bạn bè <span class="badge-count" id="friendCount">0</span></h2>
-      <div class="list" id="friendList"><div class="empty">(chưa tải)</div></div>
-    </div>
-    <div class="card">
-      <h2>Nhóm bot đang ở <span class="badge-count" id="groupCount">0</span></h2>
-      <div class="list" id="groupList"><div class="empty">(chưa tải)</div></div>
-    </div>
-  </section>
+    <main>
+      <!-- ===== TỔNG QUAN ===== -->
+      <section class="view active" id="view-dashboard">
+        <div class="metrics" id="metricsBar"></div>
+        <div class="two">
+          <div class="card">
+            <h2>⚡ Bot con <span class="count" id="bot-count">0</span></h2>
+            <div class="bots" id="botGridQuick"></div>
+          </div>
+          <div class="card">
+            <h2>🏆 Top lệnh hôm nay</h2>
+            <table class="info" id="topCommands"><tr><td colspan="2" class="sub">(chưa tải)</td></tr></table>
+          </div>
+        </div>
+      </section>
 
-  <!-- Quản lý bot con -->
-  <section class="card">
-    <div class="row between">
-      <h2>Bot con <span class="badge-count" id="bot-count">0</span></h2>
-      <div class="row">
-        <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32">
-        <button class="primary" onclick="createBot()">+ Tạo bot con</button>
-      </div>
-    </div>
-    <div class="grid" id="botGrid">
-      <div class="empty">Chưa kết nối tới host bot.</div>
-    </div>
-  </section>
+      <!-- ===== BOT CON ===== -->
+      <section class="view" id="view-bots">
+        <div class="card">
+          <div class="row between">
+            <h2 style="margin:0">➕ Tạo bot con</h2>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32" style="flex:1;min-width:180px">
+            <button class="primary" onclick="createBot()">Tạo</button>
+          </div>
+          <div class="sub" style="margin-top:8px">Bot con chạy độc lập, có dữ liệu/QR/đăng nhập riêng.</div>
+        </div>
+        <div class="bots" id="botGrid"></div>
+      </section>
 
-  <!-- Trạng thái lệnh (thiếu API/config) -->
-  <section class="card">
-    <h2>Trạng thái lệnh <span class="badge-count" id="cmdStatusCount">—</span></h2>
-    <div class="row" style="margin-bottom:12px">
-      <span style="color:var(--sub);font-size:12.5px" id="cmdStatusHint">Đang tải...</span>
-      <button onclick="loadCommandStatus()">Tải lại</button>
-    </div>
-    <div class="cmd-grid" id="cmdStatusGrid"></div>
-  </section>
+      <!-- ===== LỆNH ===== -->
+      <section class="view" id="view-commands">
+        <div class="card">
+          <div class="row between" style="margin-bottom:12px">
+            <h2 style="margin:0">⌘ Danh sách lệnh <span class="count" id="cmd-total">0</span></h2>
+            <button class="small" onclick="loadCommandList()">Tải lại</button>
+          </div>
+          <div class="filters">
+            <input id="cmdSearch" placeholder="🔍 Tìm lệnh..." oninput="renderCommands()">
+            <select id="cmdCategory" onchange="renderCommands()"><option value="">Tất cả nhóm</option></select>
+            <select id="cmdRole" onchange="renderCommands()">
+              <option value="">Mọi quyền</option>
+              <option value="0">Thành viên</option>
+              <option value="1">Support bot</option>
+              <option value="2">Admin bot</option>
+            </select>
+          </div>
+          <div class="cmds" id="cmdGrid" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <h2>🩺 Trạng thái lệnh <span class="count" id="cmdStatusCount">—</span></h2>
+          <div class="sub" id="cmdStatusHint" style="margin-bottom:12px">Đang tải...</div>
+          <div class="cmd-list" id="cmdStatusGrid"></div>
+        </div>
+      </section>
 
-  <!-- Quản lý lệnh bot con -->
-  <section class="card">
-    <h2>Quản lý lệnh <span class="badge-count" id="cmd-total">0</span></h2>
-    <div class="row" style="margin-bottom:12px">
-      <label>Group ID
-        <input id="cmdGroupId" size="30" placeholder="ID nhóm cần quản lý">
-      </label>
-      <button class="primary" onclick="loadGroupCommands()">Tải lệnh nhóm</button>
-      <span style="color:var(--sub);font-size:12px" id="cmdHint">Nhập ID nhóm rồi bấm "Tải lệnh nhóm" để bật/tắt từng lệnh.</span>
-    </div>
-    <div class="cmd-grid" id="cmdGrid"></div>
-  </section>
+      <!-- ===== THEO NHÓM ===== -->
+      <section class="view" id="view-groups">
+        <div class="card">
+          <h2>👥 Bật/tắt lệnh theo nhóm</h2>
+          <div class="row">
+            <input id="cmdGroupId" placeholder="Group ID cần quản lý" style="flex:1;min-width:200px">
+            <button class="primary" onclick="loadGroupCommands()">Tải lệnh nhóm</button>
+          </div>
+          <div class="sub" id="cmdHint" style="margin-top:8px">Nhập ID nhóm rồi bấm "Tải lệnh nhóm" để bật/tắt từng lệnh.</div>
+          <div class="cmd-list" id="cmdGroupGrid" style="margin-top:12px"></div>
+        </div>
+      </section>
 
-  <!-- Master info + Audit -->
-  <section class="two-col">
-    <div class="card">
-      <h2>Thông tin host</h2>
-      <table class="info" id="masterInfo"></table>
-      <h2 style="margin-top:18px">Top lệnh hôm nay</h2>
-      <table class="info" id="topCommands"><tr><td colspan="2" style="color:var(--sub)">(chưa tải)</td></tr></table>
-    </div>
-    <div class="card">
-      <h2>Audit log (hành động admin)</h2>
-      <pre class="logs small" id="auditLog">(chưa tải)</pre>
-    </div>
-  </section>
-</main>
+      <!-- ===== HỒ SƠ ===== -->
+      <section class="view" id="view-profile">
+        <div class="card">
+          <h2>🪪 Hồ sơ bot <span class="badge on" id="botStateBadge" style="text-transform:none">—</span></h2>
+          <div class="profile">
+            <img id="botAvatar" class="avatar" alt="avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%230d1220'/%3E%3C/svg%3E">
+            <div style="flex:1;min-width:230px">
+              <table class="info" id="profileInfo"><tr><td colspan="2" class="sub">(chưa tải — cần bot con gửi thống kê)</td></tr></table>
+            </div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="card">
+            <h2>💚 Bạn bè <span class="count" id="friendCount">0</span></h2>
+            <div class="list" id="friendList"><div class="empty">(chưa tải)</div></div>
+          </div>
+          <div class="card">
+            <h2>👥 Nhóm bot đang ở <span class="count" id="groupCount">0</span></h2>
+            <div class="list" id="groupList"><div class="empty">(chưa tải)</div></div>
+          </div>
+        </div>
+      </section>
 
-<!-- Modal -->
+      <!-- ===== HỆ THỐNG ===== -->
+      <section class="view" id="view-system">
+        <div class="two">
+          <div class="card">
+            <h2>🖥️ Thông tin host</h2>
+            <table class="info" id="masterInfo"></table>
+          </div>
+          <div class="card">
+            <h2>📜 Audit log (hành động admin)</h2>
+            <pre class="logs small" id="auditLog">(chưa tải)</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ===== Modal (Logs / QR) ===== -->
 <div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
   <div class="modal-box">
-    <header class="row between">
+    <header>
       <strong id="modalTitle">Logs</strong>
-      <div class="row">
-        <button onclick="togglePause()" id="pauseBtn">Tạm dừng</button>
-        <button onclick="closeModal()">Đóng</button>
-      </div>
+      <div class="spacer" style="flex:1"></div>
+      <button class="small" onclick="togglePause()" id="pauseBtn">Tạm dừng</button>
+      <button class="small" onclick="closeModal()">Đóng</button>
     </header>
     <div class="modal-body" id="modalBody"></div>
   </div>
