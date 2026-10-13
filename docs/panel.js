@@ -549,7 +549,8 @@ function renderThreadList() {
   $("chatThreads").innerHTML = rows.length ? rows.map((t) => {
     const unread = chatUnread[t.id] || 0;
     const tm = t.last?.ts ? new Date(t.last.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
-    return '<button class="thread ' + (chatCurrent?.id === t.id ? "active" : "") + '" onclick="openThread(\'' + escapeAttr(t.id) + "', " + t.type + ", '" + escapeAttr(t.name) + "', '" + escapeAttr(t.avatar) + "', " + t.isGroup + ')">' +
+    const tJson = escapeAttr(JSON.stringify({ id: t.id, type: t.type, name: t.name, avatar: t.avatar, isGroup: t.isGroup }));
+    return '<button class="thread ' + (chatCurrent?.id === t.id ? "active" : "") + '" data-t="' + tJson + '" onclick="openThreadJson(this)">' +
       '<span class="ava">' + threadAvatar(t) + (unread ? '<span class="unread">' + (unread > 9 ? "9+" : unread) + "</span>" : "") + "</span>" +
       "<span style=\"min-width:0\">" +
       '<span class="nm">' + escapeHtml(t.name) + ' <span class="tag ' + (t.isGroup ? "group" : "user") + '">' + (t.isGroup ? "Nhóm" : "Người dùng") + "</span></span>" +
@@ -558,7 +559,12 @@ function renderThreadList() {
   }).join("") : '<div class="empty">Không có hội thoại khớp tìm kiếm.</div>';
 }
 
-// ---- mở hội thoại ----
+// ---- mở hội thoại ---- (data-t JSON: tên nhóm có dấu ' hoặc " không vỡ chuỗi)
+function openThreadJson(el) {
+  let t = {};
+  try { t = JSON.parse(el.dataset.t || "{}"); } catch { return; }
+  return openThread(t.id, t.type, t.name, t.avatar, t.isGroup);
+}
 async function openThread(id, type, name, avatar, isGroup) {
   chatCurrent = { id, type, name, avatar, isGroup };
   chatUnread[id] = 0;
