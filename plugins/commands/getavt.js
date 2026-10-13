@@ -11,7 +11,6 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { fetchProfile } = require("../../core/zaloProfile");
-const { loadImg } = require("../../core/canvas/profileCard");
 
 module.exports.config = {
   name: "getavt",
@@ -37,6 +36,7 @@ const HD = `=== 『 GET-AVATAR 』 ===
 
 // Tải ảnh về file tạm rồi gửi (giống cách repo: lưu cache → gửi → xoá)
 async function sendAvatarFromUrl(api, threadId, type, url) {
+  const { loadImg } = require("../../core/canvas/profileCard"); // lazy — canvas+jimp ~1.6s
   const img = await loadImg(url);
   if (!img) return null;
 

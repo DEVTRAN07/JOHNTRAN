@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const { ThreadType } = require("zalo-client");
 
 const autosendgif = require('../../assets/autosend.json');
@@ -19,7 +18,7 @@ module.exports.config = {
 // Danh sách thời gian và nội dung tự động gửi
 const setting = [
   {
-    timer: '07:10:00 AM',
+    timer: '06:00:00 AM',
     message: [
       'Chúc mọi người buổi sáng vui vẻ😉',
       'Buổi sáng đầy năng lượng nhaa các bạn😙',
@@ -153,6 +152,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
     let hasGif = false;
     try {
       const imageUrl = autosendgif[Math.floor(Math.random() * autosendgif.length)];
+      const axios = require('axios');
       const res = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
         timeout: GIF_TIMEOUT,

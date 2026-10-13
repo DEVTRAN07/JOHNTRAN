@@ -4,10 +4,6 @@ const path = require("path");
 const logger = require("./logger");
 const YAML = require("yaml");
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
-const QRCode = require("qrcode");
-const jsQR = require("jsqr");
-const Jimp = require("jimp");
 
 function saveBase64Image(base64String, outputPath) {
     const matches = base64String.match(/^data:(image\/\w+);base64,(.+)$/);
@@ -197,7 +193,8 @@ function updateMessageCache(data) {
 }
 
 // PROCCES VIDEO
-ffmpeg.setFfmpegPath(ffmpegStatic);
+// lazy: ffmpeg-static/qrcode/jsqr chỉ cần khi xử lý video hoặc login QR
+ffmpeg.setFfmpegPath(require('ffmpeg-static'));
 
 function convertDurationToFiveDigits(durationStr) {
   const duration = parseFloat(durationStr);
@@ -321,6 +318,7 @@ function convertMp3ToAac(inputPath, outputPath) {
 async function decodeQRFromBase64(base64Image) {
     try {
         const buffer = Buffer.from(base64Image, 'base64');
+        const Jimp = require("jimp"); // lazy — jimp tốn ~1.6s require lần đầu
         const jimpImage = await Jimp.read(buffer);
         const imageData = {
             data: new Uint8ClampedArray(jimpImage.bitmap.data),
@@ -328,6 +326,7 @@ async function decodeQRFromBase64(base64Image) {
             height: jimpImage.bitmap.height
         };
         
+        const jsQR = require("jsqr");
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code) {
             return code.data;
@@ -352,6 +351,7 @@ function generateQRCodeInTerminal(data, options = {}) {
     const finalOptions = { ...defaultOptions, ...options };
     
     return new Promise((resolve, reject) => {
+        const QRCode = require("qrcode");
         QRCode.toString(data, finalOptions, (err, string) => {
             if (err) {
                 reject(err);

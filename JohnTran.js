@@ -136,4 +136,16 @@ setInterval(sendStats, STATS_INTERVAL).unref();
 
 listener(api);
 
+// Preload NỀN các thư viện nặng (jimp ~1.6s, cheerio ~4s, canvas ~0.9s,
+// axios ~0.3s): bot đã chạy xong mới nạp — lệnh dùng lần ĐẦU cũng tức thì
+// thay vì người dùng đầu tiên phải chờ. setImmediate + unref: không chặn,
+// không giữ process.
+setImmediate(() => {
+  const heavy = ["jimp", "cheerio", "axios", "canvas"];
+  for (const mod of heavy) {
+    try { require(mod); } catch { /* thiếu module thì thôi */ }
+  }
+  logger.log("Đã preload nền: " + heavy.join(", "), "info");
+});
+
 })();

@@ -1,6 +1,5 @@
 const path = require("path");
 const fs = require("fs");
-const axios = require("axios");
 
 module.exports.config = {
   name: 'hon',
@@ -44,6 +43,7 @@ module.exports.run = async ({ event, api }) => {
     }
     const randomLink = link[Math.floor(Math.random() * link.length)];
 
+    const axios = require('axios');
     const response = await axios.get(randomLink, { 
         responseType: 'arraybuffer', 
         headers: {

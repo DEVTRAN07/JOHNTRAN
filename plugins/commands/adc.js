@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
-const cheerio = require('cheerio');
 const { getMessageCache } = require('../../utils/index');
+// cheerio (với axios) nặng ~4s khi require lần đầu — lazy-load trong handler
+// để khỏi làm chậm khởi động bot (preload nền sau khi boot xong).
 
 module.exports.config = {
   name: 'adc',
@@ -52,6 +52,7 @@ module.exports.run = async function ({ api, event, args }) {
   }
 
   const url = matched[0];
+  const axios = require('axios'); // lazy — cheerio chỉ require khi cần cheerio
 
   try {
     if (url.includes('pastebin')) {
@@ -69,6 +70,7 @@ module.exports.run = async function ({ api, event, args }) {
 
     else if (url.includes('buildtool') || url.includes('tinyurl.com')) {
       const response = await axios.get(url);
+      const cheerio = require('cheerio');
       const $ = cheerio.load(response.data);
       const codeBlock = $('.language-js').first();
       const code = codeBlock?.text()?.trim();
@@ -108,6 +110,7 @@ async function writeCodeToFile(name, code, api, threadId, type) {
 }
 
 async function uploadToDpaste(code) {
+  const axios = require('axios');
   try {
     const response = await axios.post(
       'https://dpaste.com/api/v2/',

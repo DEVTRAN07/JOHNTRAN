@@ -3,7 +3,6 @@
 // Dữ liệu lấy qua curl_cffi (trang công khai) — Node.js thuần bị Cloudflare
 // chặn nên không lấy được. Không cần FB token.
 const http = require("../../core/http");
-const card = require("../../core/canvas/profileCard");
 const { fetchSocial } = require("../../core/socialFetch");
 
 module.exports.config = {
@@ -39,6 +38,7 @@ function parseTarget(raw) {
 
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type } = event;
+  const card = require("../../core/canvas/profileCard"); // lazy — canvas+jimp ~1.6s
 
   const raw = args[0];
   if (!raw) {

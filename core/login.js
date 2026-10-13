@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { ZaloClient, LoginQRCallbackEventType } = require("zalo-client");
-const Jimp = require("jimp");
 const logger = require("../utils/logger");
 const { registerStickerApi } = require("./stickerFactory");
 const { getJsonData, displayQRCodeInConsole } = require("../utils/index");
@@ -83,7 +82,8 @@ function createZaloClient() {
       } finally {
         await fileHandle.close();
       }
-      // Fallback cho webp/định dạng lạ: decode bằng jimp
+      // Fallback cho webp/định dạng lạ: decode bằng jimp (lazy — nặng)
+      const Jimp = require("jimp");
       const image = await Jimp.read(filePath);
       return { width: image.bitmap.width, height: image.bitmap.height, size: fs.statSync(filePath).size };
     }

@@ -1,4 +1,3 @@
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { processVideo } = require("../../utils/index");
@@ -28,6 +27,7 @@ module.exports.run = async ({ args, event, api, Users }) => {
 
     const link = vdgirl[Math.floor(Math.random() * vdgirl.length)];
 
+    const axios = require('axios');
     const res = await axios.get(link, {
       responseType: "arraybuffer",
       headers: {

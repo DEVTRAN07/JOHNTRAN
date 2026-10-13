@@ -1,4 +1,3 @@
-const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,6 +28,7 @@ module.exports.run = async ({ args, event, api, Users }) => {
   try {
     const link = girlImages[Math.floor(Math.random() * girlImages.length)];
 
+    const axios = require('axios');
     const res = await axios.get(link, {
       responseType: "arraybuffer",
       headers: {

@@ -1,7 +1,6 @@
 const { convertTimestamp, getMessageCache } = require("../../utils/index");
 const fs = require("fs").promises;
 const path = require("path");
-const axios = require("axios");
 const { ThreadType } = require("zalo-client");
 
 module.exports.config = {
@@ -30,6 +29,7 @@ function formatUndoMessage(name, timeSend, timeUndo, content) {
 
 async function handlePhoto(messageCache, tempPath, name, timeSend, timeUndo, threadId, api, type) {
   const tempFilePath = path.join(tempPath, `anti_undo_${Date.now()}.jpg`);
+  const axios = require('axios');
   const response = await axios.get(messageCache.content.href, { responseType: 'arraybuffer' });
 
   await fs.mkdir(tempPath, { recursive: true });
@@ -189,6 +189,7 @@ module.exports.handleEvent = async function ({ event, api, Threads, eventType, i
           if (!fileUrl) break;
 
           try {
+            const axios = require('axios');
             const response = await axios.get(fileUrl, { responseType: "arraybuffer" });
 
             let fileName = `anti_undo_${Date.now()}.dat`;

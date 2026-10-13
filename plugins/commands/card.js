@@ -1,7 +1,6 @@
 // /card — Thẻ hồ sơ theo layout Kenne400k (avatar tròn + thông tin bên phải)
 // Tham khảo: Kenne400k/filebotha-leak (modules/commands/card.js)
 const http = require("../../core/http");
-const card = require("../../core/canvas/profileCard");
 const { fetchProfile } = require("../../core/zaloProfile");
 
 module.exports.config = {
@@ -33,6 +32,7 @@ function dobText(dob, sdob) {
 }
 
 module.exports.run = async function ({ api, event, args, reply }) {
+  const card = require("../../core/canvas/profileCard"); // lazy — canvas+jimp ~1.6s
   const { threadId, type, data } = event;
 
   await api.sendMessage({ msg: "⏳ Đang tạo thẻ...", plain: true }, threadId, type);

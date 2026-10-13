@@ -1,4 +1,3 @@
-const { renderVipCard } = require("./canvas/vip");
 const { Reactions } = require("zalo-client");
 const cache = require("./cache");
 const logger = require("../utils/logger");
@@ -29,6 +28,7 @@ async function renderCachedCard(spec, ttl) {
     return hit.path;
   }
 
+  const { renderVipCard } = require("./canvas/vip"); // lazy — canvas nặng, chỉ cần khi gọi reply.card
   const filePath = await renderVipCard({ ttl, ...(spec || {}) });
   if (!filePath) return null;
 

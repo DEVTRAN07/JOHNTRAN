@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 const { Reactions, ThreadType } = require("zalo-client");
 const services = require("../../core/services");
 const tiktokApi = require("../../core/tiktok");
@@ -108,6 +107,7 @@ function tempDir() {
 // Tải file nhị phân về máy (ảnh gif/thumbnail/ảnh album)
 async function downloadToFile(url, filename) {
   const filePath = path.join(tempDir(), filename);
+  const axios = require('axios');
   const response = await axios.get(url, {
     responseType: "stream",
     timeout: 60000,
@@ -216,6 +216,7 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     let apiData;
     try {
         const baseUrl = services.requireService("media_downloader_url");
+        const axios = require('axios');
         const down = await axios.get(`${baseUrl}/media-downloader/atd2?url=${encodeURIComponent(url)}`, { timeout: 60000 });
         apiData = down.data;
     } catch (error) {

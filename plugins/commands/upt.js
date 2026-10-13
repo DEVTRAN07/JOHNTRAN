@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const { fileURLToPath } = require('url');
 const moment = require('moment-timezone');
-const { createCanvas } = require('canvas');
 const { networkInterfaces } = require('os');
 
 module.exports.config = {
@@ -111,6 +110,7 @@ function roundedRect(ctx, x, y, w, h, r) {
 
 async function drawSystemCanvas(data) {
   const width = 1050, height = 720, padding = 55, radius = 38;
+  const { createCanvas } = require('canvas'); // lazy — canvas nặng ~0.9s
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
