@@ -7,9 +7,46 @@ const { ThreadType } = require("zalo-client");
 const stats = require("./stats");
 const logger = require("../utils/logger");
 
-// ===== Bộ nhớ tin nhắn: mỗi thread giữ tối đa 100 tin gần nhất =====
-const MAX_PER_THREAD = 100;
+// ===== Bộ nhớ tin nhắn: RAM + lưu đĩa (sống sót qua restart) =====
+// Zalo đã XOÁ API lịch sử nhóm (getGroupChatHistory → 404) nên panel chỉ
+// xem được tin từ khi bot chạy; lưu ra JSON để restart không mất.
+const fs = require("fs");
+const path = require("path");
+const MAX_PER_THREAD = 200;
+const MAX_THREADS = 30;
+const CACHE_FILE = path.join(__dirname, "..", "data", "panel_chat.json");
 const ring = new Map(); // threadId → [{ from, name, text, ts, isSelf }]
+let persistTimer = null;
+
+function loadRingFromDisk() {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+    for (const [tid, list] of Object.entries(data || {})) {
+      if (Array.isArray(list) && list.length) ring.set(tid, list);
+    }
+  } catch { /* không đọc được thì thôi */ }
+}
+
+function persistRing() {
+  persistTimer = null;
+  try {
+    // chỉ giữ MAX_THREADS hội thoại gần nhất (tránh file phình)
+    const sorted = [...ring.entries()].sort((a, b) => {
+      const lastA = a[1].length ? a[1][a[1].length - 1].ts : 0;
+      const lastB = b[1].length ? b[1][b[1].length - 1].ts : 0;
+      return lastB - lastA;
+    });
+    const keep = Object.fromEntries(sorted.slice(0, MAX_THREADS));
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(keep));
+  } catch { /* bỏ qua */ }
+}
+
+function schedulePersist() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(persistRing, 10000).unref?.();
+}
 
 function record(threadId, message) {
   if (!threadId) return;
@@ -20,6 +57,7 @@ function record(threadId, message) {
   }
   list.push({ ts: Date.now(), ...message });
   if (list.length > MAX_PER_THREAD) list.splice(0, list.length - MAX_PER_THREAD);
+  schedulePersist();
 }
 
 function getMessages(threadId, limit = 60) {
@@ -116,11 +154,13 @@ async function handleRequest(req, res, url) {
     if (!threadId) return json(400, { error: "Thiếu threadId" });
     const limit = Math.min(Number(url.searchParams.get("limit")) || 60, 100);
     let messages = getMessages(threadId, limit);
+    let historyApi = false;
     if (type === 1) {
       const merged = await loadGroupHistory(threadId, limit);
       if (merged) messages = merged;
     }
-    return json(200, { messages, hasHistory: type === 1 });
+    historyApi = messages.length > 0 && type === 1 && (historyAt.get(threadId) || 0) > 0;
+    return json(200, { messages, historyApi });
   }
 
   // Gửi tin tới 1 thread (bạn bè hoặc nhóm)
@@ -166,6 +206,7 @@ async function start({ api, port = 3901 } = {}) {
   if (server) return server.address().port;
   apiRef = api;
 
+  loadRingFromDisk();
   const finalPort = await findPort(port);
   server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
