@@ -2,12 +2,14 @@ const fs = require("fs");
 const path = require("path");
 const http = require("../http");
 const { createTrack } = require("./models");
+const db = require("../../utils/db");
 
 const SOURCE = "SoundCloud";
 const API_BASE = "https://api-v2.soundcloud.com";
 const HOME_URL = "https://soundcloud.com/";
 const CLIENT_ID_CACHE = path.join(__dirname, "..", "..", "data", "soundcloud_client_id.txt");
 const CLIENT_ID_TTL = 24 * 60 * 60 * 1000;
+const CLIENT_ID_KEY = "soundcloud_client_id"; // khoá bền vững trên Supabase
 
 let cachedClientId = null;
 let discovering = null;
@@ -22,9 +24,14 @@ function readCachedClientId() {
 }
 
 function writeCachedClientId(clientId) {
+  // Ghi cả 2 nơi: file local (nhanh) + Supabase (sống sót qua mọi lần
+  // restart/deploy trên Render — data/ trong container là tạm).
   try {
     fs.mkdirSync(path.dirname(CLIENT_ID_CACHE), { recursive: true });
     fs.writeFileSync(CLIENT_ID_CACHE, `${clientId}|${Date.now()}`, "utf8");
+  } catch { /* bỏ qua */ }
+  try {
+    db.saveData("Config", "key", CLIENT_ID_KEY, { value: clientId });
   } catch { /* bỏ qua */ }
 }
 
@@ -38,6 +45,17 @@ async function discoverClientId() {
     cachedClientId = cached;
     return cached;
   }
+
+  // Supabase: chỉ cần discovery 1 lần DUY NHẤT, mọi lần khởi động sau đều
+  // đọc từ DB (Render reset file data/ mỗi deploy → trước đây mất ~1.5s mỗi lần)
+  try {
+    const row = db.getData("Config", "key", CLIENT_ID_KEY);
+    const stored = row?.data?.value;
+    if (stored) {
+      cachedClientId = stored;
+      return stored;
+    }
+  } catch { /* bỏ qua */ }
 
   if (discovering) return discovering;
   discovering = (async () => {

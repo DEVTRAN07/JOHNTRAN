@@ -32,7 +32,7 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
 
   let filePath = null;
   try {
-    const streamUrl = await provider.resolve(track);
+    const streamUrl = await music.resolve(providerName, track);
     filePath = await music.downloadToFile(streamUrl, "mp3");
     const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
 
@@ -151,6 +151,15 @@ async function runMusic(providerName, { api, event, args, reply }) {
     const entry = music.getPending(key);
     if (entry) entry.quality = options.quality;
   }
+
+  // Resolve NỀN 3 bài đầu (0.5s/bài) — user chọn bài thường lấy bài 1-3,
+  // lúc đó link stream đã có sẵn trong cache → nghe gần như tức thì.
+  setImmediate(() => {
+    for (const track of tracks.slice(0, 3)) {
+      music.resolve(providerName, track).catch(() => { /* bài lỗi thì thôi */ });
+    }
+  });
+
   return showResults(api, threadId, type, provider, query, tracks, 1);
 }
 

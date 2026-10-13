@@ -19,7 +19,7 @@ module.exports.config = {
 // Danh sách thời gian và nội dung tự động gửi
 const setting = [
   {
-    timer: '06:00:00 AM',
+    timer: '07:10:00 AM',
     message: [
       'Chúc mọi người buổi sáng vui vẻ😉',
       'Buổi sáng đầy năng lượng nhaa các bạn😙',
