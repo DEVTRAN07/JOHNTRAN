@@ -31,7 +31,7 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text, label, foil } = theme;
+  const { PALETTE, panel, button, text, label, foil, randomAccent } = theme;
 
   // ===== HÀNG NGANG: mỗi bài 1 dải rộng — ảnh bìa TRÁI, thông tin PHẢI =====
   const perPage = 7;
@@ -40,7 +40,7 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const rowH = cover + S(24);     // cao mỗi hàng
   const gapY = S(10);
   const headerH = S(96);
-  const footerH = S(104);
+  const footerH = S(126);
   const H = headerH + shown.length * rowH + Math.max(0, shown.length - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
@@ -113,19 +113,21 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
     button(ctx, x + rowW - btnW - S(12), centerY - btnH / 2, btnW, btnH, "▶ PHÁT", PALETTE.accent);
   });
 
-  // ===== Footer điều hướng =====
-  const footY = H - footerH + S(12);
+  // ===== Footer điều hướng: dòng "Trang x/y" + 3 nút =====
+  const footY = H - footerH + S(4);
   const btnW = (W - S(50) - S(20)) / 3;
-  button(ctx, S(25), footY, btnW, S(42), "⬅ PREV", PALETTE.gold);
-  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(27), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(42), "❌ OUT", PALETTE.red);
-  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(42), "NEXT ➡", PALETTE.green);
+  const navColors = randomAccent();
+  text(ctx, `Trang ${page}/${totalPages}`, W / 2, footY + S(24), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
+  const btnY = footY + S(38);
+  button(ctx, S(25), btnY, btnW, S(42), "◀ PREV", navColors.prev);
+  button(ctx, S(25) + btnW + S(10), btnY, btnW - S(10), S(42), "✕ OUT", navColors.out);
+  button(ctx, S(25) + btnW * 2 + S(20), btnY, btnW, S(42), "NEXT ▶", navColors.next);
 
   text(
     ctx,
-    `⌨️ ${global.config.prefix}scl <số> để tải bài  •  gõ trần next / prev / out`,
-    W / 2, footY + S(74),
-    { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
+    `» ${global.config.prefix}scl <số> để tải bài  •  gõ trần next / prev / out`,
+    W / 2, footY + S(92),
+    { size: 14, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 
   return theme.save(canvas, "music_grid");

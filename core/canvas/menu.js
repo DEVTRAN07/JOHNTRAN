@@ -9,7 +9,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
-  const { PALETTE, panel, button, text, font, label, foil } = theme;
+  const { PALETTE, panel, button, text, font, label, foil, randomAccent } = theme;
 
   // ===== Bố cục: 9 lệnh/trang, 3 CỘT x 3 HÀNG (vuông, không dài) =====
   const perPage = 9;
@@ -20,7 +20,7 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
   const gapX = S(22);
   const gapY = S(14);
   const headerH = S(104);
-  const footerH = S(104);
+  const footerH = S(126);
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
@@ -79,25 +79,21 @@ async function renderMenuGrid({ botName, avatarUrl, prefix, page, totalPages, co
     text(ctx, cmd.category.toUpperCase(), x + S(16), y + S(108), { size: 11, family: "JT-Bold", color: PALETTE.accent2, maxWidth: cardW - S(32) });
   });
 
-  // ===== Footer điều hướng: 3 nút emoji =====
-  const footY = H - footerH + S(12);
+  // ===== Footer điều hướng: dòng "Trang x/y" + 3 nút =====
+  const footY = H - footerH + S(4);
   const btnW = (W - S(50) - S(20)) / 3;
-  button(ctx, S(25), footY, btnW, S(42), "⬅ PREV", PALETTE.gold);
-  text(ctx, `📄 ${page}/${totalPages}`, W / 2, footY + S(27), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
-  button(ctx, S(25) + btnW + S(10), footY, btnW - S(10), S(42), "❌ OUT", PALETTE.red);
-  button(ctx, S(25) + btnW * 2 + S(20), footY, btnW, S(42), "NEXT ➡", PALETTE.green);
+  const navColors = randomAccent();
+  text(ctx, `Trang ${page}/${totalPages}`, W / 2, footY + S(24), { size: 20, family: "JT-Bold", color: PALETTE.ink, align: "center" });
+  const btnY = footY + S(38);
+  button(ctx, S(25), btnY, btnW, S(42), `◀ PREV`, navColors.prev);
+  button(ctx, S(25) + btnW + S(10), btnY, btnW - S(10), S(42), `✕ OUT`, navColors.out);
+  button(ctx, S(25) + btnW * 2 + S(20), btnY, btnW, S(42), `NEXT ▶`, navColors.next);
 
   text(
     ctx,
-    `⌨️ ${prefix}menu next • prev • <số> • out  (hoặc gõ trần next/prev/out)`,
-    W / 2, footY + S(76),
-    { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
-  );
-  text(
-    ctx,
-    `💡 Gõ trần next / prev / out (khỏi prefix) — nhớ gõ ${prefix}menu trước đã nhé`,
-    W / 2, footY + S(96),
-    { size: 14, color: PALETTE.mute, align: "center" }
+    `» ${prefix}menu next • prev • <số> • out  —  hoặc gõ trần next / prev / out`,
+    W / 2, footY + S(92),
+    { size: 14, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 
   return theme.save(canvas, "menu");

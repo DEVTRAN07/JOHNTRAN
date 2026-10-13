@@ -56,8 +56,8 @@ const PRESETS = {
       panelBg: "rgba(22, 21, 18, 0.86)",
       panelBorderAlpha: 0.42,   // hairline vàng mờ
       panelLineWidth: 1,
-      panelRadius: 4,           // góc gần vuông
-      btnRadius: 4,
+      panelRadius: 0,           // góc VUÔNG — editorial sạch
+      btnRadius: 0,
       frame: true,              // khung hairline vàng quanh cả ảnh
       glowCorners: ["rgba(212, 175, 55, .10)", "rgba(212, 175, 55, .04)"],
       bgImageAlpha: 0.12,
@@ -120,6 +120,22 @@ function sanitizeGlyphs(text) {
   // XOÁ emoji còn lại (surrogate pairs + variation selectors) — tránh ô vuông
   out = out.replace(/[\u{1F000}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{2600}-\u{26CF}\u{2700}-\u{27BF}]/gu, "");
   return out;
+}
+
+// ===== MÀU RANDOM cho nút điều hướng =====
+// Mỗi lần render chọn 1 bộ màu ngẫu nhiên (nhưng hài hoà) — bot không bị
+// đơn điệu, vẫn giữ nhũ vàng làm accent chính.
+const RANDOM_ACCENTS = [
+  ["#d4af37", "#fbbf24", "#c4594e"],   // vàng đồng — cam son — đỏ son
+  ["#d4af37", "#8fbf9f", "#5b8dd9"],   // vàng — xanh bạc hà — xanh dương
+  ["#c9cdd3", "#d4af37", "#b74134"],   // bạc — vàng — đỏ
+  ["#d4af37", "#9d7bd8", "#5fa8d3"],   // vàng — tím khói — xanh nhạt
+  ["#e0b84c", "#7fb069", "#c97b8a"],   // vàng nhẹ — xanh rừng — hồng đất
+  ["#d4af37", "#e07a5f", "#81b29a"]    // vàng — đất nung — xanh bãi cỏ
+];
+function randomAccent() {
+  const set = RANDOM_ACCENTS[Math.floor(Math.random() * RANDOM_ACCENTS.length)];
+  return { prev: set[0], out: set[1], next: set[2] };
 }
 
 // Vệt nhũ vàng dưới tiêu đề (dấu hiệu nhận diện của preset editorial)
@@ -346,4 +362,4 @@ function save(canvas, prefix) {
   return filePath;
 }
 
-module.exports = { PALETTE, WIDTH, S, font, FONT_FAMILIES, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save, foil, label, THEME_STYLE, reload: resolveTheme };
+module.exports = { PALETTE, WIDTH, S, font, FONT_FAMILIES, initFonts, roundRect, truncate, paintBackground, panel, button, text, newCanvas, save, foil, label, THEME_STYLE, randomAccent, RANDOM_ACCENTS, reload: resolveTheme };
