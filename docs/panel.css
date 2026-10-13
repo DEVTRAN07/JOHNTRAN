@@ -280,7 +280,8 @@ pre.logs.small { font-size: 11px; max-height: 30vh; }
 .stbtn.on { border-color: var(--accent); color: var(--accent); background: rgba(56, 225, 255, .12); }
 .color-dots { display: flex; gap: 6px; margin-left: auto; }
 .cdot { width: 24px; height: 24px; border-radius: 99px; border: 2px solid rgba(255,255,255,.18); background: var(--c); padding: 0; cursor: pointer; transition: transform .12s; }
-.cdot:hover, .cdot.on { border-color: #fff; transform: scale(1.12); }
+.cdot:hover, .cdot.on { border-color: #fff; transform: scale(1.15); }
+#glowBtn.on { color: var(--yellow); border-color: var(--yellow); background: rgba(255, 200, 87, .12); }
 .chat-input { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); background: rgba(7, 10, 18, .45); align-items: center; }
 .chat-input input { flex: 1; border-radius: 99px; padding: 12px 18px; font-size: 15px; }
 .chat-input input::placeholder { color: #5c6b85; }

@@ -102,13 +102,21 @@
             <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div></div>
             <!-- Thanh kiểu chữ -->
             <div class="chat-stylebar" id="chatStylebar">
-              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})">
+              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})" title="Cỡ chữ">
                 <option value="">Cỡ chữ</option>
                 <option value="13px">Nhỏ</option>
                 <option value="15px" selected>Trung bình</option>
                 <option value="17px">Lớn</option>
                 <option value="19px">Rất lớn</option>
               </select>
+              <select id="chatFontFamily" class="mini" onchange="setChatStyle({fontFamily:this.value})" title="Font chữ">
+                <option value="">Font chữ</option>
+                <option value="cursive">Cursive</option>
+                <option value="monospace">Monospace</option>
+                <option value="sans">Sans-serif</option>
+                <option value="serif">Serif</option>
+              </select>
+              <button class="stbtn" id="glowBtn" onclick="toggleStyle('glow')" title="Phát sáng">✨</button>
               <div class="style-btns">
                 <button class="stbtn" data-k="b" onclick="toggleStyle('b')"><b>B</b></button>
                 <button class="stbtn" data-k="i" onclick="toggleStyle('i')"><i>I</i></button>

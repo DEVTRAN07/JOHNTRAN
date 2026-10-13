@@ -454,7 +454,8 @@ let chatCurrent = null;   // { id, type, name, avatar, isGroup }
 let chatTimer = null;
 let chatUnread = {};      // threadId → số tin chưa đọc
 let chatLastSeen = {};    // threadId → ts tin cuối đã xem
-let chatStyle = { color: "", font: "", bold: false, italic: false, underline: false, strike: false };
+let chatStyle = { color: "", font: "", fontFamily: "", bold: false, italic: false, underline: false, strike: false, glow: false };
+const STYLE_FONTS = { "": "Mặc định", cursive: "Cursive", monospace: "Monospace", sans: "Sans-serif", serif: "Serif" };
 
 // ---- kiểu chữ (chỉ hiển thị trên panel, lưu localStorage) ----
 function loadChatStyle() {
@@ -465,21 +466,28 @@ function saveChatStyle() {
   localStorage.setItem(LS_STYLE, JSON.stringify(chatStyle));
   applyStyleBar();
 }
+const CSS_FONTS = { cursive: "\"Comic Sans MS\", cursive", monospace: "ui-monospace, Menlo, Consolas, monospace", sans: "-apple-system, \"Segoe UI\", Roboto, sans-serif", serif: "Georgia, \"Times New Roman\", serif" };
 function styleCss(extra = {}) {
   const css = [];
   if (chatStyle.color) css.push("color:" + chatStyle.color);
   if (chatStyle.font) css.push("font-size:" + chatStyle.font);
+  if (chatStyle.fontFamily && CSS_FONTS[chatStyle.fontFamily]) css.push("font-family:" + CSS_FONTS[chatStyle.fontFamily]);
   if (chatStyle.bold) css.push("font-weight:700");
   if (chatStyle.italic) css.push("font-style:italic");
-  if (chatStyle.underline) css.push("text-decoration:underline");
-  if (chatStyle.strike) css.push("text-decoration:line-through");
+  if (chatStyle.underline || chatStyle.strike) css.push("text-decoration:" + (chatStyle.underline ? "underline " : "") + (chatStyle.strike ? "line-through" : ""));
+  if (chatStyle.glow) css.push("text-shadow:0 0 10px currentColor, 0 0 22px currentColor");
   return css.concat(Object.entries(extra).map(([k, v]) => k + ":" + v)).join(";");
 }
 function applyStyleBar() {
-  document.querySelectorAll(".stbtn").forEach((b) => b.classList.toggle("on", !!chatStyle[b.dataset.k]));
+  document.querySelectorAll(".stbtn").forEach((b) => {
+    if (b.id === "glowBtn") b.classList.toggle("on", !!chatStyle.glow);
+    else b.classList.toggle("on", !!chatStyle[b.dataset.k]);
+  });
   document.querySelectorAll(".cdot").forEach((d) => d.classList.toggle("on", chatStyle.color === d.dataset.c));
   const f = $("chatFont");
   if (f) f.value = chatStyle.font || "";
+  const ff = $("chatFontFamily");
+  if (ff) ff.value = chatStyle.fontFamily || "";
 }
 function toggleStyle(key) {
   chatStyle[key] = !chatStyle[key];
@@ -492,30 +500,45 @@ function setChatStyle(patch, el) {
 function openStylePanel() {
   const dot = (c) => '<button class="cdot ' + (chatStyle.color === c ? "on" : "") + '" style="--c:' + c + '" onclick="setChatStyle({color:\'' + c + '\'});openStylePanel()"></button>';
   $("styleBody").innerHTML = `
-    <div class="sub" style="margin-bottom:14px">Chỉ đổi cách <b>HIỂN THỊ</b> trên panel (không gửi lên Zalo). Màu theo bảng của bot.</div>
-    <div class="color-dots" style="margin:0 0 14px">${["#7c5cff","#f43f5e","#22c55e","#f59e0b","#f97316","#e5e7eb"].map(dot).join("")}</div>
-    <label style="display:grid;gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Phong cách
-      <select onchange="setChatStyle({font:this.value});openStylePanel()" style="width:100%">
-        <option value="">Mặc định</option>
-        <option value="13px" ${chatStyle.font==="13px"?"selected":""}>Nhỏ</option>
-        <option value="15px" ${chatStyle.font==="15px"?"selected":""}>Trung bình</option>
-        <option value="17px" ${chatStyle.font==="17px"?"selected":""}>Lớn</option>
-        <option value="19px" ${chatStyle.font==="19px"?"selected":""}>Rất lớn</option>
-      </select>
-    </label>
-    <label style="display:flex;gap:9px;align-items:center;font-size:13.5px;margin-bottom:16px">
-      <span class="switch"><input type="checkbox" ${chatStyle.bold?"checked":""} onchange="toggleStyle('bold');openStylePanel()"><span class="tr"></span></span>
-      In đậm
-    </label>
+    <div class="sub" style="margin-bottom:14px">Chỉ đổi cách <b>HIỂN THỊ</b> trên panel (không gửi lên Zalo).</div>
+    <div class="row" style="margin-bottom:12px">
+      <label style="flex:1;display:grid;gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Cỡ chữ
+        <select onchange="setChatStyle({font:this.value})" style="width:100%">
+          <option value="">Mặc định</option>
+          <option value="13px" ${chatStyle.font==="13px"?"selected":""}>Nhỏ</option>
+          <option value="15px" ${chatStyle.font==="15px"?"selected":""}>Trung bình</option>
+          <option value="17px" ${chatStyle.font==="17px"?"selected":""}>Lớn</option>
+          <option value="19px" ${chatStyle.font==="19px"?"selected":""}>Rất lớn</option>
+        </select>
+      </label>
+      <label style="flex:1;display:grid;gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Font chữ
+        <select onchange="setChatStyle({fontFamily:this.value})" style="width:100%">
+          ${Object.entries(STYLE_FONTS).map(([k, v]) => `<option value="${k}" ${chatStyle.fontFamily===k?"selected":""}>${v}</option>`).join("")}
+        </select>
+      </label>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Màu chữ</div>
+      <div class="color-dots" style="margin:0">${["#7c5cff","#f43f5e","#22c55e","#f59e0b","#f97316","#e5e7eb"].map((c) => '<button class="cdot ' + (chatStyle.color === c ? "on" : "") + '" style="--c:' + c + '" onclick="setChatStyle({color:\'' + c + '\'})"></button>').join("")}</div>
+    </div>
+    <div class="row" style="gap:14px;margin-bottom:16px">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px"><span class="switch"><input type="checkbox" ${chatStyle.bold?"checked":""} onchange="toggleStyle('bold')"><span class="tr"></span></span>In đậm</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px"><span class="switch"><input type="checkbox" ${chatStyle.italic?"checked":""} onchange="toggleStyle('italic')"><span class="tr"></span></span>Nghiêng</label>
+    </div>
+    <div class="row" style="gap:14px;margin-bottom:16px">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px"><span class="switch"><input type="checkbox" ${chatStyle.underline?"checked":""} onchange="toggleStyle('underline')"><span class="tr"></span></span>Gạch chân</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px"><span class="switch"><input type="checkbox" ${chatStyle.strike?"checked":""} onchange="toggleStyle('strike')"><span class="tr"></span></span>Gạch ngang</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px"><span class="switch"><input type="checkbox" ${chatStyle.glow?"checked":""} onchange="toggleStyle('glow')"><span class="tr"></span></span>✨ Phát sáng</label>
+    </div>
     <div class="row" style="justify-content:flex-end">
       <button onclick="resetStyle()">Huỷ kiểu</button>
       <button class="primary" onclick="closeStylePanel()">Lưu</button>
     </div>`;
-  $("styleModal").classList.add("open");
+$("styleModal").classList.add("open");
 }
 function closeStylePanel() { $("styleModal").classList.remove("open"); }
 function resetStyle() {
-  chatStyle = { color: "", font: "", bold: false, italic: false, underline: false, strike: false };
+  chatStyle = { color: "", font: "", fontFamily: "", bold: false, italic: false, underline: false, strike: false, glow: false };
   saveChatStyle();
   openStylePanel();
 }
@@ -618,6 +641,9 @@ function renderChatMessages(messages) {
     return;
   }
   const box = $("chatMsgs");
+  // ô nhắn xem trước theo kiểu chữ đang chọn
+  const input = $("chatInput");
+  if (input) input.setAttribute("style", styleCss({ "max-width": "none" }));
   box.innerHTML = messages.map((m) => {
     const tm = new Date(m.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
     const personal = (styleExtra) => styleCss(styleExtra);
@@ -627,8 +653,7 @@ function renderChatMessages(messages) {
     }
     const ava = m.avatar || "";
     const showName = chatCurrent?.isGroup;
-    // chỉ cỡ chữ (không màu) cho tin đến — vẫn đọc rõ, đúng tinh thần "hiển thị panel"
-    const inStyle = chatStyle.font ? "font-size:" + chatStyle.font : "";
+    const inStyle = styleCss(); // kiểu chữ áp cho mọi bong bóng (hiển thị panel)
     const avaHtml = '<span class="ava-click" onclick="openUserInfo(\'' + escapeAttr(m.from || "") + '\')" title="Xem hồ sơ">' +
       (ava ? '<img class="avatar" src="' + escapeAttr(ava) + '" alt="">' : '<span class="ph">👤</span>') + "</span>";
     return '<div class="msg">' + avaHtml +
