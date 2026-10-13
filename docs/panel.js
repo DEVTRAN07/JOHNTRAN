@@ -685,7 +685,6 @@ function renderGroupInfo(g) {
     </div>
     <div class="info-sec">Bot trong nhóm</div>
     <div class="member-row"><span class="ph">👑</span><span class="nm">Bot chính (bạn)</span><span class="crown">quản trị</span></div>
-    <div class="sub" style="margin:-4px 0 10px">Danh sách thành viên (chỉ hiện trên panel)</div>
     ${(g.members || []).slice(0, 20).map((m) => `
       <div class="member-row" style="margin-top:6px">
         ${m.avatar ? '<img src="' + escapeAttr(m.avatar) + '" alt="">' : '<span class="ph">👤</span>'}
@@ -694,7 +693,12 @@ function renderGroupInfo(g) {
         <button class="small danger" onclick="userAction('blockgroup', '${escapeAttr(m.uid)}')">Chặn</button>
       </div>`).join("")}
     ${(g.members || []).length > 20 ? '<div class="sub" style="margin-top:8px">...và ' + (g.members.length - 20) + " thành viên khác</div>" : ""}
-    ${g.hasMoreMember ? '<div class="sub" style="margin-top:6px">Nhóm lớn — Zalo chỉ trả một phần danh sách.</div>' : ""}
+    ${!(g.members || []).length ? '<div class="sub" style="margin:8px 0">Zalo không trả danh sách thành viên cho nhóm này (nhóm lớn/nhóm lạ) — nhập UID bên dưới để xoá/chặn chính xác.</div>' : ""}
+    <div class="row" style="margin-top:10px">
+      <input id="memberUidInput" placeholder="UID thành viên" style="flex:1;min-width:150px">
+      <button class="small danger" onclick="userAction('remove', $('memberUidInput').value.trim())">Xoá</button>
+      <button class="small danger" onclick="userAction('blockgroup', $('memberUidInput').value.trim())">Chặn</button>
+    </div>
   `;
 }
 
