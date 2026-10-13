@@ -38,7 +38,7 @@ module.exports.run = async ({ args, event, api, reply }) => {
         }
     }
 
-    const mentions = data.mentions;
+    const mentions = (event.mentions && event.mentions.length) ? event.mentions.map(m => ({ uid: m.uid })) : require("../../core/mentions").extractMentions(data);
     if (mentions && mentions.length > 0) {
         const nameList = await Promise.all(mentions.map(async m => {
             const uid = m.uid;

@@ -123,6 +123,11 @@ main { padding: 22px; display: grid; gap: 18px; align-content: start; }
 .metric.bad .v { color: var(--red); }
 .metric.warn .v { color: var(--yellow); }
 
+.thread .crown-badge { color: var(--yellow); font-size: 11px; margin-left: 2px; }
+
+.ava-click { cursor: pointer; display: inline-grid; }
+.ava-click:hover .avatar, .ava-click:hover .ph { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* Bot chính — thẻ trạng thái lớn */
 .bot-main { display: grid; gap: 13px; }
 .bot-main .bt { display: flex; align-items: center; gap: 13px; }
@@ -226,7 +231,7 @@ pre.logs.small { font-size: 11px; max-height: 30vh; }
 .drawer label { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; color: var(--sub); display: grid; gap: 6px; text-transform: uppercase; }
 
 /* ===== CHAT (kiểu Zalo PC) ===== */
-.chat-layout { display: grid; grid-template-columns: 300px 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--card); box-shadow: var(--shadow); min-height: min(76vh, 680px); }
+.chat-layout { display: grid; grid-template-columns: 300px 1fr; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--card); box-shadow: var(--shadow); height: calc(100dvh - 230px); min-height: 520px; }
 
 /* --- Cột hội thoại --- */
 .chat-side { border-right: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr; min-height: 0; background: rgba(13, 18, 32, .55); }
@@ -268,16 +273,17 @@ pre.logs.small { font-size: 11px; max-height: 30vh; }
 .acts button:hover { background: rgba(120, 145, 190, .15); color: var(--text); }
 
 /* --- Thanh kiểu chữ + soạn --- */
-.chat-stylebar { display: flex; align-items: center; gap: 9px; padding: 8px 14px; border-top: 1px solid var(--border); background: rgba(13, 18, 32, .5); flex-wrap: wrap; }
+.chat-stylebar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--border); background: rgba(13, 18, 32, .78); backdrop-filter: blur(8px); flex-wrap: wrap; }
 .chat-stylebar select.mini { width: auto; min-width: 96px; padding: 6px 9px; font-size: 12.5px; border-radius: 9px; }
 .style-btns { display: flex; gap: 3px; }
-.stbtn { width: 30px; height: 28px; padding: 0; border-radius: 8px; font-size: 12.5px; display: grid; place-items: center; }
+.stbtn { width: 34px; height: 30px; padding: 0; border-radius: 9px; font-size: 13px; display: grid; place-items: center; }
 .stbtn.on { border-color: var(--accent); color: var(--accent); background: rgba(56, 225, 255, .12); }
 .color-dots { display: flex; gap: 6px; margin-left: auto; }
-.cdot { width: 21px; height: 21px; border-radius: 99px; border: 2px solid transparent; background: var(--c); padding: 0; cursor: pointer; }
+.cdot { width: 24px; height: 24px; border-radius: 99px; border: 2px solid rgba(255,255,255,.18); background: var(--c); padding: 0; cursor: pointer; transition: transform .12s; }
 .cdot:hover, .cdot.on { border-color: #fff; transform: scale(1.12); }
 .chat-input { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); background: rgba(7, 10, 18, .45); align-items: center; }
-.chat-input input { flex: 1; border-radius: 99px; padding: 11px 17px; }
+.chat-input input { flex: 1; border-radius: 99px; padding: 12px 18px; font-size: 15px; }
+.chat-input input::placeholder { color: #5c6b85; }
 .chat-input button.primary { border-radius: 99px; min-width: 82px; }
 .chat-input button:disabled, .chat-input input:disabled { opacity: .45; }
 
@@ -320,7 +326,7 @@ pre.logs.small { font-size: 11px; max-height: 30vh; }
   .conn { order: 3; width: 100%; justify-content: center; }
   .modal-box { max-height: 92vh; }
   /* Chat mobile: 1 cột; mở hội thoại → ẩn danh sách */
-  .chat-layout { grid-template-columns: 1fr; min-height: 74vh; }
+  .chat-layout { grid-template-columns: 1fr; height: calc(100dvh - 190px); min-height: 480px; }
   .chat-layout.opened .chat-side { display: none; }
   .chat-threads { max-height: 44vh; }
   .msg .col { max-width: 84%; }

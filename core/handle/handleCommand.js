@@ -178,7 +178,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
 
     reactAuto(Reactions.LIKE);
     try {
-        await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply });
+        await command.run({ args, event, api: wrappedApi, Users, Threads, replyData, reply, mentions: event.mentions || [] });
         reactAuto(Reactions.OK);
     } catch (err) {
         logger.log(`Lỗi khi xử lý lệnh '${commandName}': ${err.message}`, "error");

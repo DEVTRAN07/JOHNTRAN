@@ -40,9 +40,9 @@ module.exports.run = async function ({ api, event, args, reply }) {
   // ---- chọn uid: reply → uid → tag → chính mình ----
   let uid = null;
   const quote = data?.quote;
-  if (Array.isArray(quote?.mentions) && quote.mentions[0]?.uid) uid = String(quote.mentions[0].uid);
+  const mentioned = (event.mentions && event.mentions[0]?.uid) || require("../../core/mentions").firstMention(data);
+  if (mentioned) uid = String(mentioned);
   else if (args[0] && /^\d{6,}$/.test(args[0])) uid = args[0];
-  else if (data?.mentions && Object.keys(data.mentions)[0]) uid = String(Object.keys(data.mentions)[0]);
   else if (quote?.uidFrom) uid = String(quote.uidFrom);
   else uid = String(data.uidFrom);
 

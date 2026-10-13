@@ -521,10 +521,13 @@ function resetStyle() {
 }
 
 // ---- danh sách hội thoại ----
+let chatAdminGroups = [];
+
 async function loadThreads() {
   try {
     const data = await api("/api/chat/" + CHAT_BOT + "/threads");
     chatThreads = data;
+    chatAdminGroups = data.adminGroups || [];
     renderThreadList();
   } catch (e) {
     $("chatThreads").innerHTML = '<div class="empty">' + escapeHtml(e.message) + '<br><br>Bot chưa bật cầu nối chat hoặc chưa chạy.</div>';
@@ -540,6 +543,7 @@ function threadAvatar(t) {
 function renderThreadList() {
   const q = ($("chatSearch").value || "").trim().toLowerCase();
   const muted = JSON.parse(localStorage.getItem("jt_chat_muted") || "[]");
+  const adminSet = new Set(chatAdminGroups || []);
   const friends = (chatThreads.friends?.list || []).filter((f) => !q || (f.displayName || "").toLowerCase().includes(q) || f.uid.includes(q));
   const groups = (chatThreads.groups?.list || []).filter((g) => !q || (g.name || "").toLowerCase().includes(q) || g.gid.includes(q));
   const rows = [
@@ -550,10 +554,11 @@ function renderThreadList() {
     const unread = chatUnread[t.id] || 0;
     const tm = t.last?.ts ? new Date(t.last.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
     const tJson = escapeAttr(JSON.stringify({ id: t.id, type: t.type, name: t.name, avatar: t.avatar, isGroup: t.isGroup }));
+    const crown = t.isGroup && adminSet.has(t.id) ? '<span class="crown-badge" title="Bot cầm key">👑</span>' : "";
     return '<button class="thread ' + (chatCurrent?.id === t.id ? "active" : "") + '" data-t="' + tJson + '" onclick="openThreadJson(this)">' +
-      '<span class="ava">' + threadAvatar(t) + (unread ? '<span class="unread">' + (unread > 9 ? "9+" : unread) + "</span>" : "") + "</span>" +
+      '<span class="ava" onclick="event.stopPropagation();openThreadJson(this.parentElement)" title="Xem thông tin">' + threadAvatar(t) + (unread ? '<span class="unread">' + (unread > 9 ? "9+" : unread) + "</span>" : "") + "</span>" +
       "<span style=\"min-width:0\">" +
-      '<span class="nm">' + escapeHtml(t.name) + ' <span class="tag ' + (t.isGroup ? "group" : "user") + '">' + (t.isGroup ? "Nhóm" : "Người dùng") + "</span></span>" +
+      '<span class="nm">' + escapeHtml(t.name) + " " + crown + ' <span class="tag ' + (t.isGroup ? "group" : "user") + '">' + (t.isGroup ? "Nhóm" : "Người dùng") + "</span></span>" +
       '<span class="pv">' + (t.last ? escapeHtml((t.last.name ? t.last.name + ": " : "") + String(t.last.text || "[tin nhắn]").slice(0, 42)) : (tm ? tm : "Chưa có tin nhắn")) + "</span>" +
       "</span></button>";
   }).join("") : '<div class="empty">Không có hội thoại khớp tìm kiếm.</div>';
@@ -615,17 +620,21 @@ function renderChatMessages(messages) {
   const box = $("chatMsgs");
   box.innerHTML = messages.map((m) => {
     const tm = new Date(m.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const personal = (styleExtra) => styleCss(styleExtra);
     if (m.isSelf) {
-      return '<div class="msg out"><div class="col"><div class="bubble" style="' + styleCss() + '">' + escapeHtml(m.text || "") +
+      return '<div class="msg out"><div class="col"><div class="bubble" style="' + personal() + '">' + escapeHtml(m.text || "") +
         '<div class="tm">' + tm + '</div><div class="acts"><button onclick="copyMsg(this)" title="Copy">📋</button></div></div></div></div>';
     }
     const ava = m.avatar || "";
     const showName = chatCurrent?.isGroup;
-    return '<div class="msg">' +
-      (ava ? '<img class="avatar" src="' + escapeAttr(ava) + '" alt="">' : '<span class="ph">👤</span>') +
+    // chỉ cỡ chữ (không màu) cho tin đến — vẫn đọc rõ, đúng tinh thần "hiển thị panel"
+    const inStyle = chatStyle.font ? "font-size:" + chatStyle.font : "";
+    const avaHtml = '<span class="ava-click" onclick="openUserInfo(\'' + escapeAttr(m.from || "") + '\')" title="Xem hồ sơ">' +
+      (ava ? '<img class="avatar" src="' + escapeAttr(ava) + '" alt="">' : '<span class="ph">👤</span>') + "</span>";
+    return '<div class="msg">' + avaHtml +
       '<div class="col">' +
       (showName ? '<div class="who">' + escapeHtml(m.name || m.from || "") + "</div>" : "") +
-      '<div class="bubble">' + escapeHtml(m.text || "") + '<div class="tm">' + tm + '</div>' +
+      '<div class="bubble" style="' + inStyle + '">' + escapeHtml(m.text || "") + '<div class="tm">' + tm + '</div>' +
       '<div class="acts"><button onclick="copyMsg(this)" title="Copy">📋</button></div></div></div></div>';
   }).join("");
   box.scrollTop = box.scrollHeight;
@@ -654,6 +663,19 @@ async function sendChat(e) {
 }
 
 // ---- popup thông tin nhóm / hồ sơ người dùng ----
+async function openUserInfo(uid) {
+  if (!uid || uid === "me") return;
+  $("infoTitle").textContent = "Hồ sơ";
+  $("infoBody").innerHTML = '<div class="empty">Đang tải...</div>';
+  $("infoModal").classList.add("open");
+  try {
+    const info = await api("/api/chat/" + CHAT_BOT + "/user-info?uid=" + encodeURIComponent(uid));
+    renderUserInfo(info);
+  } catch (e) {
+    $("infoBody").innerHTML = '<div class="empty">' + escapeHtml(e.message) + "</div>";
+  }
+}
+
 async function openThreadInfo() {
   if (!chatCurrent) return;
   const t = chatCurrent;
@@ -688,6 +710,7 @@ function renderGroupInfo(g) {
       <button class="info-act danger" onclick="groupAction('leave')"><span class="ic">🚪</span>Rời nhóm</button>
       <button class="info-act full" onclick="groupAction('avatar')"><span class="ic">🖼️</span>Đổi avatar nhóm</button>
       <button class="info-act full" onclick="toggleMute('${escapeAttr(uid)}')"><span class="ic">🔕</span>${isMuted(uid) ? "Bỏ ẩn nhóm" : "Ẩn nhóm khỏi panel"}</button>
+      <button class="info-act full" onclick="toggleAdminGroup('${escapeAttr(uid)}')"><span class="ic">👑</span>${isAdminGroup(uid) ? "Bỏ đánh dấu cầm key" : "Đánh dấu bot cầm key ở nhóm này"}</button>
     </div>
     <div class="info-sec">Bot trong nhóm</div>
     <div class="member-row"><span class="ph">👑</span><span class="nm">Bot chính (bạn)</span><span class="crown">quản trị</span></div>
@@ -731,6 +754,22 @@ function renderUserInfo(u) {
 function closeInfoModal() { $("infoModal").classList.remove("open"); }
 
 function toastSoon() { toast("Tính năng này chưa hỗ trợ"); }
+
+function isAdminGroup(id) {
+  return (chatAdminGroups || []).includes(id);
+}
+async function toggleAdminGroup(id) {
+  try {
+    const res = await api("/api/chat/" + CHAT_BOT + "/toggle-admin-group", {
+      method: "POST",
+      body: JSON.stringify({ gid: id })
+    });
+    chatAdminGroups = res.groups || [];
+    toast(chatAdminGroups.includes(id) ? "Đã đánh dấu bot cầm key 👑" : "Đã bỏ đánh dấu");
+    openThreadInfo();
+    renderThreadList();
+  } catch (e) { toast(e.message); }
+}
 
 function copyUid(uid) {
   navigator.clipboard?.writeText(uid);

@@ -15,6 +15,20 @@ const path = require("path");
 const MAX_PER_THREAD = 200;
 const MAX_THREADS = 30;
 const CACHE_FILE = path.join(__dirname, "..", "data", "panel_chat.json");
+const ADMIN_GROUPS_FILE = path.join(__dirname, "..", "data", "bot_admin_groups.json");
+
+// Zalo không trả memberIds cho nhóm lớn → không đo "bot có phải admin" qua
+// API được. Người dùng tự đánh dấu nhóm bot CẦM KEY trong panel (lưu file).
+function readAdminGroups() {
+  try { return JSON.parse(fs.readFileSync(ADMIN_GROUPS_FILE, "utf8")) || []; } catch { return []; }
+}
+function writeAdminGroups(list) {
+  try {
+    fs.mkdirSync(path.dirname(ADMIN_GROUPS_FILE), { recursive: true });
+    fs.writeFileSync(ADMIN_GROUPS_FILE, JSON.stringify(list));
+  } catch { /* bỏ qua */ }
+  return list;
+}
 const ring = new Map(); // threadId → [{ from, name, text, ts, isSelf }]
 let persistTimer = null;
 
@@ -152,7 +166,8 @@ async function handleRequest(req, res, url) {
     return json(200, {
       friends: { ...friends, list: (friends.list || []).map((f) => withLast(f, "uid")) },
       groups: { ...groups, list: (groups.list || []).map((g) => withLast(g, "gid")) },
-      profile
+      profile,
+      adminGroups: readAdminGroups()
     });
   }
 
@@ -170,6 +185,27 @@ async function handleRequest(req, res, url) {
     }
     historyApi = messages.length > 0 && type === 1 && (historyAt.get(threadId) || 0) > 0;
     return json(200, { messages, historyApi });
+  }
+
+  // Danh sách nhóm bot cầm key (do người dùng đánh dấu trong panel)
+  if (route === "/admin-groups") return json(200, { groups: readAdminGroups() });
+
+  if (route === "/toggle-admin-group" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => { body += c; if (body.length > 1e6) req.destroy(); });
+    req.on("end", () => {
+      try {
+        const { gid } = JSON.parse(body || "{}");
+        if (!gid) return json(400, { error: "Thiếu gid" });
+        const list = readAdminGroups();
+        const has = list.includes(gid);
+        const next = has ? list.filter((g) => g !== gid) : [...list, gid];
+        return json(200, { groups: writeAdminGroups(next) });
+      } catch (error) {
+        return json(500, { error: error.message });
+      }
+    });
+    return;
   }
 
   // Thông tin hội thoại (người dùng hoặc nhóm + thành viên)
@@ -217,6 +253,19 @@ async function handleRequest(req, res, url) {
         uid: threadId,
         status: u.status || ""
       });
+    } catch (error) {
+      return json(500, { error: error.message });
+    }
+  }
+
+  // Hồ sơ 1 người dùng (bấm avatar trong tin nhắn nhóm)
+  if (route === "/user-info") {
+    const uid = url.searchParams.get("uid") || "";
+    if (!uid) return json(400, { error: "Thiếu uid" });
+    try {
+      const info = await apiRef.getUserInfo(uid);
+      const u = info?.changedProfiles?.[uid] || info?.profiles?.[uid] || info?.profiles?.[String(uid)] || {};
+      return json(200, { isGroup: false, id: uid, uid, name: u.displayName || u.zaloName || uid, avatar: u.avatar || "", status: u.status || "" });
     } catch (error) {
       return json(500, { error: error.message });
     }

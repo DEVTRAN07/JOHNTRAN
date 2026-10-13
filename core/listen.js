@@ -63,6 +63,11 @@ function startListening(api) {
       logger.log(`Lỗi đọc dữ liệu nhóm ${event.threadId} (bỏ qua): ${err.message}`, "warn");
     }
 
+    // Chuẩn hoá @mention → event.mentions = [{ uid }] để mọi lệnh dùng chung
+    try {
+      event.mentions = require("./mentions").extractMentions(event?.data).map((uid) => ({ uid }));
+    } catch { /* bỏ qua */ }
+
     const threadInfo = threadData?.data || {};
     const prefix = threadInfo.prefix ? threadInfo.prefix : global.config.prefix;
 

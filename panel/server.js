@@ -417,7 +417,7 @@ function startPanel({ manager, config }) {
 
       // ===== CHAT (Zalo thu nhỏ): proxy sang cầu nối localhost của bot =====
       if (pathname.startsWith("/api/chat")) {
-        const match = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/(threads|messages|health|thread-info|action)$/);
+        const match = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/(threads|messages|health|thread-info|user-info|action|admin-groups|toggle-admin-group)$/);
         const sendMatch = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/send$/);
         const botName = match?.[1] || sendMatch?.[1];
         if (!botName) return sendJson(res, 400, { error: "Thiếu tên bot" });

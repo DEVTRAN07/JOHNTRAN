@@ -77,6 +77,7 @@ async function getAvatar(api, threadId, type, uid) {
 
 module.exports.run = async function ({ api, event, args }) {
   const { threadId, type, data } = event;
+  const firstTag = (event.mentions && event.mentions[0]?.uid) || require("../../core/mentions").firstMention(data);
   const sub = (args[0] || "").toLowerCase();
 
   // ===== KHÔNG THAM SỐ → HDSD (như repo) =====
@@ -110,9 +111,7 @@ module.exports.run = async function ({ api, event, args }) {
   // ===== USER [@tag] =====
   if (sub === "user") {
     // /getavt user @tag → avatar người được tag
-    if (data?.mentions && Object.keys(data.mentions).length > 0) {
-      return getAvatar(api, threadId, type, String(Object.keys(data.mentions)[0]));
-    }
+    if (firstTag) return getAvatar(api, threadId, type, firstTag);
     // /getavt user <uid> → avatar theo uid
     if (args[1] && /^\d{6,}$/.test(args[1])) {
       return getAvatar(api, threadId, type, args[1]);
@@ -122,9 +121,7 @@ module.exports.run = async function ({ api, event, args }) {
 
   // ===== GÕ NHANH: /getavt <uid> hoặc /getavt @tag =====
   if (/^\d{6,}$/.test(sub)) return getAvatar(api, threadId, type, sub);
-  if (data?.mentions && Object.keys(data.mentions).length > 0) {
-    return getAvatar(api, threadId, type, String(Object.keys(data.mentions)[0]));
-  }
+  if (firstTag) return getAvatar(api, threadId, type, firstTag);
 
   return api.sendMessage({ msg: "❌ Sai lệnh. Gõ /getavt để xem hướng dẫn.", plain: true, ttl: 60000 }, threadId, type);
 };
