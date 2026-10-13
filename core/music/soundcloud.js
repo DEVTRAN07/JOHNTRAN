@@ -9,7 +9,7 @@ const API_BASE = "https://api-v2.soundcloud.com";
 const HOME_URL = "https://soundcloud.com/";
 const CLIENT_ID_CACHE = path.join(__dirname, "..", "..", "data", "soundcloud_client_id.txt");
 const CLIENT_ID_TTL = 24 * 60 * 60 * 1000;
-const CLIENT_ID_KEY = "soundcloud_client_id"; // khoá bền vững trên Supabase
+const CLIENT_ID_KEY = "soundcloud_client_id"; // khoá trong bảng bot_stats (bền vững qua deploy)
 
 let cachedClientId = null;
 let discovering = null;
@@ -31,7 +31,7 @@ function writeCachedClientId(clientId) {
     fs.writeFileSync(CLIENT_ID_CACHE, `${clientId}|${Date.now()}`, "utf8");
   } catch { /* bỏ qua */ }
   try {
-    db.saveData("Config", "key", CLIENT_ID_KEY, { value: clientId });
+    db.saveData("BotStats", "name", CLIENT_ID_KEY, { value: clientId });
   } catch { /* bỏ qua */ }
 }
 
@@ -49,7 +49,7 @@ async function discoverClientId() {
   // Supabase: chỉ cần discovery 1 lần DUY NHẤT, mọi lần khởi động sau đều
   // đọc từ DB (Render reset file data/ mỗi deploy → trước đây mất ~1.5s mỗi lần)
   try {
-    const row = db.getData("Config", "key", CLIENT_ID_KEY);
+    const row = db.getData("BotStats", "name", CLIENT_ID_KEY);
     const stored = row?.data?.value;
     if (stored) {
       cachedClientId = stored;
