@@ -93,7 +93,8 @@ module.exports.onLoad = async function ({ api, Threads }) {
             `━━━━━━━━━━\n` +
             `[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${randomMessage()}`;
 
-          await api.sendMessage({ msg }, thread.threadId, ThreadType.Group);
+          // Supabase row chỉ có id, KHÔNG có threadId — dùng thẳng groupId
+          await api.sendMessage({ msg }, groupId, ThreadType.Group);
 
           // GHI NHỚ thời điểm gửi — restart/deploy không gửi lại
           thread.data.auto_send_last = Date.now();
