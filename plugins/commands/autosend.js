@@ -1,4 +1,9 @@
+const fs = require("fs");
+const path = require("path");
 const { ThreadType } = require("zalo-client");
+
+const GIF_LIST = require("../../assets/autosend.json"); // 64 gif imgur
+const TEMP_DIR = path.join(__dirname, "temp");
 
 module.exports.config = {
   name: 'autosend',
@@ -39,6 +44,40 @@ const HOURLY_MESSAGES = {
   23: "Khuya rùi ngủ ngon nhé các bạn😇 Ngủ sớm cho da đẹp dáng xinh nha💤"
 };
 
+
+// Tải 1 GIF ngẫu nhiên từ assets → file tạm. Lỗi mạng/hết gif → null
+// (tin nhắn vẫn gửi, chỉ mất ảnh trang trí).
+const GIF_TIMEOUT = 20000;
+
+async function downloadRandomGif() {
+  try {
+    if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+    const url = GIF_LIST[Math.floor(Math.random() * GIF_LIST.length)];
+    const http = require("../../core/http");
+    const { buffer } = await http.getBuffer(url, { timeout: GIF_TIMEOUT });
+    if (!buffer || buffer.length < 64) return null;
+    const filePath = path.join(TEMP_DIR, `autosend_${Date.now()}.gif`);
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
+  } catch (err) {
+    console.log("Autosend: không tải được gif (vẫn gửi tin nhắn):", err.message);
+    return null;
+  }
+}
+
+function cleanupGif(filePath) {
+  try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
+}
+
+// Dọn gif tạm cũ sót lại (crash giữa lúc gửi)
+try {
+  if (fs.existsSync(TEMP_DIR)) {
+    for (const f of fs.readdirSync(TEMP_DIR)) {
+      if (f.startsWith("autosend_")) fs.unlinkSync(path.join(TEMP_DIR, f));
+    }
+  }
+} catch { /* bỏ qua */ }
+
 function hourMessage() {
   const hour = vnTime().getHours();
   return HOURLY_MESSAGES[hour] || null;
@@ -50,7 +89,7 @@ function autoMessage() {
   const t = vnTime();
   return `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n` +
     `➝ Bây Giờ Là: ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}\n` +
-    `➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n` +
+    `➝ Đây Là Tin Nhắn Tự Động)\n` +
     `━━━━━━━━━━\n` +
     `[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${body}`;
 }
@@ -112,8 +151,18 @@ module.exports.onLoad = async function ({ api, Threads }) {
           const msg = autoMessage();
           if (!msg) continue; // giờ im lặng (1-5h sáng)
 
-          // Supabase row chỉ có id, KHÔNG có threadId — dùng thẳng groupId
-          await api.sendMessage({ msg }, groupId, ThreadType.Group);
+          // GIF trang trí từ assets — tải lỗi vẫn gửi text
+          const gifPath = await downloadRandomGif();
+          try {
+            // Supabase row chỉ có id, KHÔNG có threadId — dùng thẳng groupId
+            await api.sendMessage(
+              { msg, ...(gifPath ? { attachments: [gifPath] } : {}) },
+              groupId,
+              ThreadType.Group
+            );
+          } finally {
+            cleanupGif(gifPath);
+          }
 
           // GHI NHỚ giờ đã gửi — restart/deploy không gửi lại
           thread.data.auto_send_hour = currentHour;
@@ -206,7 +255,16 @@ module.exports.run = async ({ api, event, args, Threads }) => {
   if (status && !wasEnabled) {
     try {
       const msg = autoMessage() || `➢ 𝐍𝐨𝐭𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 🏆\n➝ Đây Là Tin Nhắn Tự Động (1 tiếng/lần)\n━━━━━━━━━━\n[ 𝗡𝗢̣̂𝗜 𝗗𝗨𝗡𝗚 ]  ${randomMessage()}`;
-      await api.sendMessage({ msg }, threadId, type);
+      const gifPath = await downloadRandomGif();
+      try {
+        await api.sendMessage(
+          { msg, ...(gifPath ? { attachments: [gifPath] } : {}) },
+          threadId,
+          type
+        );
+      } finally {
+        cleanupGif(gifPath);
+      }
     } catch (error) {
       console.log("Autosend: gửi tin bật lập tức thất bại:", error.message);
     }
