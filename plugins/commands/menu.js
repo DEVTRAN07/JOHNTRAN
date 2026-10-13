@@ -8,12 +8,12 @@ const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 module.exports.config = {
     name: "menu",
     aliases: ["help"],
-    version: "3.1.0",
+    version: "4.0.0",
     role: 0,
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
     description: "Xem danh sách lệnh và info",
     category: "Tiện ích",
-    usage: "[tên lệnh/all/next/prev/out] [text/canvas]",
+    usage: "[tên lệnh/all/next/prev/out]",
     cooldowns: 1,
     dependencies: {
         "string-similarity": "",
@@ -86,45 +86,89 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
     const { threadId, type, data } = event;
     const prefix = global.config.prefix;
 
-    // Mặc định TEXT (phản hồi tức thì). Canvas chỉ khi nhóm chủ động bật
-    // "menu canvas" — render ảnh 3x3 mất ~1-2s trên Render free tier.
-    if (threadData.menu_mode !== "canvas") {
-        return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
-    }
-
+    // ===== MENU CHỈ CANVAS (ảnh) =====
+    // Render ảnh 3x3 mất ~1-2s lần đầu; các lần sau lấy từ CACHE (key gồm
+    // trang + danh sách lệnh, không gồm uptime) → mở lại tức thì.
     const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    let gridPath = null;
-    try {
-        gridPath = await menuCard.renderMenuGrid({
-            botName: global.config.name_bot,
-            avatarUrl: data.avatar,
-            prefix,
-            page,
-            totalPages,
-            commands: { total: commands.length, page: slice },
-            uptimeText: getUptimeText()
-        });
-        await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
-    } catch (error) {
-        console.error("Lỗi render menu:", error.message);
-        // Báo lỗi ra chat để biết ngay (console.log trên Render khó xem)
+    const cacheKey = JSON.stringify({
+        botName: global.config.name_bot,
+        prefix,
+        page,
+        totalPages,
+        avatar: data.avatar || "",
+        commands: slice.map((c) => `${c.name}:${c.category}`)
+    });
+
+    let gridPath = menuCache.get(cacheKey);
+    if (!gridPath || !fs.existsSync(gridPath)) {
         try {
-            const stack = String(error.stack || "")
-                .split("\n")
-                .filter((l) => l.includes("core/canvas") || l.includes("menu"))
-                .slice(0, 3)
-                .join("\n");
-            await api.sendMessage({
-                plain: true,
-                msg: `⚠️ Không render được ảnh menu: ${error.message}\n${stack}\n(Dạng text hiển thị tạm)`
-            }, threadId, type);
-        } catch { /* bỏ qua */ }
-        await showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
-    } finally {
-        if (gridPath && fs.existsSync(gridPath)) {
-            try { fs.unlinkSync(gridPath); } catch { /* bỏ qua */ }
+            gridPath = await menuCard.renderMenuGrid({
+                botName: global.config.name_bot,
+                avatarUrl: data.avatar,
+                prefix,
+                page,
+                totalPages,
+                commands: { total: commands.length, page: slice },
+                uptimeText: getUptimeText()
+            });
+            menuCache.set(cacheKey, gridPath);
+        } catch (error) {
+            console.error("Lỗi render menu:", error.message);
+            // Báo lỗi ra chat để biết ngay (console.log trên Render khó xem)
+            try {
+                const stack = String(error.stack || "")
+                    .split("\n")
+                    .filter((l) => l.includes("core/canvas") || l.includes("menu"))
+                    .slice(0, 3)
+                    .join("\n");
+                await api.sendMessage({
+                    plain: true,
+                    msg: `⚠️ Không render được ảnh menu: ${error.message}\n${stack}\n(Dạng text hiển thị tạm)`
+                }, threadId, type);
+            } catch { /* bỏ qua */ }
+            return showTextMenu(commands, page, totalPages, prefix, api, threadId, type);
         }
     }
+
+    // Ảnh cache: GỬI TRƯỚC rồi mới hẹn xoá (zalo-client cần file tồn tại lúc đọc)
+    await api.sendMessage({ msg: "", attachments: gridPath }, threadId, type);
+    scheduleMenuCacheCleanup();
+}
+
+// ===== CACHE ẢNH MENU ĐÃ RENDER =====
+// Render lại ảnh tốn ~1-2s trên Render free tier. Ảnh cùng nội dung giữ lại
+// 10 phút — lật next/prev hoặc mở lại menu là gửi ngay từ đĩa.
+const MENU_CACHE_TTL = 10 * 60 * 1000;
+const MENU_CACHE_MAX = 20;
+const menuCacheMap = new Map(); // key → { path, at }
+let menuCleanupTimer = null;
+
+const menuCache = {
+    get: (key) => menuCacheMap.get(key)?.path,
+    set: (key, path) => {
+        if (menuCacheMap.size >= MENU_CACHE_MAX) {
+            const oldest = [...menuCacheMap.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+            if (oldest) {
+                try { if (fs.existsSync(oldest[1].path)) fs.unlinkSync(oldest[1].path); } catch { /* bỏ qua */ }
+                menuCacheMap.delete(oldest[0]);
+            }
+        }
+        menuCacheMap.set(key, { path, at: Date.now() });
+    }
+};
+
+function scheduleMenuCacheCleanup() {
+    if (menuCleanupTimer) return;
+    menuCleanupTimer = setTimeout(() => {
+        menuCleanupTimer = null;
+        const now = Date.now();
+        for (const [key, entry] of [...menuCacheMap.entries()]) {
+            if (now - entry.at > MENU_CACHE_TTL) {
+                try { if (fs.existsSync(entry.path)) fs.unlinkSync(entry.path); } catch { /* bỏ qua */ }
+                menuCacheMap.delete(key);
+            }
+        }
+    }, MENU_CACHE_TTL).unref?.();
 }
 
 // ===== Gõ "next"/"prev"/"out" KHÔNG CẦN PREFIX =====
@@ -173,28 +217,6 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
     const senderId = data.uidFrom;
     const prefix = global.config.prefix;
     const argType = (args[0] || "").toLowerCase();
-
-    // Chế độ text cho nhóm này
-    if (argType === "text") {
-        const thread = (await Threads.getData(threadId)).data || {};
-        thread.menu_mode = "text";
-        await Threads.setData(threadId, thread);
-        return reply.success("Đã chuyển menu sang chế độ text.");
-    }
-
-    if (argType === "canvas") {
-        const thread = (await Threads.getData(threadId)).data || {};
-        thread.menu_mode = "canvas";
-        await Threads.setData(threadId, thread);
-        return reply.success("Đã chuyển menu sang chế độ canvas (ảnh).");
-    }
-
-    // Xem nhóm này đang dùng chế độ menu nào
-    if (argType === "mode" || argType === "che_do") {
-        const thread = (await Threads.getData(threadId)).data || {};
-        return reply.info(`Nhóm này đang dùng: ${thread.menu_mode === "canvas" ? "CANVAS (ảnh)" : "TEXT"}\nĐổi: ${prefix}menu canvas | ${prefix}menu text`,
-            { title: "⚙️ CHẾ ĐỘ MENU" });
-    }
 
     // Điều hướng: next / prev / out / số trang
     if (NAV_WORDS.includes(argType) || /^\d{1,2}$/.test(argType)) {
