@@ -102,12 +102,10 @@
             <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div></div>
             <!-- Thanh kiểu chữ -->
             <div class="chat-stylebar" id="chatStylebar">
-              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})" title="Cỡ chữ">
+              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})" title="Cỡ chữ (Zalo: nhỏ/lớn)">
                 <option value="">Cỡ chữ</option>
                 <option value="13px">Nhỏ</option>
-                <option value="15px" selected>Trung bình</option>
-                <option value="17px">Lớn</option>
-                <option value="19px">Rất lớn</option>
+                <option value="18px">Lớn</option>
               </select>
               <select id="chatFontFamily" class="mini" onchange="setChatStyle({fontFamily:this.value})" title="Font chữ">
                 <option value="">Font chữ</option>
@@ -123,14 +121,10 @@
                 <button class="stbtn" data-k="u" onclick="toggleStyle('u')"><u>U</u></button>
                 <button class="stbtn" data-k="s" onclick="toggleStyle('s')"><s>S</s></button>
               </div>
-              <div class="color-dots" id="colorDots">
-                <button class="cdot" data-c="#7c5cff" style="--c:#7c5cff" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-                <button class="cdot" data-c="#f43f5e" style="--c:#f43f5e" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-                <button class="cdot" data-c="#22c55e" style="--c:#22c55e" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-                <button class="cdot" data-c="#f59e0b" style="--c:#f59e0b" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-                <button class="cdot" data-c="#f97316" style="--c:#f97316" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-                <button class="cdot" data-c="#e5e7eb" style="--c:#e5e7eb" onclick="setChatStyle({color:this.dataset.c},this)"></button>
-              </div>
+              <button class="color-preview" id="colorPreview" onclick="openColorPicker()" title="Bảng kéo chọn màu">
+                <span id="colorSwatch"></span>
+                <span id="colorHex">Màu</span>
+              </button>
             </div>
             <form class="chat-input" id="chatForm" onsubmit="sendChat(event)">
               <button type="button" class="icon" onclick="openStylePanel()" title="Kiểu chữ">🎨</button>
@@ -243,6 +237,35 @@
       <button class="small" onclick="closeInfoModal()">Đóng</button>
     </header>
     <div class="modal-body" id="infoBody"></div>
+  </div>
+</div>
+
+<!-- Modal bảng kéo chọn màu (HSV) -->
+<div class="modal" id="colorModal" onclick="if(event.target===this) closeColorPicker()">
+  <div class="modal-box" style="max-width:360px">
+    <header>
+      <strong>Bảng kéo chọn màu</strong>
+      <div style="flex:1"></div>
+      <button class="small" onclick="closeColorPicker()">Đóng</button>
+    </header>
+    <div class="modal-body">
+      <canvas id="svArea" width="300" height="170" style="width:100%;border-radius:12px;cursor:crosshair;touch-action:none"></canvas>
+      <div style="margin:14px 0 6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Sắc độ (Hue)</div>
+      <canvas id="hueBar" width="300" height="26" style="width:100%;border-radius:99px;cursor:pointer;touch-action:none"></canvas>
+      <div class="row" style="margin-top:16px">
+        <span id="colorPreview2" class="color-preview" style="pointer-events:none"><span id="colorSwatch2"></span><span id="colorHex2">—</span></span>
+        <input id="colorHexInput" placeholder="#ff0000" style="flex:1;font-family:ui-monospace,monospace" onchange="applyHexInput()">
+        <button class="primary" onclick="closeColorPicker()">Dùng màu này</button>
+      </div>
+      <div class="sub" style="margin-top:12px">Panel hiển thị ĐÚNG màu bạn chọn. Zalo chỉ có 4 màu (đỏ/cam/vàng/xanh) nên khi gửi tự quy về màu Zalo gần nhất. Nút nhanh:</div>
+      <div class="row" style="margin-top:10px">
+        <button class="small" onclick="pickZaloColor(&#39;#f43f5e&#39;)">Đỏ</button>
+        <button class="small" onclick="pickZaloColor(&#39;#f97316&#39;)">Cam</button>
+        <button class="small" onclick="pickZaloColor(&#39;#f59e0b&#39;)">Vàng</button>
+        <button class="small" onclick="pickZaloColor(&#39;#22c55e&#39;)">Xanh</button>
+        <button class="small" onclick="pickZaloColor(&#39;&#39;)">Mặc định</button>
+      </div>
+    </div>
   </div>
 </div>
 

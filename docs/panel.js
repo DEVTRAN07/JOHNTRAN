@@ -488,6 +488,15 @@ function applyStyleBar() {
   if (f) f.value = chatStyle.font || "";
   const ff = $("chatFontFamily");
   if (ff) ff.value = chatStyle.fontFamily || "";
+  const sw = $("colorSwatch");
+  const hx = $("colorHex");
+  if (chatStyle.color) {
+    if (sw) sw.style.background = chatStyle.color;
+    if (hx) hx.textContent = chatStyle.color.toUpperCase();
+  } else {
+    if (sw) sw.style.background = "transparent";
+    if (hx) hx.textContent = "Màu";
+  }
 }
 function toggleStyle(key) {
   chatStyle[key] = !chatStyle[key];
@@ -505,10 +514,8 @@ function openStylePanel() {
       <label style="flex:1;display:grid;gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Cỡ chữ
         <select onchange="setChatStyle({font:this.value})" style="width:100%">
           <option value="">Mặc định</option>
-          <option value="13px" ${chatStyle.font==="13px"?"selected":""}>Nhỏ</option>
-          <option value="15px" ${chatStyle.font==="15px"?"selected":""}>Trung bình</option>
-          <option value="17px" ${chatStyle.font==="17px"?"selected":""}>Lớn</option>
-          <option value="19px" ${chatStyle.font==="19px"?"selected":""}>Rất lớn</option>
+          <option value="13px" ${chatStyle.font==="13px"?"selected":""}>Nhỏ (13px)</option>
+          <option value="18px" ${chatStyle.font==="18px"?"selected":""}>Lớn (18px)</option>
         </select>
       </label>
       <label style="flex:1;display:grid;gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Font chữ
@@ -541,6 +548,140 @@ function resetStyle() {
   chatStyle = { color: "", font: "", fontFamily: "", bold: false, italic: false, underline: false, strike: false, glow: false };
   saveChatStyle();
   openStylePanel();
+}
+
+
+// ---- BẢNG KÉO CHỌN MÀU (HSV) ----
+let pickerHsv = { h: 0, s: 1, v: 1 };
+
+function hsvToRgb(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let rgb;
+  if (h < 60) rgb = [c, x, 0];
+  else if (h < 120) rgb = [x, c, 0];
+  else if (h < 180) rgb = [0, c, x];
+  else if (h < 240) rgb = [0, x, c];
+  else if (h < 300) rgb = [x, 0, c];
+  else rgb = [c, 0, x];
+  return rgb.map((v) => Math.round((v + m) * 255));
+}
+const rgbToHex = (r, g, b) => "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+function hsvToHex(h, s, v) { const [r, g, b] = hsvToRgb(h, s, v); return rgbToHex(r, g, b); }
+function hexToHsv(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const r = parseInt(m[1].slice(0, 2), 16) / 255, g = parseInt(m[1].slice(2, 4), 16) / 255, b = parseInt(m[1].slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max ? d / max : 0, v: max };
+}
+
+function drawSvArea() {
+  const cv = $("svArea");
+  if (!cv || !cv.getContext) return;
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  const base = hsvToRgb(pickerHsv.h, 1, 1);
+  const grad = ctx.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, "rgb(255,255,255)");
+  grad.addColorStop(1, `rgb(${base[0]},${base[1]},${base[2]})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  const grad2 = ctx.createLinearGradient(0, 0, 0, H);
+  grad2.addColorStop(0, "rgba(0,0,0,0)");
+  grad2.addColorStop(1, "rgba(0,0,0,1)");
+  ctx.fillStyle = grad2;
+  ctx.fillRect(0, 0, W, H);
+  // vòng tròn vị trí đang chọn
+  const cx = pickerHsv.s * W, cy = (1 - pickerHsv.v) * H;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+}
+
+function drawHueBar() {
+  const cv = $("hueBar");
+  if (!cv || !cv.getContext) return;
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height;
+  const grad = ctx.createLinearGradient(0, 0, W, 0);
+  for (let i = 0; i <= 6; i++) {
+    const [r, g, b] = hsvToRgb(i * 60, 1, 1);
+    grad.addColorStop(i / 6, `rgb(${r},${g},${b})`);
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  const x = (pickerHsv.h / 360) * W;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(Math.max(0, Math.min(W - 4, x - 2)), 0, 4, H);
+}
+
+function updateColorPreview() {
+  const hex = hsvToHex(pickerHsv.h, pickerHsv.s, pickerHsv.v);
+  setChatStyle({ color: chatStyle.color === "" ? hex : hex });
+  const sw = $("colorSwatch"); if (sw) sw.style.background = hex;
+  const hx = $("colorHex"); if (hx) hx.textContent = chatStyle.color ? hex.toUpperCase() : "Màu";
+  const sw2 = $("colorSwatch2"); if (sw2) sw2.style.background = hex;
+  const hx2 = $("colorHex2"); if (hx2) hx2.textContent = hex.toUpperCase();
+  const hi = $("colorHexInput"); if (hi && document.activeElement !== hi) hi.value = hex.toUpperCase();
+  drawSvArea();
+  drawHueBar();
+}
+
+function pickerBind(cv, onPick) {
+  if (!cv) return;
+  const move = (e) => {
+    const rect = cv.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    onPick(x / rect.width, y / rect.height);
+  };
+  cv.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    move(e);
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+function openColorPicker() {
+  const from = hexToHsv(chatStyle.color || "#ff0000");
+  if (from) pickerHsv = from;
+  $("colorModal").classList.add("open");
+  requestAnimationFrame(() => {
+    pickerBind($("svArea"), (fx, fy) => { pickerHsv.s = fx; pickerHsv.v = 1 - fy; updateColorPreview(); });
+    pickerBind($("hueBar"), (fx) => { pickerHsv.h = fx * 360; updateColorPreview(); });
+    updateColorPreview();
+  });
+}
+
+function closeColorPicker() {
+  $("colorModal").classList.remove("open");
+}
+
+function applyHexInput() {
+  const hex = ($("colorHexInput").value || "").trim();
+  const hsv = hexToHsv(hex);
+  if (hsv) { pickerHsv = hsv; updateColorPreview(); }
+  else toast("Mã màu không hợp lệ (vd #ff0000)");
+}
+
+function pickZaloColor(hex) {
+  setChatStyle({ color: hex });
+  closeColorPicker();
 }
 
 // ---- danh sách hội thoại ----
@@ -674,7 +815,7 @@ function copyMsg(el) {
 
 // Zalo chỉ hỗ trợ: b/i/u/s + 4 màu + 2 cỡ chữ → quy đổi kiểu chữ panel
 const ZALO_COLOR = { "#f43f5e": "c_db342e", "#f97316": "c_f27806", "#f59e0b": "c_f7b503", "#22c55e": "c_15a85f" };
-const ZALO_FONT = { "13px": "f_13", "19px": "f_18" };
+const ZALO_FONT = { "13px": "f_13", "18px": "f_18" };
 function zaloStyles(msg) {
   const styles = [];
   const push = (st) => styles.push({ start: 0, len: String(msg).length, st });
@@ -701,7 +842,7 @@ async function sendChat(e) {
     });
     await loadChatMessages();
     if (chatStyle.fontFamily || chatStyle.glow) {
-      toast("Font chữ/phát sáng chỉ hiển thị trên panel — Zalo không hỗ trợ");
+      toast("Font chữ + phát sáng chỉ hiển thị trên panel — Zalo không hỗ trợ 2 thứ này");
     }
   } catch (error) { toast(error.message); }
 }
