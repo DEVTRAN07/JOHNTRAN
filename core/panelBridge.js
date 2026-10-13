@@ -181,6 +181,10 @@ async function handleRequest(req, res, url) {
       if (type === 1) {
         const info = await apiRef.getGroupInfo(threadId);
         const g = info?.gridInfoMap?.[threadId] || {};
+        // Log 1 lần để biết Zalo trả shape gì (nhóm lớn hay bỏ member lists)
+        console.log("[bridge] group-info keys:", Object.keys(g).join(","),
+          "| memberIds:", (g.memberIds || []).length, "| currentMems:", (g.currentMems || []).length,
+          "| memVerMap:", Object.keys(g.memVerMap || {}).length);
         const adminIds = g.adminIds || [];
         // currentMems = chi tiết (tên+avatar); memberIds = mọi uid (nhóm lớn
         // Zalo chỉ trả ids) → ghép lại, ưu tiên bản chi tiết.
