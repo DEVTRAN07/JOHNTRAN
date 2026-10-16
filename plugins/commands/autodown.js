@@ -55,6 +55,17 @@ function errorHint(url, message) {
   return "";
 }
 
+// Gợi ý khi lỗi do chính sách bảo mật (privacy guard) chặn host
+function privacyHint(error) {
+  const text = String(error?.message || "");
+  if (/không nằm trong danh sách cho phép|privacy/i.test(text)) {
+    return "\n\n💡 Host này bị chặn bởi chính sách bảo mật (privacy.allowed_hosts). Admin hãy:\n" +
+           "• Set `privacy.allow_all_hosts: true` trong config.yml (chạy thử), hoặc\n" +
+           "• Thêm host vào `privacy.allowed_hosts` (vd: tiktok.com, instagram.com, facebook.com, youtube.com)";
+  }
+  return "";
+}
+
 // Tách URL SẠCH khỏi tin nhắn — xử lý MỌI dạng Zalo gửi link:
 //   "xem link này https://youtu.be/abc nha"  → "https://youtu.be/abc"
 //   { href: "..." } / { url: "..." } / { link: "..." } (tin chia sẻ)
@@ -200,11 +211,11 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
             return await downloadWithJsDownloader(url, api, threadId, type, setReactions);
         } catch (error) {
             console.log(`[autodown] Tải local thất bại: ${error.message}`);
-            // Không còn endpoint cấu hình sẵn → báo lỗi luôn
+            const hint = privacyHint(error);
             if (!services.serviceUrl("media_downloader_url")) {
                 await setReactions([Reactions.CRY]);
                 return api.sendMessage({
-                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}${errorHint(url, error.message)}`
+                    msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}${errorHint(url, error.message)}${hint}`
                 }, threadId, type);
             }
         }
@@ -212,18 +223,25 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
 
     // ===== Cách 2: API endpoint do admin cấu hình (vd cho TikTok) =====
     let apiData;
-    try {
-        const baseUrl = services.requireService("media_downloader_url");
-        const axios = require('axios');
-        const down = await axios.get(`${baseUrl}/media-downloader/atd2?url=${encodeURIComponent(url)}`, { timeout: 60000 });
-        apiData = down.data;
-    } catch (error) {
-        if (error.notConfigured) {
-            await setReactions([Reactions.CRY]);
-            return api.sendMessage({ msg: `❌ ${error.message}` }, threadId, type);
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const baseUrl = services.requireService("media_downloader_url");
+            const axios = require('axios');
+            const down = await axios.get(`${baseUrl}/media-downloader/atd2?url=${encodeURIComponent(url)}`, { timeout: 60000 });
+            apiData = down.data;
+            break;
+        } catch (error) {
+            lastErr = error;
+            if (error.notConfigured) {
+                await setReactions([Reactions.CRY]);
+                return api.sendMessage({ msg: `❌ ${error.message}` }, threadId, type);
+            }
         }
+    }
+    if (!apiData) {
         await setReactions([Reactions.CRY]);
-        return api.sendMessage({ msg: "❌ Lỗi khi tải xuống media" }, threadId, type);
+        return api.sendMessage({ msg: `❌ Lỗi khi tải xuống media (${sanitizeError(lastErr?.message)})` }, threadId, type);
     }
 
     if (!apiData || !Array.isArray(apiData.medias) || apiData.medias.length === 0) {

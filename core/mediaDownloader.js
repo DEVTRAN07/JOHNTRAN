@@ -12,7 +12,12 @@ const { caches } = require("./cache");
 const REQUEST_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
-  "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8"
+  "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1"
 };
 
 const DOWNLOAD_TIMEOUT = 180000;
@@ -20,6 +25,43 @@ const MAX_VIDEO_BYTES = Number(process.env.JT_MAX_VIDEO_MB || 200) * 1024 * 1024
 
 const YT_INNERTUBE = "https://www.youtube.com/youtubei/v1/player";
 const YT_CLIENT = { clientName: "WEB", clientVersion: "2.20240101.00.0" };
+
+function loadCookies(platform) {
+  const key = platform === "facebook" ? "facebook_cookies" : "tiktok_cookies";
+  const env = platform === "facebook" ? "FACEBOOK_COOKIES" : "TIKTOK_COOKIES";
+  const raw = (global.config?.media?.[key] || process.env[env] || "").trim();
+  const out = {};
+  for (const part of String(raw).split(";")) {
+    const idx = part.indexOf("=");
+    if (idx > 0) out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
+  }
+  return out;
+}
+
+function pageHeaders(platform) {
+  const headers = { ...REQUEST_HEADERS };
+  const cookies = loadCookies(platform);
+  if (Object.keys(cookies).length) {
+    headers.Cookie = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+  }
+  return headers;
+}
+
+async function fetchPage(url, platform = "generic", timeout = 45000) {
+  const res = await axios.get(url, {
+    timeout,
+    headers: pageHeaders(platform),
+    maxRedirects: 5,
+    validateStatus: () => true,
+    maxBodyLength: 10 * 1024 * 1024
+  });
+  return res.data || "";
+}
+
+async function fetchHtml(url, timeout = 45000) {
+  const res = await axios.get(url, { timeout, headers: REQUEST_HEADERS, maxRedirects: 5, validateStatus: () => true });
+  return res.data || "";
+}
 
 function isTikTokUrl(url) {
   return /(?:^|\.)(?:tiktok|douyin)\.com\/|vm\.tiktok\.com|vt\.tiktok\.com/.test(String(url));
@@ -116,7 +158,7 @@ async function extractTikTok(url) {
 
 // ===== Facebook Reels / Watch / Video =====
 async function extractFacebook(url) {
-  const html = await fetchHtml(url);
+  const html = await fetchPage(url, "facebook");
   const meta = extractMetaMedia(html);
 
   // 1) video URL trực tiếp từ meta og:video
@@ -146,7 +188,7 @@ async function extractFacebook(url) {
     if (found.length) videoUrl = found[0];
   }
 
-  if (!videoUrl && !meta.image) throw new Error("Facebook không trích xuất được video (trang có thể yêu cầu đăng nhập hoặc cần cookie)");
+  if (!videoUrl && !meta.image) throw new Error("Facebook không trích xuất được video (trang yêu cầu đăng nhập — hãy cấu hình media.facebook_cookies trong config.yml hoặc env FACEBOOK_COOKIES)");
 
   return {
     title: meta.title || "Facebook video",
@@ -162,7 +204,7 @@ async function extractFacebook(url) {
 
 // ===== Instagram Reels / Post =====
 async function extractInstagram(url) {
-  const html = await fetchHtml(url);
+  const html = await fetchPage(url, "instagram");
   const meta = extractMetaMedia(html);
 
   let videoUrl = meta.video || "";
@@ -190,7 +232,7 @@ async function extractInstagram(url) {
     if (found.length) videoUrl = found[0];
   }
 
-  if (!videoUrl && !meta.image) throw new Error("Instagram không trích xuất được video (có thể cần đăng nhập hoặc video riêng tư)");
+  if (!videoUrl && !meta.image) throw new Error("Instagram không trích xuất được video (có thể cần đăng nhập — cấu hình media.facebook_cookies / env FACEBOOK_COOKIES nếu bắt buộc cookie)");
 
   return {
     title: meta.title || "Instagram video",
