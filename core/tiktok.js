@@ -29,6 +29,30 @@ const FALLBACK_APIS = [
   "https://tikwm.com/api"
 ];
 
+// Chuẩn hóa short link TikTok (vt.tiktok.com, vm.tiktok.com) → URL chính thức
+// theo dõi redirect. Tikwm API đôi khi không resolve được short link, nên cần
+// canonical URL trước khi gọi API và fallback lấy từ trang.
+async function resolveTikTokUrl(url) {
+  try {
+    const res = await axios.get(url, {
+      timeout: 25000,
+      headers: apiHeaders(),
+      maxRedirects: 10,
+      validateStatus: () => true,
+      maxBodyLength: 5 * 1024 * 1024
+    });
+    const finalUrl =
+      res.request?._currentUrl ||
+      (res.request?.res?.responseUrl) ||
+      (res.request?.res?.url) ||
+      res.config?.url ||
+      url;
+    return String(finalUrl);
+  } catch {
+    return url;
+  }
+}
+
 function loadCookies() {
   const raw = (global.config?.media?.tiktok_cookies || process.env.TIKTOK_COOKIES || "").trim();
   const out = {};
@@ -96,11 +120,14 @@ async function getVideoInfo(url) {
   const errors = [];
   const bases = apiChain();
 
+  // Chuẩn hóa short link (vt.tiktok.com, vm.tiktok.com) → canonical URL trước khi gọi API
+  const canonicalUrl = await resolveTikTokUrl(url);
+
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const base of bases) {
       try {
         const headers = apiHeaders(attempt === 0); // lần đầu không cookie, lần sau có cookie
-        const endpoint = `${base}/?url=${encodeURIComponent(url)}&hd=1`;
+        const endpoint = `${base}/?url=${encodeURIComponent(canonicalUrl)}&hd=1`;
         const res = await axios.get(endpoint, { timeout: 45000, headers, validateStatus: () => true });
 
         const data = res.data?.data;
@@ -126,9 +153,9 @@ async function getVideoInfo(url) {
   }
 
   // API hết sức → lấy trực tiếp từ trang TikTok (og:video / twitter:player).
-  // axios tự theo dõi redirect nên vt.tiktok.com, vm.tiktok.com sẽ về trang chính thức.
+  // axios tự theo dõi redirect nên canonical URL sẽ về trang chính thức.
   try {
-    return await extractTikTokPage(url);
+    return await extractTikTokPage(canonicalUrl);
   } catch (error) {
     errors.push(`trang_tiktok: ${error.message}`);
   }
