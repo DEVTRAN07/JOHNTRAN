@@ -47,7 +47,7 @@ const HOURLY_MESSAGES = {
 
 // Tải 1 GIF ngẫu nhiên từ assets → file tạm. Lỗi mạng/hết gif → null
 // (tin nhắn vẫn gửi, chỉ mất ảnh trang trí).
-const GIF_TIMEOUT = 20000;
+const GIF_TIMEOUT = 8000;
 
 async function downloadRandomGif() {
   try {
@@ -153,6 +153,7 @@ module.exports.onLoad = async function ({ api, Threads }) {
 
           // GIF trang trí từ assets — tải lỗi vẫn gửi text
           const gifPath = await downloadRandomGif();
+          let sendOk = false;
           try {
             // Supabase row chỉ có id, KHÔNG có threadId — dùng thẳng groupId
             await api.sendMessage(
@@ -160,14 +161,17 @@ module.exports.onLoad = async function ({ api, Threads }) {
               groupId,
               ThreadType.Group
             );
+            sendOk = true;
           } finally {
             cleanupGif(gifPath);
           }
 
-          // GHI NHỚ giờ đã gửi — restart/deploy không gửi lại
-          thread.data.auto_send_hour = currentHour;
-          await Threads.setData(groupId, thread.data);
-          sentCount++;
+          // GHI NHỚ giờ đã gửi — restart/deploy không gửi lại. Chỉ đánh dấu khi gửi thành công.
+          if (sendOk) {
+            thread.data.auto_send_hour = currentHour;
+            await Threads.setData(groupId, thread.data);
+            sentCount++;
+          }
         } catch (err) {
           console.log(`Autosend: không gửi được tới nhóm ${groupId}: ${err.message}`);
         }
