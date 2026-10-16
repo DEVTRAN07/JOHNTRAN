@@ -116,3 +116,15 @@ media:
   # Cookie Facebook (nếu cần lấy nội dung yêu cầu đăng nhập) — tương tự, env FACEBOOK_COOKIES.
   facebook_cookies: "datr=zIHPad1oJ8rgjplQw303qsGm;sb=zIHPaQg9ByMzFLNM7NpjmpQV;ps_l=1;ps_n=1;locale=vi_VN;wd=1201x739;c_user=100035634173258;fr=16CWiRcnlzdF8Rqkc.AWeNnXni3Gq3ayXgLIYUEt8rBzY_VdxfcR_6XtYw6wJwAl7cM6k.Bq0kEZ..AAA.0.0.Bq0kEZ.AWfUHHw9IqybCUdRvVi_xlsRKtA;xs=29%3AMro3JZlAV4fSFQ%3A2%3A1792164116%3A-1%3A-1%3A%3AAczMkqVwsVkzqdAPc-NK2yixkEaxpGhgdd5uqKOm4Q;presence=C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1792164125418%2C%22v%22%3A1%7D;"
   youtube_cookies:  "APISID=JTqDVw9Vcut3L3G3/AH-ClP17y2R1X7JNy; SAPISID=NCSjjE2a8CJMFkx2/AVpfoOVmuQtQtzgU_; __Secure-1PAPISID=NCSjjE2a8CJMFkx2/AVpfoOVmuQtQtzgU_; __Secure-3PAPISID=NCSjjE2a8CJMFkx2/AVpfoOVmuQtQtzgU_; SID=g.a000Cgmb0w9-BOwEwT6ByUOLKbJWV6Iq6zbQhGMs3xo-N76YZwFwaCtD8gEVyMh9WYq0Qnc4aQACgYKAR0SARQSFQHGX2MitgPm3vK4popgsmOmTdpk8hoVAUF8yKpuFkemT7xIDIPiTxZsXmrU0076; PREF=f4=4000000&f6=40000000&tz=Asia.Saigon; SIDCC=AKEyXzWFKUwCP5VO2jx2EO4V9zsvO5vBB4_3zEM1IlEKpGWJGOlFyutKmrdz1walj6YLe7UT"
+
+# ===== AUTODOWN (tự động tải media trong nhóm) =====
+autodown:
+  enabled: true # cho phép tính năng autodown chạy (mặc định tắt mỗi nhóm, bật bằng lệnh autodown on)
+  rate_limit_max: 5 # tối đa số lần tải mỗi nhóm trong 1 cửa sổ thời gian
+  rate_limit_window_ms: 300000 # cửa sổ thời gian rate limit (ms) = 5 phút
+  circuit_fail_threshold: 3 # số lần thất bại liên tiếp thì đóng circuit breaker nền tảng đó
+  circuit_cooldown_ms: 600000 # thời gian chờ trước khi mở lại circuit breaker (ms) = 10 phút
+  url_dedup_ttl_ms: 120000 # tránh xử lý trùng cùng 1 link trong khoảng này (ms) = 2 phút
+  cache_ttl_ms: 600000 # cache media đã tải (ms) = 10 phút
+  max_concurrent_downloads: 3 # số tải song đồng thời tối đa
+  max_video_mb: 200 # giới hạn dung lượng video mỗi file (MB)
