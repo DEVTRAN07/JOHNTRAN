@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const tiktokApi = require("./tiktok");
 const services = require("./services");
+const { caches } = require("./cache");
 
 const REQUEST_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -294,14 +295,21 @@ async function extractGeneric(url) {
   };
 }
 
-// ===== Trung tâm lấy thông tin media =====
+// ===== Trung tâm lấy thông tin media (có cache RAM 10 phút) =====
 async function getMediaInfo(url) {
-  if (isTikTokUrl(url)) return extractTikTok(url);
-  if (isYouTubeUrl(url)) return extractYouTube(url);
-  if (isFacebookUrl(url)) return extractFacebook(url);
-  if (isInstagramUrl(url)) return extractInstagram(url);
-  if (isTwitterUrl(url)) return extractTwitter(url);
-  return extractGeneric(url);
+  const cached = caches.mediaMeta.get(url);
+  if (cached !== undefined) return cached;
+
+  let info;
+  if (isTikTokUrl(url)) info = await extractTikTok(url);
+  else if (isYouTubeUrl(url)) info = await extractYouTube(url);
+  else if (isFacebookUrl(url)) info = await extractFacebook(url);
+  else if (isInstagramUrl(url)) info = await extractInstagram(url);
+  else if (isTwitterUrl(url)) info = await extractTwitter(url);
+  else info = await extractGeneric(url);
+
+  caches.mediaMeta.set(url, info, 600000);
+  return info;
 }
 
 // ===== Tải file về máy (dùng cho video/ảnh/thumbnail) =====
@@ -316,11 +324,26 @@ async function downloadToFile(url, outputPath, timeout = DOWNLOAD_TIMEOUT) {
   });
   if (!res.data) throw new Error("Phản hồi tải về rỗng");
   const writer = fs.createWriteStream(outputPath);
-  res.data.pipe(writer);
+  let received = 0;
+  let oversizedError = null;
+  res.data.on("data", (chunk) => {
+    if (oversizedError) return;
+    received += chunk.length;
+    if (received > MAX_VIDEO_BYTES) {
+      oversizedError = new Error(`File quá lớn (vượt ${Math.round(MAX_VIDEO_BYTES / 1048576)}MB — giới hạn Zalo)`);
+      try { res.data.destroy(); } catch {}
+      try { writer.destroy(); } catch {}
+    }
+  });
   await new Promise((resolve, reject) => {
     writer.on("finish", resolve);
     writer.on("error", reject);
+    res.data.on("error", (err) => reject(err || oversizedError));
   });
+  if (oversizedError) {
+    removeQuietly(outputPath);
+    throw oversizedError;
+  }
   if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
     throw new Error("File tải về rỗng");
   }

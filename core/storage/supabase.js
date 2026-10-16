@@ -10,7 +10,8 @@ const TABLE_MAP = {
   Users: "bot_users",
   Threads: "bot_threads",
   Metrics: "bot_metrics",
-  BotStats: "bot_stats"
+  BotStats: "bot_stats",
+  MediaCache: "bot_media_cache" // cache metadata media (url → {title, author, duration, videoUrl, thumbnail})
 };
 
 const SYNC_INTERVAL = Number(process.env.SUPABASE_SYNC_MS) || 30000;
