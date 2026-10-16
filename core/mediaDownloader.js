@@ -27,8 +27,19 @@ const YT_INNERTUBE = "https://www.youtube.com/youtubei/v1/player";
 const YT_CLIENT = { clientName: "WEB", clientVersion: "2.20240101.00.0" };
 
 function loadCookies(platform) {
-  const key = platform === "facebook" ? "facebook_cookies" : "tiktok_cookies";
-  const env = platform === "facebook" ? "FACEBOOK_COOKIES" : "TIKTOK_COOKIES";
+  let key, env;
+  if (platform === "facebook") {
+    key = "facebook_cookies";
+    env = "FACEBOOK_COOKIES";
+  } else if (platform === "tiktok") {
+    key = "tiktok_cookies";
+    env = "TIKTOK_COOKIES";
+  } else if (platform === "youtube") {
+    key = "youtube_cookies";
+    env = "YOUTUBE_COOKIES";
+  } else {
+    return {};
+  }
   const raw = (global.config?.media?.[key] || process.env[env] || "").trim();
   const out = {};
   for (const part of String(raw).split(";")) {
