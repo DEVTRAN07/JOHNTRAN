@@ -107,14 +107,12 @@ music:
   cache_ttl: 300000 # thời gian nhớ danh sách chọn bài (ms)
   soundcloud_client_id: "" # để trống = bot tự lấy client_id từ asset chính chủ SoundCloud
 
-# ===== TẢI MEDIA (autodown) =====
-# YouTube đang chặn bot → dùng nightly yt-dlp đã fix đa số trường hợp.
-# Nếu vẫn báo "Sign in to confirm you're not a bot" thì cần cookie:
+# ===== TẢI MEDIA (autodown — pure JS, không cần Python/yt-dlp) =====
 media:
-  # Cách 2 (chạy trên MÁY BẠN, có trình duyệt đã đăng nhập YouTube):
-  # chrome | safari | firefox | edge | brave | chromium
-  # Không có trình duyệt đó (vd chạy trên Render) thì bot tự bỏ cờ và chạy lại.
-  ytdlp_cookies_from_browser: "chrome"
-  # Cách 1 (Render/cloud — KHÔNG có trình duyệt): export cookies.txt rồi trỏ đường dẫn
-  ytdlp_cookies_file: "" # vd: /app/cookies.txt hoặc set env YTDLP_COOKIES_FILE
+  # Cookie TikTok để qua anti-bot khi lấy thông tin profile/video.
+  # Lấy: đăng nhập tiktok.com trên trình duyệt → F12 Console → document.cookie → copy chuỗi.
+  # Hoặc set env TIKTOK_COOKIES.
+  tiktok_cookies: ""
+  # Cookie Facebook (nếu cần lấy nội dung yêu cầu đăng nhập) — tương tự, env FACEBOOK_COOKIES.
+  facebook_cookies: ""
 

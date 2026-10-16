@@ -1,4 +1,4 @@
-// TikTok/Douyin: IP máy chủ thường bị TikTok chặn nên yt-dlp không qua được.
+// TikTok/Douyin: IP máy chủ thường bị TikTok chặn nên dùng API thay cho yt-dlp (Python đã gỡ bỏ).
 // Dùng API công khai (tikwm và các endpoint dự phòng) để lấy link video.
 // Owner có thể trỏ endpoint khác trong config.yml → services.tiktok_api_url
 const axios = require("axios");

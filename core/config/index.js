@@ -135,10 +135,10 @@ const DEFAULTS = {
     token: ""
   },
   zalo_client_config: {},
-  // Tải media (autodown) — cookies cho yt-dlp khi site chặn bot
+  // Tải media pure JS (autodown) — cookies cho fetch khi trang yêu cầu đăng nhập
   media: {
-    ytdlp_cookies_file: "",
-    ytdlp_cookies_from_browser: "chrome"
+    tiktok_cookies: "",
+    facebook_cookies: ""
   },
   privacy: {
     allow_all_hosts: false,

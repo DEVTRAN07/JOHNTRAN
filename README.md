@@ -299,22 +299,11 @@ assets/
 |---|---|
 **Autodown — tự tải link trong nhóm (sau `/autodown on`):**
 - Nhận **mọi dạng Zalo gửi link**: gõ tay, link kèm chú thích, tin chia sẻ (`href`/`url`/`link`), link gợi ý, object lồng object — bot tự quét tìm URL.
-- Tải bằng **yt-dlp chạy local** (link không qua bên thứ 3). yt-dlp bản mới được chạy với `--impersonate chrome` (giả TLS fingerprint trình duyệt) — thiếu cờ này thì Facebook/Vimeo... báo *"Cannot parse data"*. Bản yt-dlp cũ không có cờ thì bot tự bỏ cờ chạy lại.
-- **YouTube** có sẵn chuỗi player_client dự phòng để qua bước *"Sign in to confirm you're not a bot"*.
+- Tải media (pure JS, không dùng yt-dlp/Python): TikTok qua `services.tiktok_api_url` (tikwm + dự phòng). YouTube/Facebook/Instagram/Twitter và các trang khác tự trích xuất link trực tiếp từ thẻ meta (og:video/twitter:player) của trang; nếu thất bại thì dùng endpoint `services.media_downloader_url` trong config.yml (nếu admin cấu hình). Nếu không có endpoint và trích xuất meta thất bại, link đó sẽ báo lỗi tải.
 - Video → gửi video; chỉ có tiếng → tải mp3 gửi voice.
-- **Chất lượng GỐC**: tải bản cao nhất có thể; nếu file quá lớn cho Zalo thì tự hạ dần 1080p → 720p → bản có sẵn (giới hạn mặc định 200MB, đổi bằng biến `JT_MAX_VIDEO_MB`).
-- **Khi YouTube báo "Sign in to confirm you're not a bot"** (IP bị chặn) thì cấu hình cookie, chọn 1 trong 2 cách trong `config.yml → media`:
-  - Bot chạy **trên máy bạn** (có trình duyệt đã đăng nhập YouTube):
-    ```yaml
-    media:
-      ytdlp_cookies_from_browser: chrome   # chrome | safari | firefox | edge | brave
-    ```
-  - Bot chạy **trên Render** (không có trình duyệt): export `cookies.txt` (định dạng Netscape, dùng extension "Get cookies.txt LOCALLY") rồi set biến môi trường `YTDLP_COOKIES_CONTENT` = **nội dung** file đó — bot tự ghi ra `cookies.txt` mỗi lần khởi động (Render xoá ổ đĩa khi restart). Cách khác: set `YTDLP_COOKIES_FILE` trỏ tới file đã đặt sẵn.
-- Facebook/Instagram hay chặn nếu chưa đăng nhập → cũng dùng cookie như trên.
-- TikTok/Douyin: thử API công khai (chain: `services.tiktok_api_url` → tikwm → dự phòng) rồi tới yt-dlp. Các API public hiện hay chết nên **nên tự cấu hình `services.tiktok_api_url`** nếu có nguồn riêng.
+- **Chất lượng**: tuỳ theo nguồn endpoint trả về (giới hạn file Zalo mặc định 200MB, đổi bằng biến `JT_MAX_VIDEO_MB`).
+- TikTok/Douyin: thử API công khai (chain: `services.tiktok_api_url` → tikwm → dự phòng). Các API public hiện hay chết nên **nên tự cấu hình `services.tiktok_api_url`** nếu có nguồn riêng.
 - Nền tảng không hỗ trợ (link lạ) → bot im lặng, không làm nhiễu nhóm.
-
-> Chi tiết: `--cookies-from-browser` và `--impersonate` không dùng được cùng lúc (xung đh, có khi treo yt-dlp) nên `core/mediaDownloader.js` thử lần lượt: cookie → giả trình duyệt → mặc định, cách nào chạy được thì dùng.
 
 **Lệnh spam (chỉ admin bot):**
 | Lệnh | Chức năng |

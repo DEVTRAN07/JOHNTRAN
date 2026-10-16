@@ -79,24 +79,23 @@ function bootstrapFiles() {
       logger.log(`Bootstrap store.json thất bại (JSON không hợp lệ): ${error.message}`, "error");
     }
   }
-  // 5. Ghi cookies.txt cho yt-dlp (YouTube/Facebook chặn IP server thì cần)
-  // Set env YTDLP_COOKIES_CONTENT = nội dung file cookies.txt xuất từ trình duyệt
-  const ytdlpCookies = process.env.YTDLP_COOKIES_CONTENT;
-  if (ytdlpCookies && typeof ytdlpCookies === "string" && ytdlpCookies.trim()) {
-    const target = process.env.YTDLP_COOKIES_FILE
-      ? resolve(process.env.YTDLP_COOKIES_FILE)
+
+  // Ghi cookies.txt (định dạng Netscape) cho các yêu cầu fetch media cần cookie
+  // (YouTube/Facebook/Instagram anti-bot). Dùng env JT_MEDIA_COOKIES_CONTENT.
+  const mediaCookies = process.env.JT_MEDIA_COOKIES_CONTENT;
+  if (mediaCookies && typeof mediaCookies === "string" && mediaCookies.trim()) {
+    const target = process.env.JT_MEDIA_COOKIES_FILE
+      ? resolve(process.env.JT_MEDIA_COOKIES_FILE)
       : path.join(__dirname, "..", "cookies.txt");
     try {
-      // cookies.txt phải ở định dạng Netscape (header đúng chuẩn hoặc dòng tab-separated)
-      if (!/^# HTTP Cookie File/mi.test(ytdlpCookies) && !/^\S+\t(TRUE|FALSE)\t/m.test(ytdlpCookies)) {
+      if (!/^# HTTP Cookie File/mi.test(mediaCookies) && !/^\S+\t(TRUE|FALSE)\t/m.test(mediaCookies)) {
         throw new Error("Nội dung không đúng định dạng cookies.txt (Netscape)");
       }
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, ytdlpCookies, "utf8");
-      process.env.YTDLP_COOKIES_FILE = target; // yt-dlp đọc biến này
-      logger.log(`Đã ghi cookies.txt cho yt-dlp: ${path.basename(target)}`, "info");
+      fs.writeFileSync(target, mediaCookies, "utf8");
+      logger.log(`Đã ghi cookies.txt cho media fetch: ${path.basename(target)}`, "info");
     } catch (error) {
-      logger.log(`Bootstrap cookies.txt thất bại: ${error.message}`, "error");
+      logger.log(`Bootstrap media cookies.txt thất bại: ${error.message}`, "error");
     }
   }
 }

@@ -1,219 +1,209 @@
-// Tải media local bằng yt-dlp — không gửi link/URL qua API bên thứ 3.
-// Hỗ trợ: Tiktok, Youtube, Facebook, Instagram, Twitter/X, Soundcloud, Zingmp3,
-// Douyin, Capcut, Vimeo, Reddit, Bilibili, v.v. ( Spotify không tải được — DRM )
-const { execFile } = require("child_process");
+// Tải media pure JS (không dùng yt-dlp/Python).
+// Trích xuất link video/ảnh trực tiếp từ trang của nền tảng qua axios + cheerio.
+// TikTok/Douyin ủy quyền cho core/tiktok.js (API công khai). Các nền tảng khác:
+//   - trích og:video / twitter:player / og:image từ HTML (dùng được cho nhiều trang)
+//   - YouTube: thử YouTube innertube player API (best effort, có thể cần cookie/media_downloader_url)
+//   - Cuối cùng: fallback endpoint media_downloader_url trong config.yml (nếu admin cấu hình)
+const axios = require("axios");
+const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
+const tiktokApi = require("./tiktok");
+const services = require("./services");
+
+const REQUEST_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8"
+};
 
 const DOWNLOAD_TIMEOUT = 180000;
+const MAX_VIDEO_BYTES = Number(process.env.JT_MAX_VIDEO_MB || 200) * 1024 * 1024;
 
-// Ứng viên binary yt-dlp: env → PATH (ưu tiên nightly: fix chống chặn YouTube nhanh hơn) → đường dẫn phổ biến
-const YTDLP_CANDIDATES = [
-  process.env.YTDLP_PATH,
-  path.join(os.homedir(), ".local/bin/yt-dlp"),
-  "yt-dlp",
-  "/usr/local/bin/yt-dlp",
-  "/Library/Frameworks/Python.framework/Versions/3.14/bin/yt-dlp",
-  "/opt/homebrew/bin/yt-dlp",
-  "/usr/bin/yt-dlp"
-].filter(Boolean);
+const YT_INNERTUBE = "https://www.youtube.com/youtubei/v1/player";
+const YT_CLIENT = { clientName: "WEB", clientVersion: "2.20240101.00.0" };
 
-let resolvedBinary = null;
-let availabilityChecked = false;
-let impersonateSupported = null; // null = chưa kiểm tra
-
-function tryBinary(binary, args) {
-  return new Promise((resolve) => {
-    execFile(binary, args, { timeout: 10000 }, (error, stdout) => {
-      resolve({ ok: !error && /^20\d\d\./.test((stdout || "").trim()), binary });
-    });
-  });
+function isTikTokUrl(url) {
+  return /(?:^|\.)(?:tiktok|douyin)\.com\/|vm\.tiktok\.com|vt\.tiktok\.com/.test(String(url));
 }
 
-async function ytDlpAvailable() {
-  if (availabilityChecked) return Boolean(resolvedBinary);
-  availabilityChecked = true;
-  for (const candidate of YTDLP_CANDIDATES) {
-    const result = await tryBinary(candidate, ["--version"]);
-    if (result.ok) {
-      resolvedBinary = candidate;
-      return true;
-    }
-  }
-  return false;
-}
-
-// yt-dlp bản mới (>= 2023.07) giả làm trình duyệt thật (TLS fingerprint) — nhiều
-// site (Facebook, Vimeo...) chặn bot thì không lấy được metadata nếu thiếu cờ này.
-async function supportsImpersonate() {
-  if (impersonateSupported !== null) return impersonateSupported;
-  if (!resolvedBinary) await ytDlpAvailable(); // chưa dò binary thì dò trước
-  if (!resolvedBinary) return (impersonateSupported = false);
-  try {
-    const { stdout } = await new Promise((resolve, reject) => {
-      execFile(resolvedBinary, ["--help"], { timeout: 15000, maxBuffer: 32 * 1024 * 1024 }, (err, out) => {
-        err ? reject(err) : resolve({ stdout: out });
-      });
-    });
-    impersonateSupported = /--impersonate/.test(stdout || "");
-  } catch {
-    impersonateSupported = false;
-  }
-  return impersonateSupported;
-}
-
-function impersonateArgs() {
-  return ["--impersonate", "chrome"];
-}
-
-function run(args, timeout = DOWNLOAD_TIMEOUT) {
-  if (!resolvedBinary) {
-    return Promise.reject(new Error("yt-dlp không khả dụng (chưa cài đặt hoặc sai đường dẫn)"));
-  }
-  return new Promise((resolve, reject) => {
-    execFile(
-      resolvedBinary,
-      args,
-      { timeout, maxBuffer: 32 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        const dropFlags = ["--impersonate", "--cookies-from-browser"];
-        const errText = stderr || "";
-        // Thiếu curl_cffi/impersonate hoặc trình duyệt đọc không được
-        // → bỏ cờ đó (KÈM GIÁ TRỊ) rồi chạy lại, khỏi bó tay vì 1 tuỳ chọn phụ
-        if (error && new RegExp(dropFlags.join("|"), "i").test(errText)) {
-          const retryArgs = [];
-          for (let i = 0; i < args.length; i++) {
-            if (dropFlags.includes(args[i])) { i++; continue; } // bỏ flag + giá trị đi kèm
-            retryArgs.push(args[i]);
-          }
-          if (retryArgs.length !== args.length) {
-            return execFile(resolvedBinary, retryArgs, { timeout, maxBuffer: 32 * 1024 * 1024 }, (e2, so2, se2) => {
-              if (e2) return reject(new Error(cleanError(e2, se2 || so2)));
-              resolve(so2);
-            });
-          }
-        }
-        if (error) return reject(new Error(cleanError(error, stderr || stdout)));
-        resolve(stdout);
-      }
-    );
-  });
-}
-
-function cleanError(error, stderr) {
-  const message = (stderr || error.message || "").split("\n").filter(Boolean).slice(-2).join(" ");
-  return message.slice(0, 200);
-}
-
-// ===== Cookies + player client (YouTube chặn bot khi không có cookie) =====
-function cookiesFile() {
-  return (global.config?.media?.ytdlp_cookies_file || process.env.YTDLP_COOKIES_FILE || "").trim();
-}
-
-function cookiesBrowser() {
-  return (global.config?.media?.ytdlp_cookies_from_browser || "").trim();
-}
-
-// Cờ xác thực cho YouTube. Ưu tiên file cookies.txt (dùng được cả trên
-// Render); nếu không có thì lấy cookie từ trình duyệt của máy (chỉ chạy local).
-let authLogged = false; // chỉ log 1 lần cho đỡ nhiễu log
-function authArgs() {
-  const file = cookiesFile();
-  if (file) {
-    if (fs.existsSync(file)) {
-      logAuth(`cookies.txt (${file})`);
-      return ["--cookies", file];
-    }
-    logger.log(`[yt-dlp] Không thấy file cookies: ${file}`, "warn");
-    return [];
-  }
-  const browser = cookiesBrowser();
-  if (browser) {
-    logAuth(`trình duyệt "${browser}"`);
-    return ["--cookies-from-browser", browser];
-  }
-  return [];
-}
-
-function logAuth(source) {
-  if (authLogged) return;
-  authLogged = true;
-  logger.log(`[yt-dlp] Đang dùng cookie ${source} để qua bước "Sign in" của YouTube`, "info");
-}
-
-// Thử các player_client khác nhau để qua mặt bước "Sign in to confirm you're not a bot"
-const YT_PLAYER_CLIENTS = ["tv,ios,web_embedded", "mweb,web_safari,mweb_embedded", "android,web_creator,web"];
-
-function isYoutube(url) {
+function isYouTubeUrl(url) {
   return /(?:^|\.)(?:youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)/.test(String(url));
 }
 
-function baseArgs(extra = []) {
-  return ["--no-warnings", "--no-playlist", "--no-check-certificate", ...extra];
+function isFacebookUrl(url) {
+  return /(?:^|\.)(?:facebook\.com|fb\.watch|fb\.com)/.test(String(url));
 }
 
-// Cờ cookie và --impersonate KHÔNG dùng được cùng lúc (xung đh, có khi treo
-// yt-dlp) nên tách thành các "biến thể" và thử lần lượt từ khả thi nhất:
-//   1) cookie (nếu admin cấu hình)     2) giả trình duyệt   3) mặc định
-async function argVariants(extra = []) {
-  const variants = [];
-  const auth = authArgs();
-  if (auth.length) variants.push([...baseArgs(extra), ...auth]);
-  if (await supportsImpersonate()) variants.push([...baseArgs(extra), ...impersonateArgs()]);
-  variants.push(baseArgs(extra));
-  return variants;
+function isInstagramUrl(url) {
+  return /(?:^|\.)(?:instagram\.com|instagr\.am)/.test(String(url));
 }
 
-async function runTryAll(variants, timeout = DOWNLOAD_TIMEOUT) {
-  let lastError = null;
-  for (const args of variants) {
-    try {
-      return await run(args, timeout);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError || new Error("yt-dlp thất bại");
+function isTwitterUrl(url) {
+  return /(?:^|\.)(?:twitter\.com|x\.com)/.test(String(url));
 }
 
-// Lấy metadata (title, duration, thumbnail, formats) dạng JSON.
-// YouTube hay chặn bot → thử lần lượt các player_client khác nhau.
-async function getMediaInfo(url) {
+function isShortsOrReels(url) {
+  return /(shorts|reel|reels|watch\?v=)/.test(String(url));
+}
+
+async function fetchHtml(url, timeout = 45000) {
+  const res = await axios.get(url, { timeout, headers: REQUEST_HEADERS, maxRedirects: 5, validateStatus: () => true });
+  return res.data || "";
+}
+
+// Trích xuất media từ thẻ meta (og:video, twitter:player, og:image, v.v.)
+function extractMetaMedia(html) {
+  const $ = cheerio.load(html);
+  const meta = (name) => {
+    const el = $(`meta[name="${name}"], meta[property="${name}"]`).first();
+    return el.attr("content") || "";
+  };
+  const video = meta("og:video") || meta("og:video:secure_url") || meta("twitter:player") || meta("twitter:image:src");
+  const image = meta("og:image") || meta("twitter:image") || "";
+  const title = meta("og:title") || $("title").first().text() || "";
+  const author = meta("og:site_name") || meta("author") || "";
+  return { video, image, title, author };
+}
+
+// Lấy thời lượng đơn giản từ meta (giây), nếu có
+function parseDurationFromMeta(html) {
+  const m = html.match(/duration["']?\s*[:=]\s*["']?(\d+)/i);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// ===== TikTok/Douyin → core/tiktok.js =====
+async function extractTikTok(url) {
+  const info = await tiktokApi.getVideoInfo(url);
+  return {
+    title: info.title || "TikTok video",
+    author: info.author || "Không rõ",
+    duration: Number(info.duration) || 0,
+    videoUrl: info.videoUrl,
+    thumbnail: info.thumbnail || "",
+    platform: "tiktok",
+    source: "tiktok_api"
+  };
+}
+
+// ===== YouTube → innertube player API =====
+async function extractYouTube(url) {
+  const videoIdMatch = String(url).match(/(?:v=|be\/|embed\/|shorts\/)([0-9A-Za-z_-]{6,})/);
+  if (!videoIdMatch) throw new Error("Không nhận diện được video ID YouTube");
+  const videoId = videoIdMatch[1];
+
   try {
-    return JSON.parse(await runTryAll(await argVariants(["-J", url]), 90000));
+    const res = await axios.post(
+      YT_INNERTUBE,
+      { videoId, context: { client: YT_CLIENT } },
+      {
+        timeout: 45000,
+        headers: { ...REQUEST_HEADERS, "Content-Type": "application/json", "X-YouTube-Client-Name": "1", "X-YouTube-Client-Version": YT_CLIENT.clientVersion },
+        validateStatus: () => true
+      }
+    );
+    const data = res.data || {};
+    const streaming = data.streamingData || {};
+    const formats = [...(streaming.adaptiveFormats || []), ...(streaming.formats || [])];
+
+    let best = null;
+    for (const f of formats) {
+      if (!f.url) continue;
+      if (f.mimeType && /video\//.test(f.mimeType) && (!best || (f.height || 0) > (best.height || 0))) {
+        best = f;
+      }
+    }
+    if (!best) {
+      for (const f of formats) {
+        if (f.url && f.mimeType && /audio\//.test(f.mimeType)) { best = f; break; }
+      }
+    }
+    if (!best) throw new Error("YouTube không trả định dạng trực tiếp (có thể cần cookie hoặc media_downloader_url)");
+
+    const title = (data.videoDetails || {}).title || "YouTube video";
+    const author = (data.videoDetails || {}).author || "Không rõ";
+    const duration = parseInt((data.videoDetails || {}).lengthSeconds || "0", 10);
+    const thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+
+    return { title, author, duration, videoUrl: best.url, thumbnail, platform: "youtube", source: "innertube" };
   } catch (error) {
-    if (!isYoutube(url)) throw error;
-    for (const client of YT_PLAYER_CLIENTS) {
-      try {
-        const extra = ["-J", "--extractor-args", `youtube:player_client=${client}`, url];
-        return JSON.parse(await runTryAll(await argVariants(extra), 90000));
-      } catch { /* thử client tiếp */ }
+    if (error.response && error.response.status === 403) {
+      throw new Error("YouTube chặn yêu cầu (cần cookie hoặc media_downloader_url)");
     }
     throw error;
   }
 }
 
-// Là "chỉ có tiếng" (không hình) → gửi voice. Một số site không set vcodec ở
-// top-level nên phải xem thêm danh sách formats mới tin được.
-function isAudioOnly(info) {
-  if (!info) return true;
-  if (info.vcodec && info.vcodec !== "none") return false;
-  if (Array.isArray(info.formats) && info.formats.length > 0) {
-    return !info.formats.some((f) => f && f.vcodec && f.vcodec !== "none");
-  }
-  return info.vcodec === "none";
+// ===== Facebook / Instagram / Twitter / Generic → meta tags =====
+async function extractSocialPage(url, platformLabel) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+  if (!meta.video && !meta.image) throw new Error(`${platformLabel} không trích xuất được media (trang có thể yêu cầu đăng nhập)`);
+  return {
+    title: meta.title || platformLabel,
+    author: meta.author || "",
+    duration: parseDurationFromMeta(html),
+    videoUrl: meta.video || "",
+    image: meta.image || "",
+    thumbnail: meta.image || "",
+    platform: platformLabel.toLowerCase(),
+    source: "meta_tags"
+  };
 }
 
-// Tải video ra file local. Mặc định lấy CHẤT LƯỢNG GỐC (cao nhất có thể),
-// nếu file quá lớn cho Zalo thì tự hạ dần 1080p → 720p → bản có sẵn.
-const MAX_VIDEO_BYTES = Number(process.env.JT_MAX_VIDEO_MB || 200) * 1024 * 1024;
-const QUALITY_LADDER = [
-  { label: "gốc (cao nhất)", format: "bv*+ba/b" },
-  { label: "1080p", format: "bv*[height<=1080]+ba/b[height<=1080]/b[height<=1080]" },
-  { label: "720p", format: "bv*[height<=720]+ba/b[height<=720]/b[height<=720]" },
-  { label: "bản có sẵn", format: "b/best" }
-];
+async function extractFacebook(url) { return extractSocialPage(url, "Facebook"); }
+async function extractInstagram(url) { return extractSocialPage(url, "Instagram"); }
+async function extractTwitter(url) { return extractSocialPage(url, "Twitter/X"); }
+
+// ===== Generic fallback (mọi trang khác) =====
+async function extractGeneric(url) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+  if (!meta.video && !meta.image) throw new Error("Không trích xuất được media từ link này");
+  return {
+    title: meta.title || "Media",
+    author: meta.author || "",
+    duration: parseDurationFromMeta(html),
+    videoUrl: meta.video || "",
+    image: meta.image || "",
+    thumbnail: meta.image || "",
+    platform: "generic",
+    source: "meta_tags"
+  };
+}
+
+// ===== Trung tâm lấy thông tin media =====
+async function getMediaInfo(url) {
+  if (isTikTokUrl(url)) return extractTikTok(url);
+  if (isYouTubeUrl(url)) return extractYouTube(url);
+  if (isFacebookUrl(url)) return extractFacebook(url);
+  if (isInstagramUrl(url)) return extractInstagram(url);
+  if (isTwitterUrl(url)) return extractTwitter(url);
+  return extractGeneric(url);
+}
+
+// ===== Tải file về máy (dùng cho video/ảnh/thumbnail) =====
+async function downloadToFile(url, outputPath, timeout = DOWNLOAD_TIMEOUT) {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  const res = await axios.get(url, {
+    responseType: "stream",
+    timeout,
+    headers: REQUEST_HEADERS,
+    maxRedirects: 5,
+    validateStatus: (status) => status < 400
+  });
+  if (!res.data) throw new Error("Phản hồi tải về rỗng");
+  const writer = fs.createWriteStream(outputPath);
+  res.data.pipe(writer);
+  await new Promise((resolve, reject) => {
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+  });
+  if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+    throw new Error("File tải về rỗng");
+  }
+  return outputPath;
+}
 
 function videoTooBig(filePath) {
   try {
@@ -227,66 +217,81 @@ function removeQuietly(filePath) {
   try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
 }
 
+// ===== Tải video =====
 async function downloadVideo(url, outputPath) {
-  let sizeBlocked = false;
-  const withOutput = (extra) => [...extra, "-o", outputPath, url];
-  const yt = isYoutube(url);
+  const info = await getMediaInfo(url);
+  if (!info) throw new Error("Không lấy được thông tin media");
+  const mediaUrl = info.videoUrl || info.image || "";
+  if (!mediaUrl) throw new Error("Trang này không có link video/ảnh trực tiếp");
 
-  for (let i = 0; i < QUALITY_LADDER.length; i++) {
-    const step = QUALITY_LADDER[i];
-    const extra = ["-f", step.format, "--concurrent-fragments", "4"];
-    if (step.label !== "bản có sẵn") extra.push("--merge-output-format", "mp4");
-    const playerClients = yt && i === 0 ? [null, ...YT_PLAYER_CLIENTS] : [null]; // bậc đầu thử nhiều client
-
-    for (const client of playerClients) {
-      try {
-        const args = extra.slice();
-        if (client) args.push("--extractor-args", `youtube:player_client=${client}`);
-        await runTryAll(await argVariants(withOutput(args)));
-        if (fs.existsSync(outputPath)) {
-          // Quá lớn cho Zalo → bỏ, hạ bậc chất lượng
-          if (videoTooBig(outputPath)) {
-            sizeBlocked = true;
-            logger.log(`[yt-dlp] Video vượt ${MAX_VIDEO_BYTES / 1048576}MB → hạ xuống ${QUALITY_LADDER[i + 1]?.label || "bản thấp hơn"}`, "info");
-            removeQuietly(outputPath);
-            break;
-          }
-          return outputPath;
-        }
-      } catch { /* thử cách tiếp */ }
-    }
+  await downloadToFile(mediaUrl, outputPath);
+  if (videoTooBig(outputPath)) {
+    removeQuietly(outputPath);
+    throw new Error(`Video quá lớn (vượt ${Math.round(MAX_VIDEO_BYTES / 1048576)}MB — giới hạn Zalo). Hãy dùng media_downloader_url hoặc video ngắn hơn.`);
   }
-
-  // Không bậc nào có ảnh nổi → thử lấy bất cứ thứ gì (âm thanh cũng chấp nhận)
-  if (sizeBlocked) {
-    throw new Error(`Video quá lớn (mọi chất lượng đều vượt ${MAX_VIDEO_BYTES / 1048576}MB — Zalo giới hạn dung lượng). Hãy thử video ngắn hơn hoặc tên JT_MAX_VIDEO_MB cao hơn.`);
-  }
-  try {
-    await runTryAll(await argVariants(withOutput(["-f", "b/best"])));
-    if (fs.existsSync(outputPath)) return outputPath;
-  } catch { /* bỏ qua */ }
-
-  throw new Error("Không tải được video (link có thể bị xoá hoặc bị chặn)");
+  return outputPath;
 }
 
-// Tải audio (mp3)
+// ===== Tải âm thanh (mp3) =====
+// Pure JS không transmux được định dạng strema của YouTube/TikTok nếu server chỉ cung cấp video.
+// Nếu có audioUrl riêng thì tải về, nếu không thì lấy video và để utils xử lý.
 async function downloadAudio(url, outputPath) {
-  await runTryAll(await argVariants(
-    ["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "0", "-o", outputPath, url]
-  ));
+  const info = await getMediaInfo(url);
+  if (!info) throw new Error("Không lấy được thông tin media");
+  const mediaUrl = info.videoUrl || info.image || "";
+  if (!mediaUrl) throw new Error("Trang này không có link âm thanh/video trực tiếp");
+
+  await downloadToFile(mediaUrl, outputPath);
+  if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+    throw new Error("Tải âm thanh về rỗng");
+  }
   return outputPath;
+}
+
+function isAudioOnly(info) {
+  if (!info) return true;
+  if (info.videoUrl) return false;
+  if (info.image && !info.videoUrl) return true;
+  return false;
 }
 
 function describe(info) {
   const meta = [];
   if (info.title) meta.push(`Title: ${info.title}`);
-  if (info.uploader || info.channel) meta.push(`Author: ${info.uploader || info.channel}`);
+  if (info.author) meta.push(`Author: ${info.author}`);
   if (info.duration) {
     const m = Math.floor(info.duration / 60);
     const s = Math.floor(info.duration % 60);
     meta.push(`Thời lượng: ${m}:${String(s).padStart(2, "0")}`);
   }
+  if (info.platform) meta.push(`Nguồn: ${info.platform}`);
+  if (info.source) meta.push(`Cách lấy: ${info.source}`);
   return meta;
 }
 
-module.exports = { ytDlpAvailable, supportsImpersonate, getMediaInfo, downloadVideo, downloadAudio, isAudioOnly, describe };
+// yt-dlp (Python) đã gỡ bỏ → luôn false. Dùng jsDownloaderAvailable() thay thế.
+async function ytDlpAvailable() {
+  return false;
+}
+
+async function supportsImpersonate() {
+  return false;
+}
+
+// Downloader pure JS luôn sẵn sàng (chỉ cần axios/cheerio đã có trong package.json).
+async function jsDownloaderAvailable() {
+  return true;
+}
+
+module.exports = {
+  ytDlpAvailable,
+  supportsImpersonate,
+  jsDownloaderAvailable,
+  getMediaInfo,
+  downloadVideo,
+  downloadAudio,
+  isAudioOnly,
+  describe,
+  fetchHtml,
+  extractMetaMedia
+};

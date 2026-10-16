@@ -41,15 +41,13 @@ function sanitizeError(msg) {
 function errorHint(url, message) {
   const text = String(message || "");
   if (/youtube|youtu\.be/i.test(url) && /sign in|not a bot|cookies|login/i.test(text)) {
-    return "\n\n💡 YouTube đang chặn IP này. Sửa 1 trong 2 cách:\n" +
-           "1) Bot chạy trên máy bạn → config.yml: media.ytdlp_cookies_from_browser: chrome\n" +
-           "2) Bot chạy trên Render → export cookies.txt từ trình duyệt rồi set media.ytdlp_cookies_file (hoặc env YTDLP_COOKIES_FILE)";
+    return "\n\n💡 YouTube đang chặn IP này. Hãy cấu hình `media_downloader_url` trong config.yml (endpoint tải media của admin).";
   }
   if (/facebook|fb\.watch/i.test(url) && /cannot parse|login|log in|cookie/i.test(text)) {
-    return "\n\n💡 Facebook thường cần cookie: export cookies.txt từ trình duyệt rồi set media.ytdlp_cookies_file trong config.yml.";
+    return "\n\n💡 Facebook thường cần cookie. Hãy cấu hình `media_downloader_url` trong config.yml.";
   }
   if (/instagram/i.test(url) && /empty media|login|cookie|rate/i.test(text)) {
-    return "\n\n💡 Instagram hay chặn/bắt đăng nhập — thử lại sau hoặc set media.ytdlp_cookies_file trong config.yml.";
+    return "\n\n💡 Instagram hay chặn/bắt đăng nhập — thử lại sau hoặc cấu hình `media_downloader_url` trong config.yml.";
   }
   if (/sign in|not a bot|inappropriate|confirm your age/i.test(text)) {
     return "\n\n💡 Site đang chặn bot — bot đã tự thử nhiều cách, nếu vẫn lỗi thì cấu hình cookie hoặc media_downloader_url trong config.yml.";
@@ -180,12 +178,12 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
             console.log(`[autodown] TikTok API thất bại: ${error.message}`);
         }
 
-        // Dự phòng: yt-dlp (máy chủ nào IP không bị chặn thì vẫn tải được)
-        if (await ytdlp.ytDlpAvailable()) {
+        // Dự phòng: JS downloader pure JS (không cần Python)
+        if (await ytdlp.jsDownloaderAvailable()) {
             try {
-                return await downloadWithYtDlp(url, api, threadId, type, setReactions);
+                return await downloadWithJsDownloader(url, api, threadId, type, setReactions);
             } catch (error) {
-                console.log(`[autodown] TikTok qua yt-dlp cũng thất bại: ${error.message}`);
+                console.log(`[autodown] TikTok qua JS downloader cũng thất bại: ${error.message}`);
             }
         }
 
@@ -196,10 +194,10 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
         }, threadId, type);
     }
 
-    // ===== Cách 1: tải LOCAL bằng yt-dlp (link KHÔNG đi qua bên thứ 3) =====
-    if (await ytdlp.ytDlpAvailable()) {
+    // ===== Cách 1: tải LOCAL bằng JS downloader pure JS (không cần Python) =====
+    if (await ytdlp.jsDownloaderAvailable()) {
         try {
-            return await downloadWithYtDlp(url, api, threadId, type, setReactions);
+            return await downloadWithJsDownloader(url, api, threadId, type, setReactions);
         } catch (error) {
             console.log(`[autodown] Tải local thất bại: ${error.message}`);
             // Không còn endpoint cấu hình sẵn → báo lỗi luôn
@@ -322,8 +320,8 @@ async function downloadTikTok(url, api, threadId, type, setReactions) {
     return;
 }
 
-// ===== Tải local bằng yt-dlp (mọi nền tảng) =====
-async function downloadWithYtDlp(url, api, threadId, type, setReactions) {
+// ===== Tải local bằng JS downloader pure JS (mọi nền tảng) =====
+async function downloadWithJsDownloader(url, api, threadId, type, setReactions) {
     const info = await ytdlp.getMediaInfo(url);
     if (!info) throw new Error("Không lấy được thông tin media");
 
@@ -388,7 +386,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
             plain: true,
             msg: `📥 Autodown nhóm này: ${thread.auto_down ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\n` +
                  `Dùng: autodown on / autodown off\n` +
-                 `Tiktok API: ${tiktokOk ? "hoạt động ✅" : "đang lỗi ❌ (Youtube/Facebook vẫn dùng yt-dlp)"}`
+                 `Tiktok API: ${tiktokOk ? "hoạt động ✅" : "đang lỗi ❌ (còn tùy media_downloader_url)"}`
         }, threadId, type);
     }
 
