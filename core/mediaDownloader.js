@@ -1,9 +1,6 @@
 // Tải media pure JS (không dùng yt-dlp/Python).
-// Trích xuất link video/ảnh trực tiếp từ trang của nền tảng qua axios + cheerio.
-// TikTok/Douyin ủy quyền cho core/tiktok.js (API công khai). Các nền tảng khác:
-//   - trích og:video / twitter:player / og:image từ HTML (dùng được cho nhiều trang)
-//   - YouTube: thử YouTube innertube player API (best effort, có thể cần cookie/media_downloader_url)
-//   - Cuối cùng: fallback endpoint media_downloader_url trong config.yml (nếu admin cấu hình)
+// Trích xuất link video/ảnh trực tiếp từ trang của nền tảng qua axios + cheerio
+// + parse JSON nhúng trong HTML (Facebook/Instagram/Twitter) và YouTube innertube.
 const axios = require("axios");
 const cheerio = require("cheerio");
 const fs = require("fs");
@@ -43,13 +40,24 @@ function isTwitterUrl(url) {
   return /(?:^|\.)(?:twitter\.com|x\.com)/.test(String(url));
 }
 
-function isShortsOrReels(url) {
-  return /(shorts|reel|reels|watch\?v=)/.test(String(url));
-}
-
 async function fetchHtml(url, timeout = 45000) {
   const res = await axios.get(url, { timeout, headers: REQUEST_HEADERS, maxRedirects: 5, validateStatus: () => true });
   return res.data || "";
+}
+
+// Parse JSON nhúng trong HTML: window._sharedData, ytInitialPlayerResponse, v.v.
+function extractJson(html, key) {
+  const patterns = [
+    new RegExp(`${key}\\s*[:=]\\s*(\\{.*?\\});?`, "s"),
+    new RegExp(`"${key}"\\s*:\\s*(\\{.*?\\})`, "s")
+  ];
+  for (const pat of patterns) {
+    const m = html.match(pat);
+    if (m) {
+      try { return JSON.parse(m[1]); } catch { /* thử pattern khác */ }
+    }
+  }
+  return null;
 }
 
 // Trích xuất media từ thẻ meta (og:video, twitter:player, og:image, v.v.)
@@ -72,6 +80,25 @@ function parseDurationFromMeta(html) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
+// Tìm URL video trong chuỗi HTML/JSON (mp4, mov, m3u8, v.v.)
+function findVideoUrls(text) {
+  const urls = [];
+  const seen = new Set();
+  const push = (u) => {
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    urls.push(u);
+  };
+  // URL trực tiếp kết thúc bằng phần mở rộng video
+  const re = /https?:\/\/[^"'<>\\\s]+\.(?:mp4|mov|m3u8|mpd)(?:[?#][^"'<>\\\s]*)?/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) push(m[0]);
+  // playable_url / video_url trong JSON
+  const re2 = /(?:playable_url|video_url|stream_url|src|url)\s*:\s*"([^"]+\.(?:mp4|mov|m3u8|mpd)[^"]*)"/gi;
+  while ((m = re2.exec(text)) !== null) push(m[1]);
+  return urls;
+}
+
 // ===== TikTok/Douyin → core/tiktok.js =====
 async function extractTikTok(url) {
   const info = await tiktokApi.getVideoInfo(url);
@@ -83,6 +110,122 @@ async function extractTikTok(url) {
     thumbnail: info.thumbnail || "",
     platform: "tiktok",
     source: "tiktok_api"
+  };
+}
+
+// ===== Facebook Reels / Watch / Video =====
+async function extractFacebook(url) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+
+  // 1) video URL trực tiếp từ meta og:video
+  let videoUrl = meta.video || "";
+
+  // 2) parse JSON nhúng trong HTML (Facebook nhúng video URL vào page data)
+  if (!videoUrl) {
+    const data = extractJson(html, "__INITIAL_STATE__") || extractJson(html, "initial_data") || {};
+    const walk = (obj) => {
+      if (videoUrl) return;
+      if (typeof obj === "string") {
+        const found = findVideoUrls(obj);
+        if (found.length) videoUrl = found[0];
+        return;
+      }
+      if (Array.isArray(obj)) { obj.forEach(walk); return; }
+      if (obj && typeof obj === "object") {
+        Object.values(obj).forEach(walk);
+      }
+    };
+    walk(data);
+  }
+
+  // 3) quét toàn bộ HTML tìm link .mp4/.m3u8
+  if (!videoUrl) {
+    const found = findVideoUrls(html);
+    if (found.length) videoUrl = found[0];
+  }
+
+  if (!videoUrl && !meta.image) throw new Error("Facebook không trích xuất được video (trang có thể yêu cầu đăng nhập hoặc cần cookie)");
+
+  return {
+    title: meta.title || "Facebook video",
+    author: meta.author || "",
+    duration: parseDurationFromMeta(html),
+    videoUrl,
+    image: meta.image || "",
+    thumbnail: meta.image || "",
+    platform: "facebook",
+    source: videoUrl ? "facebook_html" : "meta_tags"
+  };
+}
+
+// ===== Instagram Reels / Post =====
+async function extractInstagram(url) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+
+  let videoUrl = meta.video || "";
+
+  // Instagram nhúng _sharedData với shortcode_media.video_url
+  if (!videoUrl) {
+    const shared = extractJson(html, "_sharedData");
+    if (shared) {
+      const walk = (obj) => {
+        if (videoUrl) return;
+        if (typeof obj === "string") {
+          const found = findVideoUrls(obj);
+          if (found.length) videoUrl = found[0];
+          return;
+        }
+        if (Array.isArray(obj)) { obj.forEach(walk); return; }
+        if (obj && typeof obj === "object") Object.values(obj).forEach(walk);
+      };
+      walk(shared);
+    }
+  }
+
+  if (!videoUrl) {
+    const found = findVideoUrls(html);
+    if (found.length) videoUrl = found[0];
+  }
+
+  if (!videoUrl && !meta.image) throw new Error("Instagram không trích xuất được video (có thể cần đăng nhập hoặc video riêng tư)");
+
+  return {
+    title: meta.title || "Instagram video",
+    author: meta.author || "",
+    duration: parseDurationFromMeta(html),
+    videoUrl,
+    image: meta.image || "",
+    thumbnail: meta.image || "",
+    platform: "instagram",
+    source: videoUrl ? "instagram_html" : "meta_tags"
+  };
+}
+
+// ===== Twitter/X video =====
+async function extractTwitter(url) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+
+  let videoUrl = meta.video || "";
+
+  if (!videoUrl) {
+    const found = findVideoUrls(html);
+    if (found.length) videoUrl = found[0];
+  }
+
+  if (!videoUrl && !meta.image) throw new Error("Twitter/X không trích xuất được video");
+
+  return {
+    title: meta.title || "Twitter video",
+    author: meta.author || "",
+    duration: parseDurationFromMeta(html),
+    videoUrl,
+    image: meta.image || "",
+    thumbnail: meta.image || "",
+    platform: "twitter",
+    source: videoUrl ? "twitter_html" : "meta_tags"
   };
 }
 
@@ -133,27 +276,6 @@ async function extractYouTube(url) {
     throw error;
   }
 }
-
-// ===== Facebook / Instagram / Twitter / Generic → meta tags =====
-async function extractSocialPage(url, platformLabel) {
-  const html = await fetchHtml(url);
-  const meta = extractMetaMedia(html);
-  if (!meta.video && !meta.image) throw new Error(`${platformLabel} không trích xuất được media (trang có thể yêu cầu đăng nhập)`);
-  return {
-    title: meta.title || platformLabel,
-    author: meta.author || "",
-    duration: parseDurationFromMeta(html),
-    videoUrl: meta.video || "",
-    image: meta.image || "",
-    thumbnail: meta.image || "",
-    platform: platformLabel.toLowerCase(),
-    source: "meta_tags"
-  };
-}
-
-async function extractFacebook(url) { return extractSocialPage(url, "Facebook"); }
-async function extractInstagram(url) { return extractSocialPage(url, "Instagram"); }
-async function extractTwitter(url) { return extractSocialPage(url, "Twitter/X"); }
 
 // ===== Generic fallback (mọi trang khác) =====
 async function extractGeneric(url) {
@@ -233,8 +355,6 @@ async function downloadVideo(url, outputPath) {
 }
 
 // ===== Tải âm thanh (mp3) =====
-// Pure JS không transmux được định dạng strema của YouTube/TikTok nếu server chỉ cung cấp video.
-// Nếu có audioUrl riêng thì tải về, nếu không thì lấy video và để utils xử lý.
 async function downloadAudio(url, outputPath) {
   const info = await getMediaInfo(url);
   if (!info) throw new Error("Không lấy được thông tin media");
@@ -293,5 +413,12 @@ module.exports = {
   isAudioOnly,
   describe,
   fetchHtml,
-  extractMetaMedia
+  extractMetaMedia,
+  findVideoUrls,
+  extractFacebook,
+  extractInstagram,
+  extractTwitter,
+  extractYouTube,
+  extractTikTok,
+  extractGeneric
 };
