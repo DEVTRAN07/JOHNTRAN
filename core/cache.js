@@ -67,6 +67,8 @@ const caches = {
   groupInfo: new LRUCache({ max: 200, ttl: 300000 }),
   userInfo: new LRUCache({ max: 500, ttl: 600000 }),
   musicSearch: new LRUCache({ max: 100, ttl: 300000 }),
+  musicResolve: new LRUCache({ max: 200, ttl: 1800000 }), // resolve URL bài hát (30 phút)
+  musicPending: new LRUCache({ max: 200, ttl: 300000 }), // danh sách tìm kiếm đang chờ chọn bài
   mediaMeta: new LRUCache({ max: 200, ttl: 600000 }) // cache metadata media 10 phút
 };
 

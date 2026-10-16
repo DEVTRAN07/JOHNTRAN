@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { redact, safeView, REDACTED } = require("../core/config/index");
+const { redact, safeView, validate, REDACTED } = require("../core/config/index");
 
 // ===== redact masks secret keys =====
 const config = {
@@ -34,4 +34,19 @@ assert.strictEqual(redacted.api_key, REDACTED);
 assert.strictEqual(redacted.normal, "visible");
 assert.strictEqual(redacted.nested.secret_token, REDACTED);
 
+// ===== validate =====
+// prefix thiếu
+assert.ok(validate({}).length > 0);
+// admin_bot phải là mảng
+assert.ok(validate({ prefix: "/", admin_bot: "không phai mang" }).some((e) => e.includes("admin_bot")));
+// music.max_results phải là số >= 1
+assert.ok(validate({ prefix: "/", admin_bot: [], music: { max_results: 0 } }).some((e) => e.includes("max_results")));
+// panel.enabled = true nhưng panel.port không phải số
+assert.ok(
+  validate({ prefix: "/", admin_bot: [], panel: { enabled: true } }).some((e) => e.includes("panel.port"))
+);
+// config hợp lệ → không lỗi
+assert.deepStrictEqual(validate({ prefix: "/", admin_bot: [], panel: { enabled: true, port: 3000 } }), []);
+
 console.log("✓ config tests passed");
+

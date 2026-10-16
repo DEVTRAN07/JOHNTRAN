@@ -2,33 +2,20 @@ const fs = require("fs");
 const path = require("path");
 const http = require("../http");
 const db = require("../../utils/db");
+const { caches } = require("../cache");
 
 const providers = new Map();
-const pendingPicks = new Map();
 
-// ===== CACHE KẾT QUẢ =====
+// ===== CACHE KẾT QUẢ (dùng LRUCache chung từ core/cache.js) =====
 // SoundCloud/Zalo API chậm (~0.5-1s/call). Tìm lại cùng từ khóa hoặc chọn
 // lại bài đã nghe → trả ngay từ cache, khỏi gọi API.
+// Hit/miss của các cache này được báo qua /health → /metrics (cache.stats()).
 const SEARCH_TTL = 10 * 60 * 1000;
 const RESOLVE_TTL = 30 * 60 * 1000;
-const CACHE_MAX = 200;
-const searchCache = new Map(); // "provider|query|limit" → { tracks, at }
-const resolveCache = new Map(); // "provider|trackId" → { url, at }
 
-function cacheGet(map, key, ttl) {
-  const hit = map.get(key);
-  if (hit && Date.now() - hit.at < ttl) return hit;
-  if (hit) map.delete(key);
-  return null;
-}
-
-function cacheSet(map, key, value) {
-  if (map.size >= CACHE_MAX) {
-    const oldest = [...map.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-    if (oldest) map.delete(oldest[0]);
-  }
-  map.set(key, { ...value, at: Date.now() });
-}
+const searchCache = caches.musicSearch;   // "provider|query|limit" → { tracks }
+const resolveCache = caches.musicResolve; // "provider|trackId" → { url }
+const pendingCache = caches.musicPending; // "threadId:userId" → { providerName, tracks, query, page }
 
 function registerProvider(provider) {
   if (!provider || typeof provider.search !== "function" || typeof provider.resolve !== "function") {
@@ -49,13 +36,12 @@ function listProviders() {
 
 async function search(providerName, query, limit) {
   const provider = getProvider(providerName);
-  // Mặc định 40 bài — đủ nhiều để phân trang và ưu tiên bài thịnh hành
   const maxResults = limit || global.config?.music?.max_results || 40;
 
   // Cache: tìm lại cùng từ khóa → tức thì
   const cacheKey = `${providerName}|${query}|${maxResults}`;
-  const hit = cacheGet(searchCache, cacheKey, SEARCH_TTL);
-  if (hit) return hit.tracks;
+  const hit = searchCache.get(cacheKey);
+  if (hit !== undefined) return hit.tracks;
 
   const tracks = await provider.search(query, maxResults);
   if (!Array.isArray(tracks) || tracks.length === 0) {
@@ -63,47 +49,34 @@ async function search(providerName, query, limit) {
     error.noResults = true;
     throw error;
   }
-  cacheSet(searchCache, cacheKey, { tracks });
+  searchCache.set(cacheKey, { tracks }, SEARCH_TTL);
   return tracks;
 }
 
 async function resolve(providerName, track, options = {}) {
   // Cache: chọn lại bài đã nghe → tức thì (transcoding URL sống lâu)
   const cacheKey = `${providerName}|${track?.id}`;
-  const hit = cacheGet(resolveCache, cacheKey, RESOLVE_TTL);
-  if (hit) return hit.url;
+  const hit = resolveCache.get(cacheKey);
+  if (hit !== undefined) return hit.url;
 
   const provider = getProvider(providerName);
   const url = await provider.resolve(track, options);
-  if (url) cacheSet(resolveCache, cacheKey, { url });
+  if (url) resolveCache.set(cacheKey, { url }, RESOLVE_TTL);
   return url;
 }
 
 function setPending(key, providerName, tracks, query = "", page = 1) {
   const ttl = global.config?.music?.cache_ttl || 300000;
-  pendingPicks.set(key, { providerName, tracks, query, page, expiresAt: Date.now() + ttl });
-  sweepPending();
+  pendingCache.set(key, { providerName, tracks, query, page }, ttl);
 }
 
 function getPending(key) {
-  const entry = pendingPicks.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt < Date.now()) {
-    pendingPicks.delete(key);
-    return null;
-  }
-  return entry;
+  // LRUCache tự xóa entry hết hạn khi get → không cần kiểm tra expiresAt thủ công
+  return pendingCache.get(key);
 }
 
 function clearPending(key) {
-  pendingPicks.delete(key);
-}
-
-function sweepPending() {
-  const now = Date.now();
-  for (const [key, entry] of pendingPicks.entries()) {
-    if (entry.expiresAt < now) pendingPicks.delete(key);
-  }
+  pendingCache.delete(key);
 }
 
 function pickKey(threadId, userId) {

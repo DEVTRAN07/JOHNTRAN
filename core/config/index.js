@@ -255,4 +255,4 @@ function safeView(config) {
   return JSON.stringify(redact(JSON.parse(JSON.stringify(config))), null, 2);
 }
 
-module.exports = { load, redact, safeView, REDACTED };
+module.exports = { load, redact, safeView, validate, REDACTED };
