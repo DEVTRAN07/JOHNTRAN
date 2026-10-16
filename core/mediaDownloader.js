@@ -278,20 +278,16 @@ async function extractYouTube(url) {
   if (!videoIdMatch) throw new Error("Không nhận diện được video ID YouTube");
   const videoId = videoIdMatch[1];
 
-  try {
-    const res = await axios.post(
-      YT_INNERTUBE,
-      { videoId, context: { client: YT_CLIENT } },
-      {
-        timeout: 45000,
-        headers: { ...REQUEST_HEADERS, "Content-Type": "application/json", "X-YouTube-Client-Name": "1", "X-YouTube-Client-Version": YT_CLIENT.clientVersion },
-        validateStatus: () => true
-      }
-    );
-    const data = res.data || {};
+  // Helper: parse ytInitialPlayerResponse từ HTML trang YouTube
+  const parseInitialFromHtml = (html) => {
+    const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{.*?\});/);
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch { return null; }
+  };
+
+  const extractFromData = (data) => {
     const streaming = data.streamingData || {};
     const formats = [...(streaming.adaptiveFormats || []), ...(streaming.formats || [])];
-
     let best = null;
     for (const f of formats) {
       if (!f.url) continue;
@@ -304,20 +300,88 @@ async function extractYouTube(url) {
         if (f.url && f.mimeType && /audio\//.test(f.mimeType)) { best = f; break; }
       }
     }
-    if (!best) throw new Error("YouTube không trả định dạng trực tiếp (có thể cần cookie hoặc media_downloader_url)");
+    if (!best) return null;
+    return {
+      title: (data.videoDetails || {}).title || "YouTube video",
+      author: (data.videoDetails || {}).author || "Không rõ",
+      duration: parseInt((data.videoDetails || {}).lengthSeconds || "0", 10),
+      videoUrl: best.url,
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+      platform: "youtube",
+      source: "innertube"
+    };
+  };
 
-    const title = (data.videoDetails || {}).title || "YouTube video";
-    const author = (data.videoDetails || {}).author || "Không rõ";
-    const duration = parseInt((data.videoDetails || {}).lengthSeconds || "0", 10);
-    const thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+  const ytHeaders = {
+    ...REQUEST_HEADERS,
+    "Content-Type": "application/json",
+    "X-YouTube-Client-Name": "1",
+    "X-YouTube-Client-Version": YT_CLIENT.clientVersion
+  };
 
-    return { title, author, duration, videoUrl: best.url, thumbnail, platform: "youtube", source: "innertube" };
-  } catch (error) {
-    if (error.response && error.response.status === 403) {
-      throw new Error("YouTube chặn yêu cầu (cần cookie hoặc media_downloader_url)");
+  // Thử innertube API với các client khác nhau (WEB, ANDROID, EMBED) để qua chặn
+  const clients = [
+    { clientName: "WEB", clientVersion: "2.20240101.00.0" },
+    { clientName: "ANDROID", clientVersion: "19.09.37" },
+    { clientName: "EMBED", clientVersion: "1.20240101" }
+  ];
+
+  let innertubeError = null;
+  for (const client of clients) {
+    try {
+      const res = await axios.post(
+        YT_INNERTUBE,
+        { videoId, context: { client } },
+        { timeout: 45000, headers: { ...ytHeaders, "X-YouTube-Client-Version": client.clientVersion }, validateStatus: () => true }
+      );
+      const data = res.data || {};
+      if (data.streamingData || data.videoDetails) {
+        const result = extractFromData(data);
+        if (result) {
+          result.source = `innertube_${client.clientName}`;
+          return result;
+        }
+      }
+      innertubeError = new Error("YouTube không trả định dạng trực tiếp");
+    } catch (error) {
+      innertubeError = error;
+      if (error.response && error.response.status === 403) {
+        // Thử client khác thay vì ném lỗi ngay
+        continue;
+      }
     }
-    throw error;
   }
+
+  // Innertube hết sức → lấy trực tiếp từ trang YouTube HTML (ytInitialPlayerResponse hoặc og:video)
+  try {
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const html = await fetchPage(watchUrl, "youtube");
+    const parsed = parseInitialFromHtml(html);
+    if (parsed) {
+      const result = extractFromData(parsed);
+      if (result) {
+        result.source = "youtube_html";
+        return result;
+      }
+    }
+    // Fallback cuối: og:video / twitter:player meta
+    const meta = extractMetaMedia(html);
+    if (meta.video) {
+      return {
+        title: meta.title || "YouTube video",
+        author: meta.author || "",
+        duration: parseDurationFromMeta(html),
+        videoUrl: meta.video,
+        thumbnail: meta.image || `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+        platform: "youtube",
+        source: "youtube_meta"
+      };
+    }
+  } catch (htmlError) {
+    // bỏ qua, sẽ ném innertubeError dưới đây
+  }
+
+  throw innertubeError || new Error("YouTube chặn yêu cầu (cần cookie hoặc media_downloader_url)");
 }
 
 // ===== Generic fallback (mọi trang khác) =====

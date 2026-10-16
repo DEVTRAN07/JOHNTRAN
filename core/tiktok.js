@@ -37,15 +37,17 @@ async function resolveTikTokUrl(url) {
     const res = await axios.get(url, {
       timeout: 25000,
       headers: apiHeaders(),
-      maxRedirects: 10,
+      maxRedirects: 15,
       validateStatus: () => true,
-      maxBodyLength: 5 * 1024 * 1024
+      maxBodyLength: 5 * 1024 * 1024,
+      maxContentLength: 5 * 1024 * 1024
     });
+    // axios 1.x: res.config.url được cập nhật thành URL cuối cùng sau redirect
     const finalUrl =
+      res.config?.url ||
       res.request?._currentUrl ||
       (res.request?.res?.responseUrl) ||
       (res.request?.res?.url) ||
-      res.config?.url ||
       url;
     return String(finalUrl);
   } catch {
@@ -120,40 +122,51 @@ async function getVideoInfo(url) {
   const errors = [];
   const bases = apiChain();
 
-  // Chuẩn hóa short link (vt.tiktok.com, vm.tiktok.com) → canonical URL trước khi gọi API
-  const canonicalUrl = await resolveTikTokUrl(url);
+  // Helper: thử gọi API chain với một URL cụ thể
+  const tryApiChain = async (targetUrl) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const base of bases) {
+        try {
+          const headers = apiHeaders(attempt === 0); // lần đầu không cookie, lần sau có cookie
+          const endpoint = `${base}/?url=${encodeURIComponent(targetUrl)}&hd=1`;
+          const res = await axios.get(endpoint, { timeout: 45000, headers, validateStatus: () => true });
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    for (const base of bases) {
-      try {
-        const headers = apiHeaders(attempt === 0); // lần đầu không cookie, lần sau có cookie
-        const endpoint = `${base}/?url=${encodeURIComponent(canonicalUrl)}&hd=1`;
-        const res = await axios.get(endpoint, { timeout: 45000, headers, validateStatus: () => true });
+          const data = res.data?.data;
+          if (res.data && (res.data.code === 0 || res.data.code === 200) && data) {
+            const videoUrl = data.hdplay || data.play || data.wmplay || data.music;
+            if (!videoUrl) throw new Error("Video không có link tải (có thể đã bị xoá)");
 
-        const data = res.data?.data;
-        if (res.data && (res.data.code === 0 || res.data.code === 200) && data) {
-          const videoUrl = data.hdplay || data.play || data.wmplay || data.music;
-          if (!videoUrl) throw new Error("Video không có link tải (có thể đã bị xoá)");
-
-          return {
-            title: data.title || "TikTok video",
-            author: data.author?.nickname || "Không rõ",
-            duration: Number(data.duration) || 0,
-            videoUrl,
-            thumbnail: data.cover || data.origin_cover || "",
-            platform: "tiktok",
-            source: "tiktok_api"
-          };
+            return {
+              title: data.title || "TikTok video",
+              author: data.author?.nickname || "Không rõ",
+              duration: Number(data.duration) || 0,
+              videoUrl,
+              thumbnail: data.cover || data.origin_cover || "",
+              platform: "tiktok",
+              source: "tiktok_api"
+            };
+          }
+          errors.push(`${base}: ${res.data?.msg || "không có dữ liệu"}`);
+        } catch (error) {
+          errors.push(`${base}: ${error.message}`);
         }
-        errors.push(`${base}: ${res.data?.msg || "không có dữ liệu"}`);
-      } catch (error) {
-        errors.push(`${base}: ${error.message}`);
       }
     }
+    return null;
+  };
+
+  // 1) Thử API với URL gốc đầu tiên (tikwm đôi khi resolve được short link trực tiếp)
+  const result = await tryApiChain(url);
+  if (result) return result;
+
+  // 2) Chuẩn hóa short link → canonical URL rồi thử lại
+  const canonicalUrl = await resolveTikTokUrl(url);
+  if (canonicalUrl !== url) {
+    const result2 = await tryApiChain(canonicalUrl);
+    if (result2) return result2;
   }
 
-  // API hết sức → lấy trực tiếp từ trang TikTok (og:video / twitter:player).
-  // axios tự theo dõi redirect nên canonical URL sẽ về trang chính thức.
+  // 3) API hết sức → lấy trực tiếp từ trang TikTok (og:video / twitter:player).
   try {
     return await extractTikTokPage(canonicalUrl);
   } catch (error) {
