@@ -1,23 +1,22 @@
 // =====================================================================
-// AUTODOWN v5.0 — plugin, cơ chế logic hoàn toàn mới
-// Không dùng yt-dlp/Python. Gọi core/autodownEngine để trích xuất link
-// trực tiếp từ HTML, tải file, xử lý ffmpeg, gửi lên Zalo.
-// Đặc điểm: queue tuần tự, dedup link, rate limiter, circuit breaker,
-// chỉ báo lỗi 1 lần, không spam lặp lại.
+// AUTODOWN v6.0 — đơn giản, tự chứa, chỉ báo lỗi 1 lần
+// Không dùng yt-dlp/Python. Trích xuất link video trực tiếp từ HTML
+// (og:video / twitter:player), tải file, gửi lên Zalo.
+// Cơ chế: dedup link (30s), chỉ xử lý 1 link mỗi lần, lỗi → 1 tin, không spam.
 // =====================================================================
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const cheerio = require("cheerio");
 const { Reactions, ThreadType } = require("zalo-client");
-const engine = require("../../core/autodownEngine");
 const { processVideo, processAudio } = require("../../utils/index");
 
 module.exports.config = {
   name: "autodown",
-  version: "5.0.0",
+  version: "6.0.0",
   role: 2,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Tự động tải media từ link chia sẻ trong nhóm (Tiktok, Youtube, Facebook, Instagram...)",
+  description: "Tự động tải media từ link chia sẻ trong nhóm",
   category: "Tiện ích",
   usage: "autodown on | autodown off | autodown status",
   cooldowns: 5
@@ -25,6 +24,13 @@ module.exports.config = {
 
 const TEMP_DIR = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const LINK_RE = /(https?:\/\/[^\s<>"']+)/i;
+
+// Đơn giản: 1 link đang xử lý, dedup 30s
+const processing = new Map(); // url => true
+const dedup = new Map(); // url => expiry
 
 function cleanupFile(filePath) {
   try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
@@ -34,28 +40,97 @@ function sanitizeError(msg) {
   return String(msg || "lỗi không xác định").replace(/https?:\/\/\S+/g, "[link]").slice(0, 200);
 }
 
-// ---------- Tải file về tạm ----------
+function findUrlInString(text) {
+  const m = String(text).match(LINK_RE);
+  return m ? m[1].replace(/[.,)\]]+$/, "") : null;
+}
+
+function extractUrl(content, depth = 0) {
+  if (!content || depth > 4) return null;
+  if (typeof content === "string") return findUrlInString(content);
+  if (typeof content !== "object") return null;
+  for (const key of ["href", "url", "link", "src", "value", "thumb"]) {
+    const v = content[key];
+    if (typeof v === "string") { const f = findUrlInString(v); if (f) return f; }
+    else if (v && typeof v === "object") { const f = extractUrl(v, depth + 1); if (f) return f; }
+  }
+  for (const v of Object.values(content)) {
+    if (typeof v === "string") { const f = findUrlInString(v); if (f) return f; }
+    else if (v && typeof v === "object") { const f = extractUrl(v, depth + 1); if (f) return f; }
+  }
+  return null;
+}
+
+function detectPlatform(url) {
+  if (/tiktok|douyin|vm\.tiktok|vt\.tiktok/.test(url)) return "tiktok";
+  if (/youtube|youtu\.be|m\.youtube|music\.youtube/.test(url)) return "youtube";
+  if (/facebook|fb\.watch|fb\.com/.test(url)) return "facebook";
+  if (/instagram|instagr\.am/.test(url)) return "instagram";
+  if (/twitter|x\.com|t\.co/.test(url)) return "twitter";
+  if (/vimeo/.test(url)) return "vimeo";
+  if (/dailymotion/.test(url)) return "dailymotion";
+  if (/bilibili/.test(url)) return "bilibili";
+  if (/reddit/.test(url)) return "reddit";
+  return "generic";
+}
+
+function extractMetaMedia(html) {
+  const $ = cheerio.load(html);
+  const meta = (name) => {
+    const el = $(`meta[name="${name}"], meta[property="${name}"]`).first();
+    return el.attr("content") || "";
+  };
+  const video = meta("og:video") || meta("og:video:secure_url") || meta("twitter:player") || meta("twitter:image:src") || "";
+  const image = meta("og:image") || meta("twitter:image") || "";
+  const title = meta("og:title") || $("title").first().text() || "";
+  return { video, image, title };
+}
+
+async function fetchHtml(url) {
+  const res = await axios.get(url, {
+    timeout: 30000,
+    headers: { "User-Agent": UA, "Accept-Language": "vi-VN,vi;q=0.9" },
+    validateStatus: () => true,
+    maxRedirects: 10,
+    maxBodyLength: 8 * 1024 * 1024
+  });
+  return res.data || "";
+}
+
+async function extractDirect(url) {
+  const html = await fetchHtml(url);
+  const meta = extractMetaMedia(html);
+  if (!meta.video && !meta.image) throw new Error("Trang không chứa video/ảnh trực tiếp");
+  return {
+    title: meta.title || "Media",
+    author: "",
+    duration: 0,
+    videoUrl: meta.video || "",
+    thumbnail: meta.image || "",
+    platform: detectPlatform(url),
+    type: meta.video ? "video" : "image",
+    source: "direct_html"
+  };
+}
+
 async function downloadToFile(url, outputPath) {
   const res = await axios.get(url, {
     responseType: "stream",
     timeout: 60000,
-    headers: { ...engine.CONFIG.REQUEST_HEADERS || {}, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36" },
+    headers: { "User-Agent": UA },
     maxRedirects: 10
   });
-  if (!res.data) throw new_error("Tải về rỗng");
+  if (!res.data) throw new Error("Tải về rỗng");
   const writer = fs.createWriteStream(outputPath);
   res.data.pipe(writer);
   await new Promise((resolve, reject) => {
     writer.on("finish", resolve);
     writer.on("error", reject);
   });
-  if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) throw new_error("File tải về rỗng");
+  if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) throw new Error("File tải về rỗng");
   return outputPath;
 }
 
-function new_error(msg) { const e = new Error(msg); e.isAutodown = true; return e; }
-
-// ---------- Xử lý phản hồi ----------
 async function sendReactions(api, threadId, type, event, reactions) {
   for (const r of reactions) {
     try {
@@ -71,7 +146,6 @@ async function sendReactions(api, threadId, type, event, reactions) {
   }
 }
 
-// ---------- handleEvent ----------
 module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
   if (!event.data) return;
   if (event.type !== ThreadType.Group) return;
@@ -79,33 +153,35 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
   const rawContent = String(event.data.content || "").trim();
   if (global.config.prefix && rawContent.startsWith(global.config.prefix)) return;
 
-  const url = engine.extractUrl(event.data.content);
+  const url = extractUrl(event.data.content);
   if (!url) return;
-
-  const platform = engine.detectPlatform(url);
-  if (platform === "generic") return; // link lạ → im lặng
+  if (detectPlatform(url) === "generic") return;
 
   const { threadId, type } = event;
   const threadData = (await Threads.getData(threadId)).data || {};
   if (!threadData.auto_down) return;
 
-  if (!engine.checkRateLimit(threadId)) return; // đạt giới hạn → im lặng
-  if (engine.isCircuitOpen(platform)) return;   // nền tảng bị chặn → im lặng
+  // Dedup: link vừa xử lý trong 30s → bỏ qua
+  const now = Date.now();
+  const ex = dedup.get(url);
+  if (ex && now < ex) return;
+  dedup.set(url, now + 30000);
 
-  await sendReactions(api, threadId, type, event, [Reactions.LIKE]);
+  // Nếu đang xử lý link này → bỏ qua
+  if (processing.get(url)) return;
+  processing.set(url, true);
 
   try {
-    const { info } = await engine.enqueue(() => engine.processLink({ url, threadId, type, api, event }));
-    engine.circuitReset(platform);
+    await sendReactions(api, threadId, type, event, [Reactions.LIKE]);
 
+    const info = await extractDirect(url);
     const messageBody = "🎦 AUTODOWN\n" +
       `Title: ${info.title}\n` +
       (info.author ? `Author: ${info.author}\n` : "") +
-      (info.duration ? `Thời lượng: ${Math.floor(info.duration / 60)}:${String(info.duration % 60).padStart(2, "0")}\n` : "") +
-      `Nguồn: ${info.platform} • ${info.source}`;
+      `Nguồn: ${info.platform}`;
 
-    const fileName = `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${info.type === "audio" ? "mp3" : "mp4"}`;
-    const filePath = path.join(TEMP_DIR, fileName);
+    const ext = info.type === "audio" ? "mp3" : "mp4";
+    const filePath = path.join(TEMP_DIR, `dl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`);
 
     try {
       await downloadToFile(info.videoUrl, filePath);
@@ -133,17 +209,17 @@ module.exports.handleEvent = async function ({ api, event, Threads, isSelf }) {
     return;
 
   } catch (error) {
-    engine.circuitFail(platform);
-    await sendReactions(api, threadId, type, event, [Reactions.CRY]);
     // Chỉ báo lỗi 1 lần, không spam
+    await sendReactions(api, threadId, type, event, [Reactions.CRY]);
     return api.sendMessage({
-      msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}\n\n💡 Nếu liên tục lỗi, nền tảng này sẽ bị bỏ qua tạm thời.`,
+      msg: `❌ Không tải được link này.\n${sanitizeError(error.message)}`,
       plain: true
     }, threadId, type);
+  } finally {
+    processing.delete(url);
   }
 };
 
-// ---------- Lệnh ----------
 module.exports.run = async function ({ api, event, args, Threads }) {
   const { threadId, type } = event;
   if (type === ThreadType.User) {
@@ -168,7 +244,6 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
   if (action === "status" || action === "stt") {
     const thread = (await Threads.getData(threadId)).data || {};
-    const openCircuits = [...engine.isCircuitOpen ? [] : []];
     return api.sendMessage({
       plain: true,
       msg: `📥 Autodown nhóm này: ${thread.auto_down ? "ĐANG BẬT ✅" : "ĐANG TẮT ❌"}\n` +
@@ -178,12 +253,12 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
   return api.sendMessage({
     plain: true,
-    msg: '🔍 AUTODOWN HELPER v5\n\n' +
+    msg: '🔍 AUTODOWN HELPER v6\n\n' +
       'Tự động tải media từ link chia sẻ trong nhóm.\n\n' +
-      '📌 Hỗ trợ: Tiktok, Youtube, Facebook, Instagram, Twitter/X, Vimeo, Dailymotion, Bilibili, Reddit, Capcut, Threads, Pinterest, Imgur, Soundcloud.\n\n' +
+      '📌 Hỗ trợ: Tiktok, Youtube, Facebook, Instagram, Twitter/X, Vimeo, Dailymotion, Bilibili, Reddit.\n\n' +
       '💡 Cách dùng: Gửi link http/https vào nhóm, bot tự tải (nếu nhóm đã bật autodown on).\n\n' +
       '🔰 Emoji: 👍 xử lý • ❤️ thành công • 😢 lỗi\n' +
       '⚙️ Admin: autodown on / off / status\n' +
-      '🛡️ Cơ chế: rate limiter • circuit breaker • dedup link • chỉ báo lỗi 1 lần'
+      '🛡️ Cơ chế: dedup link 30s • chỉ báo lỗi 1 lần, không spam'
     }, threadId, type);
 };
