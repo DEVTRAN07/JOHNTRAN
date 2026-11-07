@@ -62,6 +62,7 @@ module.exports.run = async function ({ api, event, args }) {
       } catch (error) {
         const detail = errDetail(error);
         console.error("[stk] sendCustomStickerUrl failed:", detail || error);
+        if (error?.stack) console.error(error.stack);
         return safeSend(api, { msg: "❌ Gửi sticker thất bại: " + (detail || "lỗi không xác định"), plain: true, ttl: 60000 }, threadId, type);
       }
       return;
@@ -92,6 +93,8 @@ module.exports.run = async function ({ api, event, args }) {
     const detail = errDetail(error);
     console.error("[stk] unexpected:", detail || error);
     if (error?.stack) console.error(error.stack);
-    return safeSend(api, { plain: true, msg: "❌ Lệnh /stk gặp lỗi: " + (detail || "lỗi không xác định"), ttl: 60000 }, threadId, type);
+    const stackHint = (error?.stack || "").split("\n").slice(0, 3).join(" | ").slice(0, 200);
+    const hint = stackHint ? " (trace: " + stackHint + ")" : "";
+    return safeSend(api, { plain: true, msg: "❌ Lệnh /stk gặp lỗi: " + (detail || "lỗi không xác định") + hint, ttl: 60000 }, threadId, type);
   }
 };
