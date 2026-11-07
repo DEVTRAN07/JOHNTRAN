@@ -116,12 +116,19 @@ async function loginWithQR() {
 
                 const qrPath = resolveBotPath(global.config.qrcode_path);
                 const isChild = process.env.JT_PANEL_CHILD === "1";
+                const isNonTTY = !process.stdout.isTTY || !!(process.env.PORT || process.env.RENDER || process.env.RENDER_SERVICE_ID);
+                const qrUrl = process.env.RENDER_EXTERNAL_URL
+                    ? `${String(process.env.RENDER_EXTERNAL_URL).replace(/\/$/, "")}/qr`
+                    : null;
 
-                if (isChild) {
-                    // Bot con (cloud): chỉ lưu ảnh — log gom theo dòng nên in terminal sẽ vỡ QR.
-                    // Xem + quét qua Panel quản lý (nút QR).
+                if (isChild || isNonTTY) {
+                    // Cloud/non-TTY: ASCII QR bị vỡ trong log; chỉ lưu ảnh và hướng dẫn URL /qr (public, panel mode).
                     await displayQRCodeInConsole(image, qrPath, { terminal: false });
-                    logger.log("Đã tạo QRCode — mở Panel quản lý, bấm nút QR để xem và quét", "info");
+                    if (qrUrl) {
+                        logger.log(`[QR LOGIN] Mở ${qrUrl} (hoặc /qr/main) để quét mã QR đăng nhập Zalo.`, "info");
+                    } else {
+                        logger.log("[QR LOGIN] Mở URL dịch vụ Render của bạn và truy cập /qr (hoặc /qr/main) để quét mã QR đăng nhập Zalo.", "info");
+                    }
                     setLoginState('qr_pending');
                     return;
                 }

@@ -380,6 +380,28 @@ function startPanel({ manager, config }) {
         return res.end();
       }
 
+      // Public QR endpoint (no token): serves only bot QR image for easy Render/cloud login.
+      // Does NOT bypass auth for /api/* and does not expose bot data.
+      if (req.method === "GET" && (pathname === "/qr" || pathname === "/qr.png" || pathname.startsWith("/qr/"))) {
+        let botName = url.searchParams.get("bot") || "main";
+        if (pathname.startsWith("/qr/")) {
+          botName = pathname.slice("/qr/".length).replace(/\.png$/i, "") || botName;
+        }
+        if (!/^[a-zA-Z0-9_-]+$/.test(botName)) {
+          res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          return res.end(JSON.stringify({ error: "Tên bot không hợp lệ" }));
+        }
+        const qrFile = botPaths(botName).qrFile;
+        if (!fs.existsSync(qrFile)) {
+          const body = `<!doctype html><meta charset="utf-8"><title>QR chưa sẵn sàng</title><body style="font-family:system-ui;padding:24px"><h2>Chưa có QR đăng nhập</h2><p>Bot <b>${botName}</b> chưa tạo QR hoặc đã đăng nhập. Nếu bạn vừa deploy, đợi bot khởi động rồi tải lại trang <code>/qr</code>.</p></body>`;
+          res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+          return res.end(body);
+        }
+        const buffer = fs.readFileSync(qrFile);
+        res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
+        return res.end(buffer);
+      }
+
       if (token && pathname.startsWith("/api")) {
         const header = req.headers.authorization || "";
         const provided = header.startsWith("Bearer ") ? header.slice(7) : url.searchParams.get("token");

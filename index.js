@@ -21,7 +21,11 @@ const configSystem = require("./core/config");
         return process.exit(1);
     }
 
-    if (config.panel?.enabled) {
+    const panelExplicitlyDisabled = process.env.JT_PANEL__ENABLED === "false" || process.env.JT_PANEL_ENABLED === "false";
+    const cloudWantsPanel = !!(process.env.PORT || process.env.RENDER || process.env.RENDER_SERVICE_ID);
+    const panelEnabled = !panelExplicitlyDisabled && (config.panel?.enabled || cloudWantsPanel);
+
+    if (panelEnabled) {
         // ===== CHẾ ĐỘ PANEL: master quản lý, bot con chạy riêng từng tiến trình =====
         const { BotManager } = require("./panel/botManager");
         const { startPanel } = require("./panel/server");
