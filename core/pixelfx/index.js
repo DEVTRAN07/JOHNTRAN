@@ -21,6 +21,7 @@ const FX_MAP = {
   "melee/sword-slash": "src/fx/melee/sword-slash.js",
   "spawn/coin-drop": "src/fx/spawn/coin-drop.js",
   "pickups/chest-open": "src/fx/pickups/chest-open.js",
+  "melee/combat-scene": "src/fx/melee/combat-scene.js",
 };
 
 function resolveFfmpeg() {

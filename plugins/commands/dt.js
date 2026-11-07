@@ -129,28 +129,15 @@ function levelUpIfNeeded(dt) {
 }
 
 function pickDtTier(level) {
-  const lv = level || 1;
-  let tier, hits;
-  if (lv <= 3) { tier = 1; hits = 1; }
-  else if (lv <= 8) { tier = 2; hits = 2; }
-  else if (lv <= 15) { tier = 3; hits = 3; }
-  else if (lv <= 25) { tier = 4; hits = 3; }
-  else if (lv <= 40) { tier = 5; hits = 4; }
-  else { tier = 6; hits = 5; }
-  hits = Math.max(1, Math.min(5, hits));
-  return { tier, hits };
+  const lv = Number(level) || 1;
+  if (lv <= 3) return 1; if (lv <= 8) return 2; if (lv <= 15) return 3;
+  if (lv <= 25) return 4; if (lv <= 40) return 5; return 6;
 }
-
-function combatSceneFx({ mode, tier, hits, power, seed, extraOpts = {} }) {
-  const h = Math.max(1, Math.min(5, hits || 1));
-  const p = power || tier || 1;
-  const fxOpts = { mode, tier, hits: h, power: p, seed, ...extraOpts };
-  return {
-    gifId: "melee/combat-scene",
-    gifOpts: { fps: 12, scale: 2, bg: 0xff101018, fxOpts },
-    pngId: "melee/combat-scene",
-    pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1, fxOpts: { mode, tier, hits: h, power: p, seed, ...extraOpts } }
-  };
+function hitsForTier(tier) { return tier <= 1 ? 1 : tier === 2 ? 2 : tier <= 4 ? 3 : 4; }
+function combatSceneFx({ mode, tier, hits, power, seed, result }) {
+  const t = Math.max(1, Math.min(6, Number(tier) || 1));
+  const fxOpts = { mode: mode === 'pk' ? 'pk' : 'pve', tier: t, hits: Math.max(1, Math.min(5, Number(hits) || hitsForTier(t))), power: Math.max(1, Math.min(6, Number(power) || t)), seed: Number(seed) || 7, result: result === 'loss' ? 'loss' : 'win' };
+  return { gifId: 'melee/combat-scene', gifOpts: { fps: 12, scale: 2, bg: 0xff101018, fxOpts }, pngId: 'melee/combat-scene', pngOpts: { progress: 0.7, bg: 0xff101018, scale: 1, fxOpts } };
 }
 
 function combat(player, enemy) {
@@ -296,17 +283,16 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       const leveled = levelUpIfNeeded(dt);
       saveDt(Users, senderId, dt);
       let msg = `PVE vs ${enemy.name} Lv.${monLevel}: THẮNG +${expGain} EXP, +${goldGain} gold.`;
-      const tierInfo = pickDtTier(Math.max(dt.level, monLevel));
       const fx = leveled
         ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
-        : combatSceneFx({ mode: "pve", tier: tierInfo.tier, hits: tierInfo.hits, power: tierInfo.tier, seed: dt.level * 100 + monLevel });
+        : combatSceneFx({ mode: 'pve', tier: pickDtTier(Math.max(dt.level, monLevel)), seed: dt.level * 100 + monLevel + dt.pveWins, result: 'win' });
       if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
       await sendWithImage(api, threadId, type, msg, fx);
     } else {
       dt.hp = Math.max(1, Math.floor(dt.maxHp * 0.3));
       dt.exp += 5;
       saveDt(Users, senderId, dt);
-      await sendWithImage(api, threadId, type, `PVE vs ${enemy.name} Lv.${monLevel}: THUA. Hồi 30% HP, +5 EXP consolation.`, combatSceneFx({ mode: "pve", tier: 1, hits: 1, power: 1, seed: dt.level * 100 + monLevel, extraOpts: { result: "loss" } }));
+      await sendWithImage(api, threadId, type, `PVE vs ${enemy.name} Lv.${monLevel}: THUA. Hồi 30% HP, +5 EXP consolation.`, combatSceneFx({ mode: 'pve', tier: Math.max(1, Math.min(2, pickDtTier(dt.level))), seed: dt.level * 100 + monLevel, result: 'loss' }));
     }
     return;
   }
@@ -332,10 +318,9 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       saveDt(Users, senderId, dt);
       saveDt(Users, targetId, tdt);
       let msg = `PK: Bạn THẮNG ${tdt.name}. +${c.pkExpWin} EXP, +${c.pkGoldWin} gold.`;
-      const tierInfo = pickDtTier(Math.max(dt.level, tdt.level));
       const fx = leveled
         ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
-        : combatSceneFx({ mode: "pk", tier: tierInfo.tier, hits: tierInfo.hits, power: tierInfo.tier, seed: dt.level * 100 + tdt.level });
+        : combatSceneFx({ mode: 'pk', tier: pickDtTier(Math.max(dt.level, tdt.level)), seed: dt.level * 100 + tdt.level, result: 'win' });
       if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
       await sendWithImage(api, threadId, type, msg, fx);
     } else {
@@ -347,7 +332,7 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       levelUpIfNeeded(tdt);
       saveDt(Users, senderId, dt);
       saveDt(Users, targetId, tdt);
-      await sendWithImage(api, threadId, type, `PK: Bạn THUA ${tdt.name}. -${c.pkGoldLoss} gold.`, combatSceneFx({ mode: "pk", tier: 2, hits: 2, power: 2, seed: dt.level * 100 + tdt.level, extraOpts: { result: "loss" } }));
+      await sendWithImage(api, threadId, type, `PK: Bạn THUA ${tdt.name}. -${c.pkGoldLoss} gold.`, combatSceneFx({ mode: 'pk', tier: Math.max(1, Math.min(2, pickDtTier(Math.max(dt.level, tdt.level)))), seed: dt.level * 100 + tdt.level, result: 'loss' }));
     }
     return;
   }
