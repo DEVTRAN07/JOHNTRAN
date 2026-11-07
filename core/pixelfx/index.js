@@ -50,7 +50,7 @@ function rmDir(dir) {
 function writeScaledFrame(frame, w, h, scale, bg, filePath) {
   const rgba = new Uint8ClampedArray(w * h * 4);
   const core = frame.__core;
-  core.composite(frame, rgba, bg != null ? bg : null);
+  core.composite(frame, rgba, bg != null ? bg : null, 1);
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(w, h);
@@ -78,9 +78,12 @@ async function renderFx(id, opts = {}) {
   const origin = opts.ox != null || opts.oy != null
     ? [opts.ox || 0, opts.oy || 0]
     : (meta.origin || [Math.floor(w / 2), Math.floor(h * 0.8)]);
-  const frame = core.createFrame(w, h, origin[0], origin[1]);
+  // Effects draw around their origin via the painter, so the frame's own
+  // origin is 0 and the effect is placed at (origin.x, origin.y) through opts.
+  const frame = core.createFrame(w, h, 0, 0);
   core.clearFrame(frame);
-  const fx = core.createFx(mod, opts.fxOpts || {});
+  const fxOpts = { ...(opts.fxOpts || {}), x: origin[0], y: origin[1] };
+  const fx = core.createFx(mod, fxOpts);
   const D = meta.duration || 1;
   const loop = !!meta.loop;
   const target = loop
@@ -95,7 +98,7 @@ async function renderFx(id, opts = {}) {
   }
   fx.draw(frame);
   const rgba = new Uint8ClampedArray(w * h * 4);
-  core.composite(frame, rgba, opts.bg != null ? opts.bg : null);
+  core.composite(frame, rgba, opts.bg != null ? opts.bg : null, 1);
   const scale = opts.scale || 2;
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext("2d");
@@ -146,9 +149,11 @@ async function renderFxGif(id, opts = {}) {
   const gifPath = path.join(os.tmpdir(), `jt_pfx_${safeId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.gif`);
 
   try {
-    const frame = core.createFrame(w, h, origin[0], origin[1]);
+    // Effects draw around their origin via the painter, so the frame's own
+    // origin is 0 and the effect is placed at (origin.x, origin.y) through opts.
+    const frame = core.createFrame(w, h, 0, 0);
     frame.__core = core;
-    const fx = core.createFx(mod, opts.fxOpts || {});
+    const fx = core.createFx(mod, { ...(opts.fxOpts || {}), x: origin[0], y: origin[1] });
 
     for (let i = 0; i < maxFrames; i++) {
       if (i > 0) fx.update(dt);

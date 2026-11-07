@@ -2,6 +2,7 @@
 const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
 let API = "", TOKEN = "";
 let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null;
+let allBots = [];
 let allCommands = [], allStatus = [];
 const VIEW_TITLES = { bots: "Bot", chat: "Chat với bot", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
 
@@ -74,13 +75,36 @@ function setConn(ok, text) {
   $("connDot").className = "dot " + (ok ? "online" : "offline");
   $("connText").textContent = text;
 }
-const STATUS_LABEL = { online: ["online", "Đang chạy"], offline: ["offline", "Chưa chạy"], stopped: ["stopped", "Đã dừng"], restarting: ["restarting", "Đang khởi động lại"] };
+function botLoggedIn(b) {
+  return b && (b.loginState === "logged_in" || b.status === "online");
+}
+function qrWaitStatus(st) {
+  st = (st || "").toString();
+  return st === "qr_pending" || st === "qr_scanned" || st === "waiting_login" || st === "starting" || st === "cookie_login";
+}
+function shouldShowQr(b) {
+  if (!b) return false;
+  return qrWaitStatus(b.status) || (b.hasQr && !botLoggedIn(b));
+}
+const STATUS_LABEL = {
+  online: ["online", "Đã đăng nhập"],
+  offline: ["offline", "Chưa chạy"],
+  stopped: ["stopped", "Đã dừng"],
+  restarting: ["restarting", "Đang khởi động lại"],
+  qr_pending: ["qr_wait", "Đang chờ quét QR"],
+  qr_scanned: ["qr_wait", "Đã quét QR, chờ xác nhận"],
+  cookie_login: ["restarting", "Đang đăng nhập cookie..."],
+  starting: ["restarting", "Đang khởi động..."],
+  waiting_login: ["qr_wait", "Chờ đăng nhập"],
+  failed: ["offline", "Đăng nhập thất bại"]
+};
 
 /* ---------- dữ liệu chính ---------- */
 async function refresh() {
   if (!API) { setConn(false, "chưa cấu hình"); return; }
   try {
     const data = await api("/api/bots");
+    allBots = data.bots || [];
     renderBots(data.bots);
     loadMetrics();
     setConn(true, `đã kết nối • ${data.bots.length} bot con`);
@@ -128,7 +152,7 @@ function renderBots(bots) {
           <button onclick="botAction('${escapeAttr(main.name)}','start')">▶ Chạy</button>
           <button onclick="botAction('${escapeAttr(main.name)}','stop')">⏹ Dừng</button>
           <button onclick="showLogs('${escapeAttr(main.name)}')">📜 Logs</button>
-          <button onclick="showQr('${escapeAttr(main.name)}')">📱 QR đăng nhập</button>
+          ${shouldShowQr(main) ? '<button onclick="showQr(\'${escapeAttr(main.name)}\')">📱 QR đăng nhập</button>' : ""}
         </div>
         <label class="row" style="gap:9px;font-size:12.5px;color:var(--sub);margin-top:2px">
           <span class="switch"><input type="checkbox" ${main.autoRestart ? "checked" : ""} onchange="setAutoRestart('${escapeAttr(main.name)}', this.checked)"><span class="tr"></span></span>
@@ -157,7 +181,7 @@ function renderBots(bots) {
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','stop')">⏹ Dừng</button>
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','restart')">🔄 Khởi động lại</button>
         <button class="small" onclick="showLogs('${escapeAttr(b.name)}')">📜 Logs</button>
-        <button class="small" onclick="showQr('${escapeAttr(b.name)}')">📱 QR</button>
+        ${shouldShowQr(b) ? '<button class="small" onclick="showQr(\'${escapeAttr(b.name)}\')">📱 QR</button>' : ""}
         <button class="small danger" onclick="removeBot('${escapeAttr(b.name)}')">🗑 Xoá</button>
       </div>
       <label class="row" style="gap:9px;font-size:12.5px;color:var(--sub)">
@@ -342,7 +366,7 @@ async function loadBotStats() {
     const [botName, s] = entries[0];
     const p = s.profile || {};
     if (p.avatar) $("botAvatar").src = p.avatar;
-    const online = s.status === "online" && (s.updatedAt || 0) > Date.now() - 90000;
+    const online = s.loginState === "logged_in" || (s.status === "online" && (s.updatedAt || 0) > Date.now() - 90000);
     $("botStateBadge").textContent = online ? "online" : "offline";
     $("botStateBadge").className = "badge " + (online ? "on" : "off");
 
@@ -419,9 +443,11 @@ async function showLogs(name) {
 /* ---------- modal: QR ---------- */
 async function showQr(name) {
   $("modalTitle").textContent = "QR đăng nhập • " + name;
+  const bot = allBots.find((b) => b.name === name) || {};
+  const loggedIn = botLoggedIn(bot);
   $("modalBody").innerHTML = `
     <div class="qr-box">
-      <small class="sub">Bot con phải đang chạy và ở trạng thái chờ đăng nhập</small><br><br>
+      <small class="sub">Đang chờ QR đăng nhập Zalo — mở Zalo trên điện thoại và quét mã</small><br><br>
       <img id="qrImg" alt="QR code">
     </div>`;
   $("modal").classList.add("open");
@@ -435,7 +461,9 @@ async function showQr(name) {
         img.src = URL.createObjectURL(await res.blob());
       } else if (!res.ok && img) {
         img.remove();
-        $("modalBody").innerHTML = '<div class="empty">Chưa có QR — bot có thể đã đăng nhập hoặc chưa khởi động.</div>';
+        $("modalBody").innerHTML = loggedIn
+          ? '<div class="empty">Đã đăng nhập Zalo (không còn mã QR).</div>'
+          : '<div class="empty">Chưa có mã QR — bot có thể chưa khởi động hoặc chưa ở trạng thái chờ đăng nhập.</div>';
         clearInterval(logTimer);
       }
     } catch { /* bỏ qua */ }

@@ -1,9 +1,4 @@
-// Storage adapter cho Supabase — thay JSON store khi deploy lên Koyeb
-// (container Koyeb mất file khi restart, Supabase giữ dữ liệu bền vững).
-//
-// Thiết kế MIRROR: nạp toàn bộ bảng vào RAM lúc khởi động → đọc ĐỒNG BỘ như JsonStore
-// (controller và plugin không cần sửa gì), ghi thì cập nhật RAM ngay + đẩy ngầm lên
-// Supabase (fire-and-forget có retry). Nhắc lại DB mỗi 30s để bắt thay đổi từ bot con khác.
+// Storage adapter cho Supabase
 const { createClient } = require("@supabase/supabase-js");
 
 const TABLE_MAP = {
@@ -11,16 +6,19 @@ const TABLE_MAP = {
   Threads: "bot_threads",
   Metrics: "bot_metrics",
   BotStats: "bot_stats",
-  MediaCache: "bot_media_cache" // cache metadata media (url → {title, author, duration, videoUrl, thumbnail})
+  MediaCache: "bot_media_cache"
 };
 
 const SYNC_INTERVAL = Number(process.env.SUPABASE_SYNC_MS) || 30000;
+const BACKOFF_CAP = 5 * 60 * 1000;
+const LOG_COOLDOWN = 60 * 1000;
 
 class SupabaseStore {
   constructor(url, serviceKey) {
     if (!url || !serviceKey) {
       throw new Error("Thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_KEY");
     }
+    this.url = url;
     this.client = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
@@ -29,25 +27,58 @@ class SupabaseStore {
     this.syncing = null;
     this.lastSyncAt = 0;
     this.syncError = null;
-    this.readyPromise = this.sync().catch((error) => {
-      // Không nạp được lần đầu vẫn cho bot chạy (sẽ thử lại theo chu kỳ)
+    this.classified = null;
+    this.consecutiveFailures = 0;
+    this.lastFailureLogAt = 0;
+    this.nextSyncDelay = SYNC_INTERVAL;
+    this.readyPromise = this.sync().then(() => {
+      this.syncError = null;
+    }).catch((error) => {
       this.syncError = error.message;
+      this.classified = this.classifyError(error);
       console.log(`[supabase] Lần đồng bộ đầu thất bại: ${error.message}`);
     });
+    this.scheduleInterval(SYNC_INTERVAL);
+  }
+
+  scheduleInterval(delay) {
+    if (this.interval) clearInterval(this.interval);
     this.interval = setInterval(() => {
-      this.sync().catch((error) => console.log(`[supabase] Đồng bộ lỗi: ${error.message}`));
+      this.sync().catch((error) => {
+        console.log(`[supabase] Đồng bộ lỗi: ${error.message}`);
+      });
       this.flushRetry().catch(() => {});
-    }, SYNC_INTERVAL);
+    }, delay);
     this.interval.unref?.();
+  }
+
+  classifyError(err) {
+    const msg = String((err && err.message) || err || "").toLowerCase();
+    const netPatterns = ["fetch failed", "econnreset", "enotfound", "eai_again", "getaddrinfo", "econnrefused", "etimedout", "timeout", "abort", "socket"];
+    const cfgPatterns = ["invalid api key", "jwt", "row level security", "unauthorized", "permission denied"];
+    if (netPatterns.some((p) => msg.includes(p))) return "network";
+    if (cfgPatterns.some((p) => msg.includes(p))) return "config";
+    return "unknown";
+  }
+
+  safeHost() {
+    try { return new URL(this.url).host; } catch { return ""; }
+  }
+
+  logFailure(msg, classified) {
+    const now = Date.now();
+    if (now - this.lastFailureLogAt < LOG_COOLDOWN) return;
+    this.lastFailureLogAt = now;
+    const host = this.safeHost();
+    console.log(`[supabase] ${classified} failure${host ? ` (${host})` : ""}: ${msg}`);
   }
 
   async ready() {
     await this.readyPromise;
-    // Chưa đồng bộ được lần nào → báo lỗi để caller biết (URL/key sai, schema thiếu...)
     if (this.syncError && this.lastSyncAt === 0) {
-      throw new Error(this.syncError);
+      console.log(`[supabase] ready: ${this.syncError}`);
     }
-    this.syncError = null;
+    return this.getStatus();
   }
 
   tableFor(name) {
@@ -59,32 +90,64 @@ class SupabaseStore {
   async sync() {
     if (this.syncing) return this.syncing;
     this.syncing = (async () => {
+      let anySuccess = false;
+      let firstError = null;
+      let firstClassified = null;
       for (const [storeTable, dbTable] of Object.entries(TABLE_MAP)) {
-        const { data, error } = await this.client
-          .from(dbTable)
-          .select("id, data, updated_at");
+        let data, error;
+        try {
+          const res = await this.client.from(dbTable).select("id, data, updated_at");
+          data = res.data;
+          error = res.error;
+        } catch (e) {
+          error = e;
+        }
         if (error) {
-          // Bảng chưa tạo (thiếu schema) → coi như rỗng, không làm sập cả sync
-          if (/Could not find the table/i.test(error.message)) {
-            this.mirror[storeTable] = {};
+          if (/Could not find the table/i.test(String(error.message || error))) {
+            this.mirror[storeTable] = this.mirror[storeTable] || {};
             continue;
           }
-          throw new Error(`Supabase ${dbTable}: ${error.message}`);
+          const classified = this.classifyError(error);
+          const msg = `Supabase ${dbTable}: ${error.message || error}`;
+          if (!firstError) { firstError = msg; firstClassified = classified; }
+          this.logFailure(msg, classified);
+          this.syncError = msg;
+          this.classified = classified;
+          if (!this.mirror[storeTable]) this.mirror[storeTable] = {};
+          continue;
         }
+        anySuccess = true;
         const next = {};
         for (const row of data || []) {
           next[String(row.id)] = { ...row, data: row.data || {} };
         }
         this.mirror[storeTable] = next;
       }
+      if (firstError && !anySuccess) {
+        this.consecutiveFailures += 1;
+        this.syncError = firstError;
+        this.classified = firstClassified;
+        this.nextSyncDelay = Math.min(SYNC_INTERVAL * Math.pow(2, this.consecutiveFailures), BACKOFF_CAP);
+        this.scheduleInterval(this.nextSyncDelay);
+        throw new Error(firstError);
+      }
+      if (firstError) {
+        this.consecutiveFailures += 1;
+        this.syncError = firstError;
+        this.classified = firstClassified;
+      } else {
+        this.consecutiveFailures = 0;
+        this.syncError = null;
+        this.classified = null;
+        this.nextSyncDelay = SYNC_INTERVAL;
+        this.scheduleInterval(SYNC_INTERVAL);
+      }
       this.lastSyncAt = Date.now();
-      this.syncError = null;
       return true;
     })().finally(() => { this.syncing = null; });
     return this.syncing;
   }
 
-  // Ghi NGẦM lên Supabase, thất bại thì xếp hàng retry
   push(dbTable, op, payload) {
     const run = async () => {
       if (op === "upsert") {
@@ -96,7 +159,12 @@ class SupabaseStore {
       }
     };
     run().catch((error) => {
-      console.log(`[supabase] Ghi ${op} thất bại, xếp retry: ${error.message}`);
+      const classified = this.classifyError(error);
+      if (classified === "network") {
+        this.logFailure(`Ghi ${op} thất bại, xếp retry: ${error.message}`, classified);
+      } else {
+        console.log(`[supabase] Ghi ${op} thất bại, xếp retry: ${error.message}`);
+      }
       this.retryQueue.push({ dbTable, op, payload });
     });
   }
@@ -110,7 +178,16 @@ class SupabaseStore {
     }
   }
 
-  // ===== API ĐỒNG BỘ (giống JsonStore) =====
+  getStatus() {
+    return {
+      ok: !this.syncError && this.lastSyncAt > 0,
+      lastSyncAt: this.lastSyncAt,
+      syncError: this.syncError,
+      consecutiveFailures: this.consecutiveFailures,
+      classified: this.classified
+    };
+  }
+
   get(tableName, idField, id) {
     const key = String(id);
     const row = this.mirror[tableName]?.[key];
@@ -154,7 +231,6 @@ class SupabaseStore {
   }
 
   flushSync() {
-    // JSON store ghi đĩa; Supabase đã ghi ngầm theo từng thao tác
     return true;
   }
 }

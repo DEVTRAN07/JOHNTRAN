@@ -16,6 +16,8 @@ const stats = require("./core/stats");
 const schedule = require("node-schedule");
 const { cleanOldMessages } = require("./utils/index");
 
+const loginMod = require("./core/login");
+
 global.client = new Object({
     commands: new Map(),
     events: new Map(),
@@ -68,7 +70,7 @@ try {
   if (fs.existsSync(tempFolderCommand)) {
     fs.rmSync(tempFolderCommand, { recursive: true, force: true });
     logger.log("Đã dọn dẹp folder temp của commands", "info");
-  } 
+  }
   if (fs.existsSync(tempFolderEvent)) {
     fs.rmSync(tempFolderEvent, { recursive: true, force: true });
     logger.log("Đã dọn dẹp folder temp của events", "info");
@@ -100,6 +102,10 @@ const api = await login();
 
 global.api = api;
 
+if (loginMod?.getLoginState && loginMod.getLoginState() !== 'logged_in') {
+    loginMod.setLoginState?.('logged_in');
+}
+
 logger.log("Đã đăng nhập thành công", "info");
 
 // Supabase: đợi đồng bộ mirror xong mới xử lý tin (tránh mất settings nhóm)
@@ -124,7 +130,8 @@ const sendStats = async () => {
     const data = await stats.collectStats(global.api);
     db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
       ...data,
-      status: "online",
+      status: global.api ? "online" : "starting",
+      loginState: loginMod.getLoginState?.() || (global.api ? 'logged_in' : 'unknown'),
       updatedAt: Date.now()
     });
   } catch (error) {

@@ -177,9 +177,12 @@ class BotInstance {
   }
 
   toJSON() {
+    const processStatus = this.status;
     return {
       name: this.name,
-      status: this.status,
+      status: processStatus,
+      processStatus,
+      loginState: null,
       pid: this.pid,
       autoRestart: this.autoRestart,
       uptimeMs: this.startedAt ? Date.now() - this.startedAt : 0,

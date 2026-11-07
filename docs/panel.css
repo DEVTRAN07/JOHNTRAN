@@ -90,6 +90,7 @@ a { color: var(--accent); text-decoration: none; }
 .dot.online, .dot.on { background: var(--green); box-shadow: 0 0 10px rgba(46, 230, 168, .8); }
 .dot.offline, .dot.off { background: var(--red); box-shadow: 0 0 10px rgba(255, 93, 115, .8); }
 .dot.restarting { background: var(--yellow); box-shadow: 0 0 10px rgba(255, 200, 87, .8); }
+.dot.qr_wait { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: pulse 1.2s infinite; }
 
 main { padding: 22px; display: grid; gap: 18px; align-content: start; }
 .view { display: none; animation: fade .25s ease; }

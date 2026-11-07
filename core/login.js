@@ -6,6 +6,10 @@ const logger = require("../utils/logger");
 const { registerStickerApi } = require("./stickerFactory");
 const { getJsonData, displayQRCodeInConsole } = require("../utils/index");
 
+let _loginState = 'starting'; // starting|cookie_login|qr_pending|qr_scanned|logged_in|failed
+function setLoginState(s) { _loginState = s; }
+function getLoginState() { return _loginState; }
+
 const USER_AGENTS = {
   mac: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0",
   windows: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
@@ -118,23 +122,27 @@ async function loginWithQR() {
                     // Xem + quét qua Panel quản lý (nút QR).
                     await displayQRCodeInConsole(image, qrPath, { terminal: false });
                     logger.log("Đã tạo QRCode — mở Panel quản lý, bấm nút QR để xem và quét", "info");
+                    setLoginState('qr_pending');
                     return;
                 }
 
                 logger.log("Vui lòng quét mã QRCode bên dưới để đăng nhập:", "info");
                 await displayQRCodeInConsole(image, qrPath);
+                setLoginState('qr_pending');
                 return;
             }
 
             if (eventType === LoginQRCallbackEventType.QRCodeScanned) {
                 // QRCodeScanned
                 logger.log("Đã quét QRCode, vui lòng xác nhận trên điện thoại", "info");
+                setLoginState('qr_scanned');
                 return;
             }
 
             if (eventType === LoginQRCallbackEventType.QRCodeExpired) {
                 // QRCodeExpired
                 logger.log("QRCode đã hết hạn, đang tạo mã mới...", "warn");
+                setLoginState('qr_pending');
                 qrData.actions.retry();
                 return;
             }
@@ -142,12 +150,14 @@ async function loginWithQR() {
             if (eventType === LoginQRCallbackEventType.QRCodeDeclined) {
                 // QRCodeDeclined
                 logger.log("QRCode bị từ chối, đang tạo mã mới...", "warn");
+                setLoginState('qr_pending');
                 qrData.actions.retry();
                 return;
             }
 
             if (eventType === LoginQRCallbackEventType.GotLoginInfo) {
                 // GotLoginInfo
+                setLoginState('logged_in');
                 const { cookie, imei, userAgent } = data;
                 if (!userAgent || !cookie || !imei) return;
                 if (!global.config.save_cookie) return;
@@ -168,6 +178,7 @@ async function loginWithQR() {
                     logger.log(`Đã lưu cookie vào ${cookieFileName} và cập nhật ${path.basename(accountPath)}`, "info");
                 } catch (err) {
                     logger.log(`Lỗi khi ghi file: ${err.message || err}`, "error");
+                    setLoginState('failed');
                     process.exit(1);
                 }
             }
@@ -177,6 +188,7 @@ async function loginWithQR() {
         return api;
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng QR: ${error.message || error}`, "error");
+        setLoginState('failed');
         process.exit(1);
     }
 }
@@ -206,15 +218,20 @@ async function loginWithCookie() {
 
 async function login() {
     try {
+        setLoginState('cookie_login');
         logger.log("Tiến hành login bằng Cookie", "info");
-        return await loginWithCookie();
+        const api = await loginWithCookie();
+        setLoginState('logged_in');
+        return api;
     } catch (error) {
         if (!global.config.login_qrcode) {
             logger.log("Cookie không hợp lệ", "error");
+            setLoginState('failed');
             process.exit(1);
         }
         logger.log("Login bằng Cookie thất bại, chuyển sang QRCode...", "warn");
         logger.log(`Thiết bị đăng nhập: ${deviceLabel(resolveUserAgent())}`, "info");
+        setLoginState('qr_pending');
         return await loginWithQR();
     }
 }
@@ -223,3 +240,6 @@ module.exports = login;
 module.exports.resolveUserAgent = resolveUserAgent;
 module.exports.deviceLabel = deviceLabel;
 module.exports.USER_AGENTS = USER_AGENTS;
+module.exports.getLoginState = getLoginState;
+module.exports.setLoginState = setLoginState;
+module.exports.loginState = getLoginState;

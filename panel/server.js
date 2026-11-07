@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { botPaths } = require("./botManager");
+let dbUtils, storeDb;
+try { dbUtils = require("../utils/db"); storeDb = dbUtils.db || dbUtils; } catch { dbUtils = null; storeDb = null; }
 
 const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="vi">
@@ -38,6 +40,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .dot.offline { background: var(--sub); }
   .dot.stopped { background: var(--red); }
   .dot.restarting { background: var(--yellow); animation: pulse 1s infinite; }
+  .dot.qr_wait { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
   .bot .sub { color: var(--sub); font-size: 13px; margin-bottom: 14px; }
   .bot .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -122,6 +125,21 @@ function uptime(ms) {
   return h > 0 ? h + "h " + m + "m" : m + "m " + (s % 60) + "s";
 }
 
+const STATUS_LABEL = {
+  online: ["online", "Đã đăng nhập"],
+  offline: ["offline", "Chưa chạy"],
+  stopped: ["stopped", "Đã dừng"],
+  restarting: ["restarting", "Đang khởi động lại"],
+  qr_pending: ["qr_wait", "Đang chờ quét QR"],
+  qr_scanned: ["qr_wait", "Đã quét QR, chờ xác nhận"],
+  cookie_login: ["restarting", "Đang đăng nhập cookie..."],
+  starting: ["restarting", "Đang khởi động..."],
+  waiting_login: ["qr_wait", "Chờ đăng nhập"],
+  failed: ["offline", "Đăng nhập thất bại"]
+};
+function labelFor(status) {
+  return STATUS_LABEL[status] || ["offline", status];
+}
 async function refresh() {
   try {
     const data = await api("/bots");
@@ -158,8 +176,8 @@ function render(master) {
   }
   grid.innerHTML = state.bots.map(b => \`
     <div class="bot">
-      <h3><span class="dot \${b.status}"></span>\${b.name}</h3>
-      <div class="sub">trạng thái <b>\${b.status}</b> • pid \${b.pid || "–"} • uptime \${uptime(b.uptimeMs)} • restart \${b.restarts || 0}\${b.flapping ? " • <span style=\\"color:var(--red)\\">CRASH LIÊN TỤC</span>" : ""} • <span class="badge \${b.autoRestart ? "on" : "off"}">auto-restart \${b.autoRestart ? "ON" : "OFF"}</span></div>
+      <h3><span class="dot \${labelFor(b.status)[0]}"></span>\${b.name}</h3>
+      <div class="sub">trạng thái <b>\${labelFor(b.status)[1]}</b> (\${b.loginState || "–"}) • pid \${b.pid || "–"} • uptime \${uptime(b.uptimeMs)} • restart \${b.restarts || 0}\${b.flapping ? " • <span style=\\"color:var(--red)\\">CRASH LIÊN TỤC</span>" : ""} • <span class="badge \${b.autoRestart ? "on" : "off"}">auto-restart \${b.autoRestart ? "ON" : "OFF"}</span></div>
       <div class="actions">
         <button class="primary" onclick="botAction('\${b.name}','start')">Chạy</button>
         <button onclick="botAction('\${b.name}','stop')">Dừng</button>
@@ -287,6 +305,52 @@ function commandStatusFromFiles(config) {
   return loadCommandsFromFiles(config).map((cmd) => audit.commandStatus(cmd.name, cmd));
 }
 
+const BOTSTATS_FRESH_MS = 90000;
+
+function botStatUpdatedAtMs(row) {
+  if (!row) return 0;
+  const v = row.updatedAt != null ? row.updatedAt : row.updated_at;
+  if (v == null) return 0;
+  return Date.parse(String(v)) || Number(v) || 0;
+}
+function isBotStatFresh(row) {
+  return botStatUpdatedAtMs(row) > Date.now() - BOTSTATS_FRESH_MS;
+}
+function findBotStatsRow(botName) {
+  if (!storeDb) return null;
+  try {
+    const rows = storeDb.allData("BotStats");
+    for (const row of rows || []) {
+      const key = row?.name || row?.id;
+      if (!key || key === "soundcloud_client_id") continue;
+      if (key === botName) return row;
+    }
+  } catch { /* BotStats/Supabase unavailable */ }
+  return null;
+}
+function enrichBot(bot) {
+  const out = { ...bot };
+  let loginState = out.loginState || null;
+  const row = findBotStatsRow(out.name);
+  const stats = row ? (row.data || row) : null;
+  if (stats) {
+    if (stats.loginState != null) loginState = stats.loginState;
+    else if (!loginState && out.processStatus === "online" && stats.status === "online" && isBotStatFresh(stats)) {
+      loginState = "logged_in";
+    }
+  }
+  out.loginState = loginState;
+  const waiting = ["qr_pending","qr_scanned","cookie_login","starting","waiting_login","unknown"];
+  let displayStatus;
+  if (loginState === "logged_in") displayStatus = "online";
+  else if (waiting.includes(loginState)) displayStatus = loginState;
+  else if (loginState === "failed") displayStatus = "failed";
+  else displayStatus = out.processStatus === "online" ? "waiting_login" : out.processStatus;
+  out.status = displayStatus;
+  out.displayStatus = displayStatus;
+  return out;
+}
+
 function startPanel({ manager, config }) {
   const token = config?.panel?.token || "";
   // Token dùng để proxy chat sang cầu nối bot (127.0.0.1) — phải GIỐNG nhau
@@ -328,13 +392,16 @@ function startPanel({ manager, config }) {
       if (!pathname.startsWith("/api") && serveStatic(pathname, res)) return;
 
       if (pathname === "/api/bots" && req.method === "GET") {
-        return sendJson(res, 200, { bots: manager.list(), master: { botCount: manager.list().length, uptimeMs: process.uptime() * 1000 } });
+        const bots = manager.list().map(enrichBot);
+        return sendJson(res, 200, { bots, master: { botCount: bots.length, uptimeMs: process.uptime() * 1000 } });
       }
 
       if (pathname === "/api/metrics" && req.method === "GET") {
         try {
           const metrics = require("../core/metrics");
           const { allStats } = require("../core/cache");
+          let supabaseStatus = null;
+          try { supabaseStatus = storeDb && typeof storeDb.getStatus === "function" ? storeDb.getStatus() : null; } catch { supabaseStatus = null; }
           return sendJson(res, 200, {
             today: metrics.getDayStats(),
             topCommands: metrics.topCommands(),
@@ -342,7 +409,8 @@ function startPanel({ manager, config }) {
             audit: metrics.readAudit(20),
             node: process.version,
             uptimeMs: process.uptime() * 1000,
-            memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024)
+            memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+            supabase: supabaseStatus
           });
         } catch (error) {
           return sendJson(res, 500, { error: error.message });
@@ -431,9 +499,12 @@ function startPanel({ manager, config }) {
         const sendMatch = pathname.match(/^\/api\/chat\/([a-zA-Z0-9_-]+)\/send$/);
         const botName = match?.[1] || sendMatch?.[1];
         if (!botName) return sendJson(res, 400, { error: "Thiếu tên bot" });
-        const bot = manager.list().find((b) => b.name === botName);
-        if (!bot?.bridgePort) return sendJson(res, 404, { error: "Chưa biết cổng cầu nối của bot" });
-        if (bot.status !== "online") return sendJson(res, 409, { error: `Bot ${botName} chưa chạy` });
+        const rawBot = manager.list().find((b) => b.name === botName);
+        if (!rawBot?.bridgePort) return sendJson(res, 404, { error: "Chưa biết cổng cầu nối của bot" });
+        const bot = enrichBot(rawBot);
+        if (bot.loginState !== "logged_in") {
+          return sendJson(res, 409, { error: `Bot "${botName}" chưa đăng nhập Zalo — đang chờ quét QR`, loginState: bot.loginState, requireLogin: true });
+        }
 
         const route = match?.[2] || "send"; // threads | messages | health | thread-info | action | send
         let target = `http://127.0.0.1:${bot.bridgePort}/${route}`;
@@ -463,14 +534,18 @@ function startPanel({ manager, config }) {
       }
 
       if (pathname === "/api/master" && req.method === "GET") {
+        let supabaseStatus = null;
+        try { supabaseStatus = storeDb && typeof storeDb.getStatus === "function" ? storeDb.getStatus() : null; } catch { supabaseStatus = null; }
         return sendJson(res, 200, {
           botCount: manager.list().length,          uptimeMs: process.uptime() * 1000,
-          node: process.version
+          node: process.version, supabase: supabaseStatus
         });
       }
 
       // health endpoint cho UptimeRobot / cloud monitor ping (luôn 200 để chống sleep)
       if (pathname === "/health" && req.method === "GET") {
+        let supabaseStatus = null;
+        try { supabaseStatus = storeDb && typeof storeDb.getStatus === "function" ? storeDb.getStatus() : null; } catch { supabaseStatus = null; }
         return sendJson(res, 200, {
           status: global.api ? "ok" : "starting",
           bot: global.config?.name_bot || "bot",
@@ -478,7 +553,7 @@ function startPanel({ manager, config }) {
           commands: global.client?.commands?.size || 0,
           uptimeMs: process.uptime() * 1000,
           memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
-          node: process.version
+          node: process.version, supabase: supabaseStatus
         });
       }
 
