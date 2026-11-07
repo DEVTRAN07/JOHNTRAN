@@ -35,25 +35,42 @@ function writeCachedClientId(clientId) {
   } catch { /* bo qua */ }
 }
 
-function scriptUrlsFromHtml(html) {
-  const urls = [];
-  const re = /src="(https:\/\/a-v2\.sndcdn\.com[^"]+\.js)"/g;
-  let match;
-  while ((match = re.exec(html)) !== null) {
-    urls.push(match[1]);
-  }
-  return [...new Set(urls)];
+function clearCachedClientId() {
+  cachedClientId = null;
+  negativeUntil = 0;
+  try { fs.unlinkSync(CLIENT_ID_CACHE); } catch { /* bo qua */ }
+  try { db.saveData("BotStats", "name", CLIENT_ID_KEY, { value: "" }); } catch { /* bo qua */ }
 }
 
-function extractClientIdFromJs(js) {
+function scriptUrlsFromHtml(html) {
+  const urls = [];
+  // SoundCloud asset layout changes over time (a-v2, assets, widget, v2...).
+  const re = /<script[^>]+src=["']([^"']+)["']/gi;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    const src = match[1];
+    if (!src) continue;
+    if (/sndcdn\.com|soundcloud\.com/.test(src) && /\.js(\?|$)/.test(src)) {
+      urls.push(src.startsWith("//") ? "https:" + src : src);
+    } else if (/^\/[^/]/.test(src) && /\.js(\?|$)/.test(src)) {
+      urls.push("https://soundcloud.com" + src);
+    }
+  }
+  // Prioritize sndcdn app bundles first.
+  return [...new Set(urls)].sort((a, b) => (b.includes("sndcdn") ? 1 : 0) - (a.includes("sndcdn") ? 1 : 0));
+}
+
+function extractClientId(text) {
+  if (!text) return null;
   const patterns = [
-    /client_id[=:"\s]{1,4}([A-Za-z0-9]{32})/,
+    /[?&]client_id=([A-Za-z0-9]{32})/,
+    /client_id[=:"\s]{1,6}"?([A-Za-z0-9]{32})"?/,
     /"client_id"\s*:\s*"([A-Za-z0-9]{32})"/,
-    /client_id:\s*"([A-Za-z0-9]{32})"/
+    /clientId[=:"\s]{1,6}"?([A-Za-z0-9]{32})"?/
   ];
   for (const pattern of patterns) {
-    const m = js.match(pattern);
-    if (m) return m[1];
+    const m = text.match(pattern);
+    if (m && m[1]) return m[1];
   }
   return null;
 }
@@ -80,7 +97,7 @@ async function discoverClientId() {
 
   if (discovering) return discovering;
   if (Date.now() < negativeUntil) {
-    const error = new Error("Dich vu SoundCloud tam thoi khong kha dung (khong lay duoc client_id), vui long thu lai sau.");
+    const error = new Error("Dich vu SoundCloud tam thoi khong kha dung (khong lay duoc client_id), vui long thu lai sau hoac dat music.soundcloud_client_id.");
     error.notAvailable = true;
     throw error;
   }
@@ -89,19 +106,36 @@ async function discoverClientId() {
     try {
       let home;
       try {
-        home = await http.request(HOME_URL, { timeout: 20000 });
+        home = await http.request(HOME_URL, {
+          timeout: 20000,
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" }
+        });
       } catch (error) {
-        const err = new Error("Khong ket noi duoc trang chu SoundCloud de lay client_id.");
+        const err = new Error("Khong ket noi duoc trang chu SoundCloud de lay client_id: " + (error && error.message ? error.message : error));
+        err.notAvailable = true;
+        err.cause = error;
+        throw err;
+      }
+      if (home && home.status >= 400) {
+        const err = new Error("Trang chu SoundCloud tra ve loi " + home.status + " khi lay client_id.");
         err.notAvailable = true;
         throw err;
       }
       const html = home && home.body ? home.body.toString("utf8") : "";
-      const scriptUrls = scriptUrlsFromHtml(html).slice(0, 20);
+      // Try extracting directly from HTML (SoundCloud sometimes embeds config/client_id).
+      const fromHtml = extractClientId(html);
+      if (fromHtml) {
+        cachedClientId = fromHtml;
+        writeCachedClientId(fromHtml);
+        negativeUntil = 0;
+        return fromHtml;
+      }
+      const scriptUrls = scriptUrlsFromHtml(html).slice(0, 25);
       for (const scriptUrl of scriptUrls) {
         try {
           const script = await http.request(scriptUrl, { timeout: 20000 });
           const js = script && script.body ? script.body.toString("utf8") : "";
-          const clientId = extractClientIdFromJs(js);
+          const clientId = extractClientId(js) || extractClientId(scriptUrl);
           if (clientId) {
             cachedClientId = clientId;
             writeCachedClientId(clientId);
@@ -112,8 +146,20 @@ async function discoverClientId() {
           continue;
         }
       }
+      // Fallback: widget API script sometimes exposes client_id in fetched assets/params.
+      try {
+        const widget = await http.request("https://w.soundcloud.com/player/api.js", { timeout: 15000 });
+        const wjs = widget && widget.body ? widget.body.toString("utf8") : "";
+        const wid = extractClientId(wjs);
+        if (wid) {
+          cachedClientId = wid;
+          writeCachedClientId(wid);
+          negativeUntil = 0;
+          return wid;
+        }
+      } catch { /* bo qua */ }
       negativeUntil = Date.now() + CLIENT_ID_NEGATIVE_TTL;
-      const error = new Error("Khong tim thay client_id cua SoundCloud (trang web da thay doi cau truc).");
+      const error = new Error("Khong tim thay client_id cua SoundCloud (trang web da thay doi cau truc). Thu dat music.soundcloud_client_id trong config.");
       error.notAvailable = true;
       throw error;
     } finally {
@@ -123,12 +169,32 @@ async function discoverClientId() {
   return discovering;
 }
 
-async function apiGet(apiPath, params = {}) {
+async function apiGet(apiPath, params = {}, retry = true) {
   const clientId = await discoverClientId();
   const query = new URLSearchParams({ ...params, client_id: clientId });
-  const { data } = await http.getJson(API_BASE + apiPath + "?" + query.toString(), {
+  const url = API_BASE + apiPath + "?" + query.toString();
+  const { status, data } = await http.getJson(url, {
     headers: { Accept: "application/json" }
   });
+  // client_id expired/revoked: clear cache and rediscover once.
+  if ((status === 401 || status === 403) && retry) {
+    clearCachedClientId();
+    return apiGet(apiPath, params, false);
+  }
+  if (status >= 400) {
+    const msg = data && (data.errors && data.errors[0] && data.errors[0].error_message || data.message || data.error)
+      ? ((data.errors && data.errors[0] && data.errors[0].error_message) || data.message || data.error)
+      : ("SoundCloud API loi " + status);
+    const error = new Error(String(msg));
+    if (status === 401 || status === 403 || status === 429) error.notAvailable = true;
+    error.status = status;
+    throw error;
+  }
+  if (data && Array.isArray(data.errors) && data.errors.length) {
+    const error = new Error(String(data.errors[0].error_message || data.errors[0] || "Loi SoundCloud API"));
+    error.notAvailable = true;
+    throw error;
+  }
   return data;
 }
 
@@ -176,8 +242,8 @@ async function resolve(track) {
   let stream;
   try {
     stream = await http.getJson(progressive.url + "?client_id=" + clientId);
-  } catch {
-    const error = new Error("Khong lay duoc link stream tu SoundCloud (mang/loi API).");
+  } catch (err) {
+    const error = new Error("Khong lay duoc link stream tu SoundCloud: " + (err && err.message ? err.message : err));
     error.notAvailable = true;
     throw error;
   }
