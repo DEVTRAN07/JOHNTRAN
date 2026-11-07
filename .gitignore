@@ -20,3 +20,6 @@ ecosystem.config.cjs
 .env.*
 .env*
 reference-images/
+
+# local editor config (không commit token)
+vscode/
