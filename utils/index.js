@@ -344,24 +344,26 @@ async function decodeQRFromBase64(base64Image) {
 }
 
 function generateQRCodeInTerminal(data, options = {}) {
+    const { plain, stripAnsi, ...qrOptions } = options || {};
     const defaultOptions = {
         type: 'terminal',
         small: true,
-        scale: 0.05,
         margin: 0,
-        width: 1,
         errorCorrectionLevel: 'L'
     };
-    
-    const finalOptions = { ...defaultOptions, ...options };
-    
+
+    const finalOptions = { ...defaultOptions, ...qrOptions };
+
     return new Promise((resolve, reject) => {
         const QRCode = require("qrcode");
         QRCode.toString(data, finalOptions, (err, string) => {
             if (err) {
                 reject(err);
             } else {
-                resolve(string);
+                const out = (plain || stripAnsi)
+                    ? String(string).replace(/\x1b\[[0-9;]*m/g, "")
+                    : string;
+                resolve(out);
             }
         });
     });
@@ -379,12 +381,13 @@ async function displayQRCodeInConsole(base64Image, fallbackPath = null, options 
             logger.printReplaceable([qrString]);
         }
         if (options.printPlain) {
-            // Cloud/non-TTY: không dùng ANSI replaceable cursor (không hiệu quả trong log),
-            // in ASCII QR plainly cho deploy logs. Lỗi nào đó không làm sập phần lưu ảnh/URL.
+            // Cloud/non-TTY: log Render không render ANSI cursor; in QR ASCII thu gọn, bỏ màu ANSI.
+            // Vẫn ưu tiên ảnh QR đã lưu + URL /qr nếu ASCII khó quét.
             try {
                 const qrData = await decodeQRFromBase64(base64Image);
-                const qrString = await generateQRCodeInTerminal(qrData);
-                console.log("\n" + qrString + "\n");
+                const qrString = await generateQRCodeInTerminal(qrData, { small: true, margin: 0, plain: true });
+                const compact = String(qrString).replace(/\n+$/g, "");
+                console.log("\n[QR LOGIN ASCII]\n" + compact);
             } catch (plainErr) {
                 logger.log("Không thể in ASCII QR plainly: " + (plainErr.message || plainErr), "warn");
             }
