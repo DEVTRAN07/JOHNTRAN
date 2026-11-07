@@ -176,9 +176,9 @@ function dtFxProfile() {
     process.env.PIXELFX_DT_PROFILE
     || (C().dtFxProfile)
     || (global.config && global.config.dtFxProfile)
-    || "remote"
+    || "scene"
   ).toLowerCase();
-  return (v === "remote" || v === "mixed" || v === "scene") ? v : "remote";
+  return (v === "remote" || v === "mixed" || v === "scene") ? v : "scene";
 }
 
 // Deterministic-ish pick: rotate within the tier pool by seed so fights vary,
