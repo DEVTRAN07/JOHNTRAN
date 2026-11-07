@@ -84,23 +84,110 @@ function pickKey(threadId, userId) {
   return `${threadId}:${userId}`;
 }
 
+function spawnFfmpegHls(streamUrl, filePath, timeoutMs = 90000) {
+  let ffmpegPath;
+  try {
+    ffmpegPath = require("ffmpeg-static");
+  } catch (e) {
+    const err = new Error("Không tìm thấy ffmpeg-static để xử lý stream HLS: " + (e && e.message ? e.message : e));
+    err.ffmpegMissing = true;
+    throw err;
+  }
+  if (!ffmpegPath) {
+    const err = new Error("ffmpeg-static không cung cấp đường dẫn binary.");
+    err.ffmpegMissing = true;
+    throw err;
+  }
+
+  const args = [
+    "-nostdin", "-y",
+    "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+    "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+    "-allowed_extensions", "ALL",
+    "-i", streamUrl,
+    "-vn", "-acodec", "libmp3lame", "-ab", "128k", "-f", "mp3",
+    filePath
+  ];
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stderr = "";
+    let child;
+    try {
+      child = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    } catch (err) {
+      return reject(new Error("Không khởi động được ffmpeg: " + (err && err.message ? err.message : err)));
+    }
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (child) {
+        try { child.stdout && child.stdout.destroy(); } catch {}
+        try { child.stderr && child.stderr.destroy(); } catch {}
+      }
+    };
+
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+      reject(err);
+    };
+    const ok = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(filePath);
+    };
+
+    const timer = setTimeout(() => {
+      try { if (child && !child.killed) child.kill("SIGKILL"); } catch {}
+      fail(new Error("ffmpeg HLS timeout sau " + Math.round(timeoutMs / 1000) + "s"));
+    }, timeoutMs);
+
+    if (child.stderr) {
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+        if (stderr.length > 4000) stderr = stderr.slice(-4000);
+      });
+    }
+
+    child.on("error", (err) => {
+      fail(new Error("Lỗi chạy ffmpeg: " + (err && err.message ? err.message : err)));
+    });
+
+    child.on("close", (code, signal) => {
+      if (signal) {
+        const sig = String(signal);
+        if (["SIGSEGV","SIGABRT","SIGBUS","SIGILL","SIGKILL"].indexOf(sig) !== -1) {
+          return fail(new Error("ffmpeg bị dừng bởi tín hiệu " + sig + " (binary ffmpeg có thể không tương thích/crash với stream này)"));
+        }
+        return fail(new Error("ffmpeg bị dừng bởi tín hiệu " + sig));
+      }
+      if (code !== 0) {
+        const tail = stderr ? ("\n" + stderr.trim().split("\n").slice(-3).join("\n")) : "";
+        return fail(new Error("ffmpeg thoát với mã " + code + tail));
+      }
+      try {
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1024) {
+          return fail(new Error("ffmpeg hoàn tất nhưng file output không hợp lệ"));
+        }
+      } catch (e) {
+        return fail(new Error("Không kiểm tra được file output: " + (e && e.message ? e.message : e)));
+      }
+      ok();
+    });
+  });
+}
+
 async function downloadHlsToFile(streamUrl, extension) {
-  const ffmpeg = require("fluent-ffmpeg");
-  const ffmpegPath = require("ffmpeg-static");
-  ffmpeg.setFfmpegPath(ffmpegPath);
   const tempDir = path.join(__dirname, "..", "..", "plugins", "commands", "temp");
   fs.mkdirSync(tempDir, { recursive: true });
-  const filePath = path.join(tempDir, `music_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`);
-  await new Promise((resolve, reject) => {
-    const cmd = ffmpeg(streamUrl)
-      .inputOptions(["-nostdin", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-allowed_extensions", "ALL"])
-      .audioCodec("libmp3lame")
-      .audioBitrate("128k")
-      .format("mp3")
-      .on("error", (err) => reject(new Error("Khong tai duoc stream HLS: " + (err && err.message ? err.message : err))))
-      .on("end", resolve);
-    cmd.save(filePath);
-  });
+  const ext = extension || "mp3";
+  const filePath = path.join(tempDir, "music_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8) + "." + ext);
+  const timeoutMs = Number(global.config?.music?.hls_timeout_ms) || 90000;
+  await spawnFfmpegHls(streamUrl, filePath, timeoutMs);
   return filePath;
 }
 
@@ -121,7 +208,11 @@ async function downloadToFile(streamUrl, extension) {
     try {
       return await downloadHlsToFile(url, extension || "mp3");
     } catch (err) {
-      const error = new Error((err && err.message ? err.message : "Khong tai duoc stream HLS") + " (track co the la Go+ hoac bi gioi han vung/ban quyen)");
+      const detail = err && err.message ? err.message : String(err || "unknown");
+      const error = new Error(
+        "Không thể tải bài này (stream HLS lỗi: " + detail + "). " +
+        "Track có thể bị giới hạn (Go+/vùng/ban quyền) hoặc server không hỗ trợ xử lý HLS. Hãy thử bài khác."
+      );
       error.notAvailable = true;
       throw error;
     }
