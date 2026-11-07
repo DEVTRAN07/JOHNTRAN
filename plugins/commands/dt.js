@@ -57,13 +57,35 @@ function tryRender() {
   } catch { return null; }
 }
 
-async function sendWithImage(api, threadId, type, msg, renderFn) {
+async function renderVisual(renderSpec) {
+  const px = tryRender();
+  if (!px) return null;
+  try {
+    if (!renderSpec) return null;
+    if (typeof renderSpec === "function") return await renderSpec(px);
+    const { gifId, gifOpts, pngId, pngOpts } = renderSpec;
+    if (gifId && typeof px.renderFxGif === "function") {
+      try {
+        const r = await px.renderFxGif(gifId, gifOpts || {});
+        if (r?.path) return r.path;
+      } catch {}
+    }
+    if (pngId && typeof px.renderFx === "function") {
+      const r = await px.renderFx(pngId, pngOpts || {});
+      return r?.path || null;
+    }
+    if (gifId && typeof px.renderFx === "function") {
+      const r = await px.renderFx(gifId, { progress: 0.6, bg: 0xff101018, scale: 1, ...(gifOpts || {}) });
+      return r?.path || null;
+    }
+  } catch {}
+  return null;
+}
+
+async function sendWithImage(api, threadId, type, msg, renderSpec) {
   let imgPath = null;
   try {
-    const px = tryRender();
-    if (px && typeof renderFn === "function") {
-      imgPath = await renderFn(px);
-    }
+    imgPath = await renderVisual(renderSpec);
   } catch { imgPath = null; }
   try {
     if (imgPath && fs.existsSync(imgPath)) {
@@ -72,7 +94,7 @@ async function sendWithImage(api, threadId, type, msg, renderFn) {
       await api.sendMessage(msg, threadId, type);
     }
   } catch {
-    await api.sendMessage(msg, threadId, type);
+    try { await api.sendMessage(msg, threadId, type); } catch {}
   } finally {
     if (imgPath) try { fs.unlinkSync(imgPath); } catch {}
   }
@@ -193,8 +215,11 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
     const leveled = levelUpIfNeeded(dt);
     saveDt(Users, senderId, dt);
     let msg = `Daily: +${c.dailyExp} EXP, +${c.dailyGold} gold, +${c.dailyEnergy} energy.`;
+    const fx = leveled
+      ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
+      : { gifId: "ui/quest-complete", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/quest-complete", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } };
     if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
-    await sendWithImage(api, threadId, type, msg, async (px) => { const r = await px.renderFx("ui/level-up", { progress: 0.6, bg: 0xff101018, scale: 1 }); return r?.path || null; });
+    await sendWithImage(api, threadId, type, msg, fx);
     return;
   }
 
@@ -215,8 +240,12 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
     const leveled = levelUpIfNeeded(dt);
     saveDt(Users, senderId, dt);
     let msg = `Train: +${c.trainExp} EXP, -${c.trainEnergyCost} energy.`;
-    if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
-    await api.sendMessage(msg, threadId, type);
+    if (leveled) {
+      msg += "\n🎉 Level up! Lv." + dt.level;
+      await sendWithImage(api, threadId, type, msg, { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } });
+    } else {
+      await api.sendMessage(msg, threadId, type);
+    }
     return;
   }
 
@@ -242,8 +271,11 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       const leveled = levelUpIfNeeded(dt);
       saveDt(Users, senderId, dt);
       let msg = `PVE vs ${enemy.name} Lv.${monLevel}: THẮNG +${expGain} EXP, +${goldGain} gold.`;
+      const fx = leveled
+        ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
+        : { gifId: "impacts/hit-flash", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "impacts/hit-flash", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } };
       if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
-      await sendWithImage(api, threadId, type, msg, async (px) => { const r = await px.renderFx("impacts/hit-flash", { progress: 0.6, bg: 0xff101018, scale: 1 }); return r?.path || null; });
+      await sendWithImage(api, threadId, type, msg, fx);
     } else {
       dt.hp = Math.max(1, Math.floor(dt.maxHp * 0.3));
       dt.exp += 5;
@@ -274,8 +306,11 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       saveDt(Users, senderId, dt);
       saveDt(Users, targetId, tdt);
       let msg = `PK: Bạn THẮNG ${tdt.name}. +${c.pkExpWin} EXP, +${c.pkGoldWin} gold.`;
+      const fx = leveled
+        ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
+        : { gifId: "ui/coin-collect", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/coin-collect", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } };
       if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
-      await sendWithImage(api, threadId, type, msg, async (px) => { const r = await px.renderFx("ui/coin-collect", { progress: 0.6, bg: 0xff101018, scale: 1 }); return r?.path || null; });
+      await sendWithImage(api, threadId, type, msg, fx);
     } else {
       dt.losses += 1;
       tdt.wins += 1;
