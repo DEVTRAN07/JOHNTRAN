@@ -229,19 +229,21 @@ async function search(query, limit) {
   return tracks;
 }
 
-async function resolve(track) {
-  const clientId = await discoverClientId();
-  const data = await apiGet("/tracks/" + encodeURIComponent(track.id));
-  const transcodings = data && data.media && data.media.transcodings ? data.media.transcodings : [];
-  const progressive = transcodings.find((item) => item && item.format && item.format.protocol === "progressive");
-  if (!progressive) {
-    const error = new Error("Bai hat nay khong co ban tai xuong (co the la Go+ hoac bi gioi han)");
-    error.notAvailable = true;
-    throw error;
-  }
+function pickTranscoding(transcodings) {
+  const list = Array.isArray(transcodings) ? transcodings : [];
+  const progressive = list.find((item) => item && item.format && item.format.protocol === "progressive");
+  if (progressive) return { item: progressive, protocol: "progressive" };
+  const hlsAac = list.find((item) => item && item.format && item.format.protocol === "hls" && /aac/i.test(item.format.mime_type || item.preset || ""));
+  if (hlsAac) return { item: hlsAac, protocol: "hls" };
+  const hlsAny = list.find((item) => item && item.format && item.format.protocol === "hls");
+  if (hlsAny) return { item: hlsAny, protocol: "hls" };
+  return null;
+}
+
+async function resolveTranscodingUrl(transcoding, clientId) {
   let stream;
   try {
-    stream = await http.getJson(progressive.url + "?client_id=" + clientId);
+    stream = await http.getJson(transcoding.url + "?client_id=" + clientId);
   } catch (err) {
     const error = new Error("Khong lay duoc link stream tu SoundCloud: " + (err && err.message ? err.message : err));
     error.notAvailable = true;
@@ -253,6 +255,36 @@ async function resolve(track) {
     throw error;
   }
   return stream.data.url;
+}
+
+async function resolve(track) {
+  const clientId = await discoverClientId();
+  const data = await apiGet("/tracks/" + encodeURIComponent(track.id));
+  const transcodings = data && data.media && data.media.transcodings ? data.media.transcodings : [];
+  const picked = pickTranscoding(transcodings);
+  if (!picked) {
+    const error = new Error("Bai hat nay khong co ban tai xuong (co the la Go+ hoac bi gioi han vung/ban quyen)");
+    error.notAvailable = true;
+    throw error;
+  }
+  try {
+    const url = await resolveTranscodingUrl(picked.item, clientId);
+    if (picked.protocol === "hls") return { url, protocol: "hls" };
+    return url;
+  } catch (err) {
+    if (picked.protocol === "progressive") {
+      const hlsAac = transcodings.find((item) => item && item.format && item.format.protocol === "hls" && /aac/i.test(item.format.mime_type || item.preset || ""));
+      const hlsAny = transcodings.find((item) => item && item.format && item.format.protocol === "hls");
+      const hls = hlsAac || hlsAny;
+      if (hls) {
+        try {
+          const url = await resolveTranscodingUrl(hls, clientId);
+          return { url, protocol: "hls" };
+        } catch { }
+      }
+    }
+    throw err;
+  }
 }
 
 module.exports = { name: "scl", label: SOURCE, search, resolve };

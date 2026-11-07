@@ -83,11 +83,51 @@ function pickKey(threadId, userId) {
   return `${threadId}:${userId}`;
 }
 
-async function downloadToFile(streamUrl, extension) {
+async function downloadHlsToFile(streamUrl, extension) {
+  const ffmpeg = require("fluent-ffmpeg");
+  const ffmpegPath = require("ffmpeg-static");
+  ffmpeg.setFfmpegPath(ffmpegPath);
   const tempDir = path.join(__dirname, "..", "..", "plugins", "commands", "temp");
   fs.mkdirSync(tempDir, { recursive: true });
   const filePath = path.join(tempDir, `music_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`);
-  const { buffer } = await http.getBuffer(streamUrl, { timeout: 60000, retries: 1 });
+  await new Promise((resolve, reject) => {
+    const cmd = ffmpeg(streamUrl)
+      .inputOptions(["-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-allowed_extensions", "ALL"])
+      .audioCodec("libmp3lame")
+      .audioBitrate("128k")
+      .format("mp3")
+      .on("error", (err) => reject(new Error("Khong tai duoc stream HLS: " + (err && err.message ? err.message : err))))
+      .on("end", resolve);
+    cmd.save(filePath);
+  });
+  return filePath;
+}
+
+async function downloadToFile(streamUrl, extension) {
+  // Ho tro ca string URL (progressive) va object { url, protocol } (HLS/Go+ fallback).
+  let url = streamUrl;
+  let protocol = "progressive";
+  if (streamUrl && typeof streamUrl === "object") {
+    url = streamUrl.url;
+    protocol = streamUrl.protocol || protocol;
+  }
+  if (!url) throw new Error("Khong co URL stream de tai nhac.");
+
+  const tempDir = path.join(__dirname, "..", "..", "plugins", "commands", "temp");
+  fs.mkdirSync(tempDir, { recursive: true });
+
+  if (protocol === "hls") {
+    try {
+      return await downloadHlsToFile(url, extension || "mp3");
+    } catch (err) {
+      const error = new Error((err && err.message ? err.message : "Khong tai duoc stream HLS") + " (track co the la Go+ hoac bi gioi han vung/ban quyen)");
+      error.notAvailable = true;
+      throw error;
+    }
+  }
+
+  const filePath = path.join(tempDir, `music_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`);
+  const { buffer } = await http.getBuffer(url, { timeout: 60000, retries: 1 });
   fs.writeFileSync(filePath, buffer);
   return filePath;
 }
