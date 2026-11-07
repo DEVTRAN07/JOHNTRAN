@@ -6,6 +6,7 @@ qr.png
 # data dir - ignore runtime, keep game balance data
 data/*
 !data/game/
+!data/game/*.json
 plugins/*/temp/
 plugins/**/temp/
 bots/

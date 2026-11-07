@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "clue": "🦁 + 👑 = ? (vua của muôn thú)",
+    "answer": "Sư tử",
+    "hint": "Loài mèo lớn có bờm"
+  },
+  {
+    "id": 2,
+    "clue": "🌧️ + ☂️ = ? (vật che mưa)",
+    "answer": "Ô dù",
+    "hint": "Dùng khi trời mưa"
+  },
+  {
+    "id": 3,
+    "clue": "🐝 + 🍯 = ? (sản phẩm ngọt)",
+    "answer": "Mật ong",
+    "hint": "Ong làm ra"
+  },
+  {
+    "id": 4,
+    "clue": "🔥 + 🚒 = ? (người dập lửa)",
+    "answer": "Lính cứu hỏa",
+    "hint": "Xe đỏ, còi hú"
+  },
+  {
+    "id": 5,
+    "clue": "🌙 + ⭐ = ? (bầu trời đêm)",
+    "answer": "Trăng sao",
+    "hint": "Hai thứ xuất hiện ban đêm"
+  },
+  {
+    "id": 6,
+    "clue": "📚 + 🏫 = ? (nơi học tập)",
+    "answer": "Trường học",
+    "hint": "Học sinh đến mỗi ngày"
+  },
+  {
+    "id": 7,
+    "clue": "🦷 + 👨‍⚕️ = ? (người chữa răng)",
+    "answer": "Nha sĩ",
+    "hint": "Khám răng miệng"
+  },
+  {
+    "id": 8,
+    "clue": "🧊 + ☕ = ? (cà phê lạnh)",
+    "answer": "Cà phê đá",
+    "hint": "Thức uống quen thuộc ở Việt Nam"
+  },
+  {
+    "id": 9,
+    "clue": "🚲 + 🛞🛞 = ? (phương tiện hai bánh)",
+    "answer": "Xe đạp",
+    "hint": "Tự đạp bằng chân"
+  },
+  {
+    "id": 10,
+    "clue": "🌊 + 🏄 = ? (môn thể thao trên sóng)",
+    "answer": "Lướt sóng",
+    "hint": "Đứng trên ván giữa biển"
+  },
+  {
+    "id": 11,
+    "clue": "🍞 + 🥩 + 🥬 = ? (món ăn kẹp)",
+    "answer": "Bánh mì",
+    "hint": "Món ăn đường phố Việt Nam"
+  },
+  {
+    "id": 12,
+    "clue": "🎵 + 🎤 = ? (hoạt động hát)",
+    "answer": "Ca hát",
+    "hint": "Cất tiếng theo nhạc"
+  },
+  {
+    "id": 13,
+    "clue": "🌽 + 🔥 = ? (ngô nướng)",
+    "answer": "Bắp nướng",
+    "hint": "Món ăn vặt thơm"
+  },
+  {
+    "id": 14,
+    "clue": "🐟 + 🧂 + 🔥 = ? (cá ướp nướng/chiên mặn)",
+    "answer": "Cá kho",
+    "hint": "Món mặn đưa cơm"
+  },
+  {
+    "id": 15,
+    "clue": "✈️ + 🎫 = ? (giấy đi máy bay)",
+    "answer": "Vé máy bay",
+    "hint": "Cần có khi lên máy bay"
+  }
+]

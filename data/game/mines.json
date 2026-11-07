@@ -1,0 +1,8 @@
+{
+  "minBet": 10,
+  "maxBet": 100000,
+  "minMines": 1,
+  "maxMines": 24,
+  "defaultMines": 3,
+  "houseEdge": 0.97
+}
