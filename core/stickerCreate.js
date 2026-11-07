@@ -111,15 +111,20 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
     // Zalo CDN trước (mọi kích thước) — sticker bền vững, không phụ thuộc host ngoài
     try {
       const uploaded = await api.uploadStickerImage({ filePath: file.path, threadId, threadType: type });
-      const cdnUrl = uploaded?.normalUrl || uploaded?.hdUrl || uploaded?.thumbUrl || uploaded?.url;
+      // Handle shapes: {normalUrl} | {data:{normalUrl}} | {data:[...]}
+      const u = (uploaded && typeof uploaded === "object") ? uploaded : {};
+      const d = (u.data && typeof u.data === "object" && !Array.isArray(u.data)) ? u.data : u;
+      const cdnUrl = d.normalUrl || d.hdUrl || d.thumbUrl || d.url || d.oriUrl ||
+        u.normalUrl || u.hdUrl || u.thumbUrl || u.url;
       if (cdnUrl) {
-        // Đổi đuôi .webp cho CDN (GIF vẫn giữ nguyên — hậu tố mới là thứ quyết định)
-        stickerUrl = buildStickerUrl(cdnUrl, file.format === "webp");
+        stickerUrl = buildStickerUrl(String(cdnUrl), file.format === "webp");
       } else {
-        console.error("[stk] Zalo upload không trả URL:", JSON.stringify(uploaded).slice(0, 200));
+        console.error("[stk] Zalo upload returned no URL:", JSON.stringify(uploaded).slice(0, 400));
       }
     } catch (error) {
-      console.error("[stk] Zalo upload lỗi:", error.message);
+      const detail = [error?.code != null ? `code=${error.code}` : "", error?.message || String(error)]
+        .filter(Boolean).join(" ");
+      console.error("[stk] Zalo upload failed:", detail);
     }
     // Zalo thất bại → catbox.moe
     if (!stickerUrl) {

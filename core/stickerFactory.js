@@ -77,18 +77,22 @@ function registerStickerApi(api) {
   if (!api || typeof api.custom !== "function" || api.__jtStickerApi) return;
   api.__jtStickerApi = true;
 
-  // ===== 1. Upload ảnh lên CDN Zalo =====
+  // ===== 1. Upload image to Zalo CDN =====
+  // IMPORTANT: encrypted `params` must be in the QUERY STRING (matches
+  // zalo-client uploadAttachment). Putting params in the multipart body makes
+  // the server reject the request -> utils.resolve() throws ZaloApiError ->
+  // stickerCreate falls back to catbox. This was the primary failure cause.
   api.custom("uploadStickerImage", async ({ ctx, utils, props }) => {
     const { filePath, threadId, threadType } = props || {};
-    if (!filePath || !fs.existsSync(filePath)) throw new Error("File sticker không tồn tại");
-    if (!threadId) throw new Error("Thiếu threadId");
+    if (!filePath || !fs.existsSync(filePath)) throw new Error("Sticker file not found");
+    if (!threadId) throw new Error("Missing threadId");
 
     const fileBuffer = fs.readFileSync(filePath);
     const fileName = path.basename(filePath);
 
     const isGroup = Number(threadType) === 1; // ThreadType.Group = 1
     const uploadPath = isGroup ? UPLOAD_GROUP_PATH : UPLOAD_USER_PATH;
-    const url = utils.makeURL(UPLOAD_HOST + uploadPath, { type: isGroup ? 11 : 2 });
+    const typeParam = isGroup ? 11 : 2;
 
     const params = {
       totalChunk: 1,
@@ -102,20 +106,39 @@ function registerStickerApi(api) {
       ...(isGroup ? { grid: String(threadId) } : { toid: String(threadId) })
     };
 
+    const encryptedParams = utils.encodeAES(JSON.stringify(params));
+    if (!encryptedParams) throw new Error("Failed to encode sticker upload params");
+
+    const url = utils.makeURL(UPLOAD_HOST + uploadPath, { type: typeParam, params: encryptedParams });
+
+    // Body must contain only chunkContent (no params field), matching uploadAttachment.
     const { body, contentType } = buildMultipart(
-      [["params", utils.encodeAES(JSON.stringify(params))]],
+      [],
       "chunkContent",
       fileName,
       fileBuffer
     );
 
-    const res = await utils.request(url, {
-      method: "POST",
-      headers: { "content-type": contentType },
-      body
-    });
+    let res;
+    try {
+      res = await utils.request(url, {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body
+      });
+    } catch (e) {
+      throw new Error(`uploadStickerImage request failed: ${e?.message || e}`);
+    }
 
-    const result = await utils.resolve(res);
+    let result;
+    try {
+      result = await utils.resolve(res);
+    } catch (e) {
+      const code = e?.code != null ? ` code=${e.code}` : "";
+      const msg = e?.message || String(e);
+      throw new Error(`uploadStickerImage resolve failed${code}: ${msg}`);
+    }
+
     return result || {};
   });
 
