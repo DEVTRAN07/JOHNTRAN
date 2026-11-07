@@ -9,7 +9,6 @@ const { createCanvas } = require("canvas");
 const execFileAsync = promisify(execFile);
 
 const VENDOR = path.resolve(__dirname, "..", "..", "vendor", "pixelfx");
-const CORE_URL = pathToFileURL(path.join(VENDOR, "src", "core", "index.js")).href;
 
 const FX_MAP = {
   "ui/level-up": "src/fx/ui/level-up.js",
@@ -23,6 +22,124 @@ const FX_MAP = {
   "pickups/chest-open": "src/fx/pickups/chest-open.js",
   "melee/combat-scene": "src/fx/melee/combat-scene.js",
 };
+
+const LOCAL_CORE_FILE = path.join(VENDOR, "src", "core", "index.js");
+const LOCAL_CORE_URL = pathToFileURL(LOCAL_CORE_FILE).href;
+
+const VALID_ID = /^[a-z0-9_-]+(?:\/[a-z0-9_-]+)*$/i;
+const VALID_REL = /^[a-z0-9][a-z0-9_\/-]*\.js$/i;
+const fetchedPaths = new Set();
+
+function envSource() {
+  const v = String(process.env.PIXELFX_SOURCE || "local").toLowerCase();
+  return v === "raw" || v === "hybrid" ? v : "local";
+}
+function rawRepo() { return String(process.env.PIXELFX_RAW_REPO || "patch-gg/pixelfx"); }
+function rawRef() { return String(process.env.PIXELFX_RAW_REF || "main"); }
+function rawBaseUrl() {
+  const o = process.env.PIXELFX_RAW_BASE;
+  if (o) return String(o).replace(/\/+$/, "");
+  return `https://raw.githubusercontent.com/${rawRepo()}/${rawRef()}`;
+}
+function safeCacheSegment(s) {
+  return String(s).replace(/[^a-z0-9._@-]+/gi, "_").slice(0, 180) || "default";
+}
+function cacheRootDir() {
+  const base = process.env.PIXELFX_CACHE_DIR || path.join(os.tmpdir(), "jt_pixelfx_cache");
+  return path.join(base, safeCacheSegment(`${rawRepo()}@${rawRef()}`));
+}
+
+function isSafeId(id) {
+  return typeof id === "string" && id.length > 0 && id.length < 200 && !id.includes("..") && !id.startsWith("/") && VALID_ID.test(id);
+}
+function isSafeRel(rel) {
+  return typeof rel === "string" && rel.length > 0 && rel.length < 300 && !rel.includes("..") && !rel.startsWith("/") && VALID_REL.test(rel) && rel.startsWith("src/");
+}
+
+function ensurePackageJson(root) {
+  fs.mkdirSync(root, { recursive: true });
+  const p = path.join(root, "package.json");
+  if (!fs.existsSync(p)) fs.writeFileSync(p, '{"type":"module"}\n');
+}
+
+function copyDirSync(src, dst) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const name of fs.readdirSync(src)) {
+    const s = path.join(src, name);
+    const d = path.join(dst, name);
+    const st = fs.statSync(s);
+    if (st.isDirectory()) copyDirSync(s, d);
+    else fs.copyFileSync(s, d);
+  }
+}
+
+function ensureCacheCore(root) {
+  const dst = path.join(root, "src", "core");
+  if (fs.existsSync(path.join(dst, "index.js"))) return;
+  const src = path.join(VENDOR, "src", "core");
+  if (!fs.existsSync(src)) throw new Error("Local pixelfx core unavailable and raw core fetch not implemented");
+  copyDirSync(src, dst);
+}
+
+async function fetchToCache(cacheRoot, relPath, rawBase) {
+  if (!isSafeRel(relPath)) throw new Error(`Unsafe pixelfx path: ${relPath}`);
+  const base = String(rawBase).replace(/\/+$/, "");
+  let host;
+  try { host = new URL(base).host; } catch { throw new Error(`Invalid PIXELFX_RAW_BASE: ${base}`); }
+  if (host !== "raw.githubusercontent.com") throw new Error(`PIXELFX_RAW_BASE host not allowed: ${host}`);
+  const dest = path.join(cacheRoot, relPath);
+  const key = dest;
+  if (fetchedPaths.has(key) && fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest;
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) { fetchedPaths.add(key); return dest; }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const url = `${base}/${relPath}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(url, { signal: ac.signal, headers: { "user-agent": "johntran-pixelfx/1.0" } });
+  } catch (e) {
+    const msg = e && e.name === "AbortError" ? "timeout" : (e && e.message) || String(e);
+    throw new Error(`Failed to fetch pixelfx module ${relPath} from ${url}: ${msg}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error(`Failed to fetch pixelfx module ${relPath}: HTTP ${res.status} ${res.statusText} (${url})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (!buf.length) throw new Error(`Empty pixelfx module fetched: ${relPath}`);
+  fs.writeFileSync(dest, buf);
+  fetchedPaths.add(key);
+  return dest;
+}
+
+async function resolveFx(id) {
+  if (typeof id !== "string" || !id) throw new Error("Invalid fx id");
+  let rel = FX_MAP[id];
+  if (!rel) {
+    if (!isSafeId(id)) throw new Error(`Unknown or unsafe fx id: ${id}`);
+    rel = `src/fx/${id}.js`;
+  }
+  if (!isSafeRel(rel)) throw new Error(`Unsafe fx path mapping: ${rel}`);
+
+  const localFx = path.join(VENDOR, rel);
+  const localFxExists = fs.existsSync(localFx);
+  const source = envSource();
+  // melee/combat-scene and any existing local file always prefer local, even in raw mode.
+  if (localFxExists) {
+    return { fxUrl: pathToFileURL(localFx).href, coreUrl: LOCAL_CORE_URL, metaHint: null };
+  }
+
+  if (source !== "hybrid" && source !== "raw") {
+    throw new Error(`Unknown fx id: ${id} (local file missing; set PIXELFX_SOURCE=hybrid|raw to fetch)`);
+  }
+
+  const root = cacheRootDir();
+  ensurePackageJson(root);
+  ensureCacheCore(root);
+  const cachedFx = await fetchToCache(root, rel, rawBaseUrl());
+  // fx imports ../../core/* relative to src/fx/*, so core must exist in cache root.
+  return { fxUrl: pathToFileURL(cachedFx).href, coreUrl: LOCAL_CORE_URL, metaHint: null };
+}
 
 function resolveFfmpeg() {
   try {
@@ -68,10 +185,8 @@ function writeScaledFrame(frame, w, h, scale, bg, filePath) {
 }
 
 async function renderFx(id, opts = {}) {
-  const rel = FX_MAP[id];
-  if (!rel) throw new Error(`Unknown fx id: ${id}`);
-  const fxUrl = pathToFileURL(path.join(VENDOR, rel)).href;
-  const core = await import(CORE_URL);
+  const { fxUrl, coreUrl } = await resolveFx(id);
+  const core = await import(coreUrl);
   const mod = await import(fxUrl);
   const meta = mod.meta || {};
   const w = opts.width || (meta.size && meta.size[0]) || 160;
@@ -79,8 +194,6 @@ async function renderFx(id, opts = {}) {
   const origin = opts.ox != null || opts.oy != null
     ? [opts.ox || 0, opts.oy || 0]
     : (meta.origin || [Math.floor(w / 2), Math.floor(h * 0.8)]);
-  // Effects draw around their origin via the painter, so the frame's own
-  // origin is 0 and the effect is placed at (origin.x, origin.y) through opts.
   const frame = core.createFrame(w, h, 0, 0);
   core.clearFrame(frame);
   const fxOpts = { ...(opts.fxOpts || {}), x: origin[0], y: origin[1] };
@@ -115,20 +228,18 @@ async function renderFx(id, opts = {}) {
   }
   const buf = outCanvas.toBuffer("image/png");
   const ts = Date.now();
-  const safeId = id.replace(/\//g, "_");
+  const safeId = String(id).replace(/[^a-z0-9_-]+/gi, "_");
   const filePath = path.join(os.tmpdir(), `jt_pfx_${safeId}_${ts}.png`);
   fs.writeFileSync(filePath, buf);
   return { path: filePath, w: w * scale, h: h * scale, meta };
 }
 
 async function renderFxGif(id, opts = {}) {
-  const rel = FX_MAP[id];
-  if (!rel) throw new Error(`Unknown fx id: ${id}`);
+  const { fxUrl, coreUrl } = await resolveFx(id);
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg-static not available");
 
-  const fxUrl = pathToFileURL(path.join(VENDOR, rel)).href;
-  const core = await import(CORE_URL);
+  const core = await import(coreUrl);
   const mod = await import(fxUrl);
   const meta = mod.meta || {};
 
@@ -145,13 +256,11 @@ async function renderFxGif(id, opts = {}) {
     : (meta.origin || [Math.floor(w / 2), Math.floor(h * 0.8)]);
   const bg = opts.bg != null ? opts.bg : 0xff101018;
 
-  const safeId = id.replace(/\//g, "_");
+  const safeId = String(id).replace(/[^a-z0-9_-]+/gi, "_");
   const frameDir = mkTempDir(`jt_pfxanim_${safeId}`);
   const gifPath = path.join(os.tmpdir(), `jt_pfx_${safeId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.gif`);
 
   try {
-    // Effects draw around their origin via the painter, so the frame's own
-    // origin is 0 and the effect is placed at (origin.x, origin.y) through opts.
     const frame = core.createFrame(w, h, 0, 0);
     frame.__core = core;
     const fx = core.createFx(mod, { ...(opts.fxOpts || {}), x: origin[0], y: origin[1] });
@@ -197,8 +306,23 @@ async function renderFxGif(id, opts = {}) {
   }
 }
 
+function listFx() {
+  const out = new Set(Object.keys(FX_MAP));
+  try {
+    const fxRoot = path.join(VENDOR, "src", "fx");
+    for (const cat of fs.readdirSync(fxRoot, { withFileTypes: true })) {
+      if (!cat.isDirectory()) continue;
+      for (const f of fs.readdirSync(path.join(fxRoot, cat.name), { withFileTypes: true })) {
+        if (!f.isFile() || !f.name.endsWith(".js") || f.name.startsWith("_")) continue;
+        out.add(`${cat.name}/${f.name.replace(/\.js$/i, "")}`);
+      }
+    }
+  } catch {}
+  return Array.from(out).sort();
+}
+
 function cleanup(p) {
   try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch {}
 }
 
-module.exports = { renderFx, renderFxGif, cleanup };
+module.exports = { renderFx, renderFxGif, cleanup, listFx, _internal: { resolveFx, fetchToCache, cacheRootDir, rawBaseUrl, envSource } };
