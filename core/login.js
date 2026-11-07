@@ -310,7 +310,7 @@ async function loginWithCookie() {
           ? cookieFileName
           : path.join(path.dirname(accountPath), cookieFileName);
         const cookie = getJsonData(cookiePath);
-        if (!cookie) {
+        if (!cookie || (Array.isArray(cookie) && cookie.length === 0) || (typeof cookie === "object" && Object.keys(cookie).length === 0)) {
             throw new Error("Missing required params");
         }
 
