@@ -81,7 +81,6 @@ function registerStickerApi(api) {
   // IMPORTANT: encrypted `params` must be in the QUERY STRING (matches
   // zalo-client uploadAttachment). Putting params in the multipart body makes
   // the server reject the request -> utils.resolve() throws ZaloApiError ->
-  // stickerCreate falls back to catbox. This was the primary failure cause.
   api.custom("uploadStickerImage", async ({ ctx, utils, props }) => {
     const { filePath, threadId, threadType } = props || {};
     if (!filePath || !fs.existsSync(filePath)) throw new Error("Sticker file not found");

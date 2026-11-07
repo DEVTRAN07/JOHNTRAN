@@ -40,8 +40,13 @@ module.exports.run = async function ({ api, event, args }) {
         variant: "std"
       });
     } catch (error) {
-      console.error("[stk]", error.message);
-      return api.sendMessage({ plain: true, msg: `❌ Gửi sticker thất bại: ${error.message}`, ttl: 60000 }, threadId, type);
+      const detail = [error?.code != null ? "code="+error.code : "", error?.message || String(error)].filter(Boolean).join(" ");
+      console.error("[stk] sendCustomStickerUrl failed:", detail || error);
+      try {
+        return await api.sendMessage({ plain: true, msg: "❌ Gửi sticker thất bại: " + (detail || "lỗi không xác định"), ttl: 60000 }, threadId, type);
+      } catch (sendErr) {
+        console.error("[stk] failed to send error message:", sendErr?.message || sendErr);
+      }
     }
     return;
   }
@@ -64,8 +69,13 @@ module.exports.run = async function ({ api, event, args }) {
     const result = await createAndSend({ api, event, variant });
     console.log();
   } catch (error) {
-    const msg = error.userMessage || `❌ Tạo sticker thất bại: ${error.message}`;
-    console.error("[stk]", error.message);
-    return api.sendMessage({ plain: true, msg, ttl: 60000 }, threadId, type);
+    const detail = [error?.code != null ? "code="+error.code : "", error?.message || String(error)].filter(Boolean).join(" ");
+    console.error("[stk]", detail || error);
+    const msg = error?.userMessage || "❌ Tạo sticker thất bại: " + (detail || "lỗi không xác định");
+    try {
+      return await api.sendMessage({ plain: true, msg, ttl: 60000 }, threadId, type);
+    } catch (sendErr) {
+      console.error("[stk] failed to send error message:", sendErr?.message || sendErr);
+    }
   }
 };

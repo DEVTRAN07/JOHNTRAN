@@ -171,8 +171,6 @@ const DEFAULTS = {
       // Đọc giọng nói (/noi — Google TTS)
       "translate.google.com",
       // CDN/media cần cho các tính năng có sẵn
-      "files.catbox.moe",
-      "catbox.moe",
       "tikwm.com",
       "www.tikwm.com",
       "api.tikwm.com",
