@@ -273,14 +273,14 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       let msg = `PVE vs ${enemy.name} Lv.${monLevel}: THẮNG +${expGain} EXP, +${goldGain} gold.`;
       const fx = leveled
         ? { gifId: "ui/level-up", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "ui/level-up", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } }
-        : { gifId: "impacts/hit-flash", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "impacts/hit-flash", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } };
+        : { gifId: "impacts/crit-hit", gifOpts: { fps: 12, scale: 2, bg: 0xff101018, fxOpts: { palette: ["#2a0510", "#5c0a1c", "#a3142a", "#e0302c", "#ff7a2a", "#ffc23d", "#fff09a", "#ffffff"], height: 26, aim: 0.12, seed: 3 } }, pngId: "impacts/crit-hit", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1, fxOpts: { palette: ["#2a0510", "#5c0a1c", "#a3142a", "#e0302c", "#ff7a2a", "#ffc23d", "#fff09a", "#ffffff"], height: 26, aim: 0.12, seed: 3 } } };
       if (leveled) msg += "\n🎉 Level up! Lv." + dt.level;
       await sendWithImage(api, threadId, type, msg, fx);
     } else {
       dt.hp = Math.max(1, Math.floor(dt.maxHp * 0.3));
       dt.exp += 5;
       saveDt(Users, senderId, dt);
-      await api.sendMessage(`PVE vs ${enemy.name} Lv.${monLevel}: THUA. Hồi 30% HP, +5 EXP consolation.`, threadId, type);
+      await sendWithImage(api, threadId, type, `PVE vs ${enemy.name} Lv.${monLevel}: THUA. Hồi 30% HP, +5 EXP consolation.`, { gifId: "impacts/hit-flash", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "impacts/hit-flash", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } });
     }
     return;
   }
@@ -320,7 +320,7 @@ module.exports.run = async ({ api, event, args, Users, reply }) => {
       levelUpIfNeeded(tdt);
       saveDt(Users, senderId, dt);
       saveDt(Users, targetId, tdt);
-      await api.sendMessage(`PK: Bạn THUA ${tdt.name}. -${c.pkGoldLoss} gold.`, threadId, type);
+      await sendWithImage(api, threadId, type, `PK: Bạn THUA ${tdt.name}. -${c.pkGoldLoss} gold.`, { gifId: "impacts/hit-flash", gifOpts: { fps: 12, scale: 2, bg: 0xff101018 }, pngId: "impacts/hit-flash", pngOpts: { progress: 0.6, bg: 0xff101018, scale: 1 } });
     }
     return;
   }
