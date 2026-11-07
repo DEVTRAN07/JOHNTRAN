@@ -153,7 +153,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
 
   const cdTime = (command.config.cooldowns || 0) * 1000;
   // Điều hướng (/menu next, /scl next, /menu out...) không bị cooldown chặn
-  const { isNavigation, isCommandNav } = require("./handleCommand-nav");
+  const { isNavigation, isCommandNav } = require("./handleCommandNav");
   const isNav = isNavigation(commandName, messageText, prefix) || isCommandNav(commandName, messageText, prefix);
 
   if (cdTime > 0 && !isNav) {
