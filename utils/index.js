@@ -378,6 +378,17 @@ async function displayQRCodeInConsole(base64Image, fallbackPath = null, options 
             // in vào vùng thay thế được: QR mới sẽ đè lên QR cũ, màn hình không giật
             logger.printReplaceable([qrString]);
         }
+        if (options.printPlain) {
+            // Cloud/non-TTY: không dùng ANSI replaceable cursor (không hiệu quả trong log),
+            // in ASCII QR plainly cho deploy logs. Lỗi nào đó không làm sập phần lưu ảnh/URL.
+            try {
+                const qrData = await decodeQRFromBase64(base64Image);
+                const qrString = await generateQRCodeInTerminal(qrData);
+                console.log("\n" + qrString + "\n");
+            } catch (plainErr) {
+                logger.log("Không thể in ASCII QR plainly: " + (plainErr.message || plainErr), "warn");
+            }
+        }
         if (fallbackPath) {
             try {
                 saveBase64Image(base64Image, fallbackPath);

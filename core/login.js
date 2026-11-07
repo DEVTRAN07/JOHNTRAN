@@ -123,7 +123,7 @@ async function loginWithQR() {
 
                 if (isChild || isNonTTY) {
                     // Cloud/non-TTY: ASCII QR bị vỡ trong log; chỉ lưu ảnh và hướng dẫn URL /qr (public, panel mode).
-                    const saved = await displayQRCodeInConsole(image, qrPath, { terminal: false });
+                    const saved = await displayQRCodeInConsole(image, qrPath, { terminal: false, printPlain: true });
                     if (!saved || !fs.existsSync(qrPath) || fs.statSync(qrPath).size === 0) {
                         logger.log(`[QR LOGIN] Không lưu được QR tại ${qrPath}; /qr sẽ chưa có mã.`, "error");
                     }
