@@ -12,7 +12,8 @@ const { buildStickerUrl, stripStickerSuffix, jxlToJpg } = require("./stickerFact
 const CACHE_DIR = path.join(__dirname, "..", "assets", "cache", "sticker");
 
 function cleanMediaUrl(url) {
-  return stripStickerSuffix(jxlToJpg(String(url || "").replace(/\\//g, "/")));
+  const raw = String(url || "").split("\\").join("/");
+  return stripStickerSuffix(jxlToJpg(raw));
 }
 
 function pickMediaUrl(media) {
