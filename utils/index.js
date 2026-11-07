@@ -15,7 +15,12 @@ function saveBase64Image(base64String, outputPath) {
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-    fs.writeFileSync(outputPath, Buffer.from(base64Data, "base64"));
+    const buf = Buffer.from(base64Data, "base64");
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+        throw new Error("Ảnh QR rỗng sau decode base64");
+    }
+
+    fs.writeFileSync(outputPath, buf);
 }
 
 const getJsonData = (filePath, defaultData = {}) => {
@@ -365,6 +370,7 @@ function generateQRCodeInTerminal(data, options = {}) {
 async function displayQRCodeInConsole(base64Image, fallbackPath = null, options = {}) {
     // options.terminal === false → chỉ lưu ảnh, KHÔNG in ra terminal
     // (bot con chạy trên cloud: mỗi dòng log là 1 chunk stdout → QR in ra sẽ vỡ, không quét được)
+    const verifySaved = (p) => fs.existsSync(p) && fs.statSync(p).size > 0;
     try {
         if (options.terminal !== false) {
             const qrData = await decodeQRFromBase64(base64Image);
@@ -375,19 +381,32 @@ async function displayQRCodeInConsole(base64Image, fallbackPath = null, options 
         if (fallbackPath) {
             try {
                 saveBase64Image(base64Image, fallbackPath);
+                if (!verifySaved(fallbackPath)) {
+                    throw new Error(`QR file trống hoặc không tồn tại: ${fallbackPath}`);
+                }
                 if (options.terminal !== false) {
                     logger.log(`Đã lưu QRCode tại: ${path.basename(fallbackPath)} (mở ảnh để xem nhỏ gọn hơn)`, "info");
                 }
             } catch (e) {
-                logger.log(`Không thể lưu QRCode ra file: ${e.message || e}`, "warn");
+                logger.log(`Không thể lưu QRCode ra file (${fallbackPath}): ${e.message || e}`, "error");
+                return false;
             }
         }
         return true;
     } catch (error) {
         if (fallbackPath) {
             logger.log("Lỗi hiển thị QR code trong terminal, đang lưu vào file...", "warn");
-            saveBase64Image(base64Image, fallbackPath);
-            logger.log(`Vui lòng quét mã QRCode ${path.basename(fallbackPath)} để đăng nhập`, "info");
+            try {
+                saveBase64Image(base64Image, fallbackPath);
+                if (!verifySaved(fallbackPath)) {
+                    throw new Error(`QR file trống hoặc không tồn tại: ${fallbackPath}`);
+                }
+                logger.log(`Vui lòng quét mã QRCode ${path.basename(fallbackPath)} để đăng nhập`, "info");
+                return true;
+            } catch (e) {
+                logger.log(`Không thể lưu QRCode ra file (${fallbackPath}): ${e.message || e}`, "error");
+                return false;
+            }
         }
         return false;
     }

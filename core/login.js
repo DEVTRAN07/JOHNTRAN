@@ -123,9 +123,12 @@ async function loginWithQR() {
 
                 if (isChild || isNonTTY) {
                     // Cloud/non-TTY: ASCII QR bị vỡ trong log; chỉ lưu ảnh và hướng dẫn URL /qr (public, panel mode).
-                    await displayQRCodeInConsole(image, qrPath, { terminal: false });
+                    const saved = await displayQRCodeInConsole(image, qrPath, { terminal: false });
+                    if (!saved || !fs.existsSync(qrPath) || fs.statSync(qrPath).size === 0) {
+                        logger.log(`[QR LOGIN] Không lưu được QR tại ${qrPath}; /qr sẽ chưa có mã.`, "error");
+                    }
                     if (qrUrl) {
-                        logger.log(`[QR LOGIN] Mở ${qrUrl} (hoặc /qr/main) để quét mã QR đăng nhập Zalo.`, "info");
+                        logger.log(`[QR LOGIN] Mở ${qrUrl} (hoặc /qr/main) để quét mã QR đăng nhập Zalo. (file: ${qrPath})`, "info");
                     } else {
                         logger.log("[QR LOGIN] Mở URL dịch vụ Render của bạn và truy cập /qr (hoặc /qr/main) để quét mã QR đăng nhập Zalo.", "info");
                     }
