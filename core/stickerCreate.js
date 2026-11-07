@@ -16,7 +16,9 @@ const CACHE_DIR = path.join(__dirname, "..", "assets", "cache", "sticker");
 // chuyển sang Litterbox (cùng hệ sinh thái, tạm thời 72h). Chỉ dùng khi
 // Zalo CDN thất bại — sticker Zalo CDN mới là bền vững.
 const CATBOX_URL = "https://litterbox.catbox.moe/resources/internals/api.php";
-const CATBOX_FIELDS = [["reqtype", "fileupload"], ["time", "72h"]];
+const CATBOX_USERHASH = process.env.CATBOX_USERHASH || process.env.LITTERBOX_USERHASH || "";
+const CATBOX_FIELDS = [["reqtype", "fileupload"], ["time", "72h"]]
+  .concat(CATBOX_USERHASH ? [["userhash", CATBOX_USERHASH]] : []);
 
 function cleanMediaUrl(url) {
   return stripStickerSuffix(jxlToJpg(String(url || "").replace(/\\\//g, "/")));
@@ -74,8 +76,12 @@ async function uploadCatbox(filePath) {
     body: Buffer.concat(chunks)
   });
 
-  const text = res.text().trim();
-  if (!text.startsWith("http")) throw new Error("Litterbox trả về: " + text.slice(0, 80));
+  const text = (res.text() || "").trim();
+  if (!text.startsWith("http")) {
+    const err = new Error("Litterbox trả về: " + text.slice(0, 120));
+    err.response = text;
+    throw err;
+  }
   return text;
 }
 
