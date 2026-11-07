@@ -301,12 +301,18 @@ async function loginWithCookie() {
         const accountPath = resolveAccountPath();
         fs.mkdirSync(path.dirname(accountPath), { recursive: true });
 
-        const accountData = getJsonData(accountPath);
+        const accountData = getJsonData(accountPath) || {};
+        if (!accountData.imei || !accountData.userAgent) {
+            throw new Error("Missing required params");
+        }
         const cookieFileName = accountData.cookie || "cookie.json";
         const cookiePath = path.isAbsolute(cookieFileName)
           ? cookieFileName
           : path.join(path.dirname(accountPath), cookieFileName);
         const cookie = getJsonData(cookiePath);
+        if (!cookie) {
+            throw new Error("Missing required params");
+        }
 
         const api = await zalo.login({
             cookie: cookie,
