@@ -577,7 +577,7 @@ module.exports.handleEvent = async function ({ api, event, eventType, isSelf, Th
 module.exports.run = async function ({ api, event, args = [], Threads, reply }) {
   const { threadId, type } = event || {};
   const action = String(args[0] || "status").toLowerCase();
-  const send = (msg) => reply ? reply(msg) : api.sendMessage({ plain: true, msg }, threadId, type);
+  const send = (msg) => reply ? reply.text(msg) : api.sendMessage({ plain: true, msg }, threadId, type);
 
   if (type !== ThreadType.Group && type !== 1) {
     return send("❌ /autodown chỉ dùng trong nhóm.");
