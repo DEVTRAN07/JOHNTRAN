@@ -240,16 +240,30 @@ async function showLogs(name) {
 }
 
 async function showQr(name) {
-  document.getElementById("modalTitle").textContent = "QR đăng nhập • " + name;
-  document.getElementById("modalBody").innerHTML = '<div class="qr-box"><small>Đang chờ QR... (bot phải đang chạy và ở trạng thái chờ đăng nhập)</small><br><br><img id="qrImg" alt="qr"></div>';
+  const title = document.getElementById("modalTitle");
+  if (title) title.textContent = "QR đăng nhập • " + name;
+  const body = document.getElementById("modalBody");
+  body.innerHTML = '<div class="qr-box"><div id="qrMsg" class="sub">Đang tải trạng thái QR...</div><br><br><img id="qrImg" alt="qr" style="display:none"></div>';
   document.getElementById("modal").classList.add("open");
   const load = async () => {
     const img = document.getElementById("qrImg");
-    if (!img) return;
-    const res = await fetch("/api/bots/" + name + "/qr?ts=" + Date.now());
+    const msg = document.getElementById("qrMsg");
+    if (!img || !msg) return;
+    const res = await fetch("/api/bots/" + encodeURIComponent(name) + "/qr?ts=" + Date.now());
     if (res.ok) {
       const blob = await res.blob();
       img.src = URL.createObjectURL(blob);
+      img.style.display = "";
+      msg.textContent = "Mã QR đã sẵn sàng — mở Zalo và quét mã trên điện thoại.";
+    } else {
+      img.style.display = "none";
+      let text = "Không tải được mã QR.";
+      try {
+        const data = await res.json().catch(() => ({}));
+        if (data.error) text = data.error;
+      } catch { /* bỏ qua */ }
+      msg.textContent = text;
+      // Không dừng polling: bot có thể đang khởi động hoặc chưa sinh QR
     }
   };
   load();
@@ -637,7 +651,17 @@ function startPanel({ manager, config }) {
           }
           case "qr": {
             const qrFile = botPaths(name).qrFile;
-            if (!fs.existsSync(qrFile)) return sendJson(res, 404, { error: "Chưa có QR (bot chưa chạy hoặc đã đăng nhập)" });
+            const bot = manager.get(name);
+            const hasQr = fs.existsSync(qrFile);
+            if (!hasQr) {
+              const json = { error: "Chưa có QR (bot chưa chạy hoặc đã đăng nhập)", hasQr: false };
+              if (bot) {
+                const enriched = enrichBot(bot.toJSON());
+                if (enriched.loginState) json.loginState = enriched.loginState;
+                if (enriched.status === "failed") json.reason = "Đăng nhập thất bại";
+              }
+              return sendJson(res, 404, json);
+            }
             const buffer = fs.readFileSync(qrFile);
             res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
             return res.end(buffer);

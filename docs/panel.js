@@ -1,7 +1,7 @@
 /* ===== ᴶᴼᴴᴺ ᵀᴿᴬᴺ PANEL — logic ===== */
 const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
 let API = "", TOKEN = "";
-let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null;
+let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null, qrPoll = null;
 let allBots = [];
 let allCommands = [], allStatus = [];
 const VIEW_TITLES = { bots: "Bot", chat: "Chat với bot", commands: "Lệnh", groups: "Lệnh theo nhóm", profile: "Hồ sơ bot", system: "Hệ thống" };
@@ -152,7 +152,7 @@ function renderBots(bots) {
           <button onclick="botAction('${escapeAttr(main.name)}','start')">▶ Chạy</button>
           <button onclick="botAction('${escapeAttr(main.name)}','stop')">⏹ Dừng</button>
           <button onclick="showLogs('${escapeAttr(main.name)}')">📜 Logs</button>
-          ${shouldShowQr(main) ? '<button onclick="showQr(\'${escapeAttr(main.name)}\')">📱 QR đăng nhập</button>' : ""}
+          ${shouldShowQr(main) ? `<button onclick="showQr('${escapeAttr(main.name)}')">📱 QR đăng nhập</button>` : ""}
         </div>
         <label class="row" style="gap:9px;font-size:12.5px;color:var(--sub);margin-top:2px">
           <span class="switch"><input type="checkbox" ${main.autoRestart ? "checked" : ""} onchange="setAutoRestart('${escapeAttr(main.name)}', this.checked)"><span class="tr"></span></span>
@@ -181,7 +181,7 @@ function renderBots(bots) {
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','stop')">⏹ Dừng</button>
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','restart')">🔄 Khởi động lại</button>
         <button class="small" onclick="showLogs('${escapeAttr(b.name)}')">📜 Logs</button>
-        ${shouldShowQr(b) ? '<button class="small" onclick="showQr(\'${escapeAttr(b.name)}\')">📱 QR</button>' : ""}
+        ${shouldShowQr(b) ? `<button class="small" onclick="showQr('${escapeAttr(b.name)}')">📱 QR</button>` : ""}
         <button class="small danger" onclick="removeBot('${escapeAttr(b.name)}')">🗑 Xoá</button>
       </div>
       <label class="row" style="gap:9px;font-size:12.5px;color:var(--sub)">
@@ -418,6 +418,8 @@ function closeModal() {
   $("modal").classList.remove("open");
   clearInterval(logTimer);
   logTimer = null;
+  clearInterval(qrPoll);
+  qrPoll = null;
 }
 async function showLogs(name) {
   currentBot = name;
@@ -442,35 +444,87 @@ async function showLogs(name) {
 
 /* ---------- modal: QR ---------- */
 async function showQr(name) {
-  $("modalTitle").textContent = "QR đăng nhập • " + name;
-  const bot = allBots.find((b) => b.name === name) || {};
-  const loggedIn = botLoggedIn(bot);
+  $("modalTitle").textContent = `QR đăng nhập • ${name}`;
   $("modalBody").innerHTML = `
     <div class="qr-box">
-      <small class="sub">Đang chờ QR đăng nhập Zalo — mở Zalo trên điện thoại và quét mã</small><br><br>
-      <img id="qrImg" alt="QR code">
+      <div id="qrMsg" class="sub">Đang tải trạng thái...</div><br><br>
+      <img id="qrImg" alt="QR code" style="display:none">
+      <div id="qrHint" style="margin-top:10px"></div>
     </div>`;
   $("modal").classList.add("open");
 
-  // /qr trả ảnh PNG thô (không phải JSON)
   const load = async () => {
+    const msg = $("qrMsg");
+    const img = $("qrImg");
+    const hint = $("qrHint");
+    if (!msg || !img) return;
+
+    // Lấy trạng thái bot mới nhất ở mỗi lượt poll
+    let bot = allBots.find((b) => b.name === name) || {};
+    try {
+      const data = await api("/api/bots");
+      const found = (data.bots || []).find((b) => b.name === name);
+      if (found) { bot = found; allBots = data.bots || allBots; }
+    } catch { /* giữ trạng thái lần trước */ }
+
+    const st = (bot.loginState || bot.status || "").toString();
+    const loggedIn = botLoggedIn(bot);
+    const waiting = qrWaitStatus(st);
+
+    let text = "";
+    if (loggedIn) {
+      text = "Đã đăng nhập Zalo";
+    } else if (st === "cookie_login") {
+      text = "Đang đăng nhập bằng cookie...";
+    } else if (st === "starting") {
+      text = "Bot đang khởi động...";
+    } else if (st === "qr_scanned") {
+      text = "Đã quét QR, hãy xác nhận trên điện thoại";
+    } else if (st === "qr_pending" || st === "waiting_login") {
+      text = "Đang chờ mã QR... mở Zalo và quét";
+    } else if (st === "failed") {
+      text = "Đăng nhập thất bại" + (bot.reason ? " — " + escapeHtml(bot.reason) : "");
+    } else {
+      text = "Chưa có mã QR...";
+    }
+
+    // Lấy ảnh QR (giữ nguyên token như trước)
     try {
       const res = await fetch(`${API}/api/bots/${encodeURIComponent(name)}/qr?token=${encodeURIComponent(TOKEN)}&ts=${Date.now()}`);
-      const img = $("qrImg");
-      if (res.ok && img) {
-        img.src = URL.createObjectURL(await res.blob());
-      } else if (!res.ok && img) {
-        img.remove();
-        $("modalBody").innerHTML = loggedIn
-          ? '<div class="empty">Đã đăng nhập Zalo (không còn mã QR).</div>'
-          : '<div class="empty">Chưa có mã QR — bot có thể chưa khởi động hoặc chưa ở trạng thái chờ đăng nhập.</div>';
-        clearInterval(logTimer);
+      if (res.ok) {
+        const blob = await res.blob();
+        img.src = URL.createObjectURL(blob);
+        img.style.display = "";
+        img.alt = "Mã QR đăng nhập Zalo";
+        msg.textContent = text;
+        if (hint && window.__JT_PANEL?.isMaster) {
+          hint.innerHTML = '<div style="margin-top:8px"><a href="/qr?bot=' + encodeURIComponent(name) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">Mở trang /qr riêng (máy chủ)</a></div>';
+        }
+      } else {
+        img.style.display = "none";
+        let body = {};
+        try { body = await res.json().catch(() => ({})); } catch { /* ignore */ }
+        if (loggedIn) {
+          msg.textContent = "Đã đăng nhập Zalo (không còn mã QR).";
+          clearInterval(qrPoll);
+          qrPoll = null;
+        } else if (waiting) {
+          msg.textContent = body.error || text;
+          // bot vẫn đang khởi động/chờ đăng nhập → tiếp tục poll
+        } else {
+          msg.textContent = body.error || text || "Chưa có mã QR...";
+        }
       }
-    } catch { /* bỏ qua */ }
+    } catch {
+      if (waiting || !loggedIn) msg.textContent = text;
+      else msg.textContent = "Không tải được mã QR.";
+    }
+    if (!msg.textContent) msg.textContent = text;
   };
+
   load();
-  clearInterval(logTimer);
-  logTimer = setInterval(load, 5000);
+  clearInterval(qrPoll);
+  qrPoll = setInterval(load, 5000);
 }
 
 

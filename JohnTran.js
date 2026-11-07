@@ -39,6 +39,15 @@ const BOT_TAG = process.env.JT_BOT_NAME ? ` [${process.env.JT_BOT_NAME}]` : "";
 // ===== Safety net: bot 24/7 không được chết vì 1 lỗi không mong đợi =====
 process.on("unhandledRejection", (reason) => {
   logger.log(`Unhandled rejection${BOT_TAG}: ${reason?.message || reason}`, "error");
+  if (!global.api) {
+    try {
+      db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
+        loginState: "failed", status: "failed",
+        loginMessage: "Lỗi không xử lý khi khởi động",
+        updatedAt: Date.now()
+      });
+    } catch { /* best effort */ }
+  }
 });
 process.on("uncaughtException", (error) => {
   logger.log(`Uncaught exception${BOT_TAG}: ${error?.message || error}`, "error");
@@ -98,9 +107,68 @@ schedule.scheduleJob("0 * * * * *", () => {
     cleanOldMessages();
 });
 
-const api = await login();
+// Snapshot trạng thái ban đầu cho panel trước khi bắt đầu đăng nhập (best-effort)
+try {
+  db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
+    loginState: loginMod.getLoginState?.() || "starting",
+    status: "starting",
+    loginMessage: "Đang khởi động...",
+    updatedAt: Date.now()
+  });
+} catch { /* best effort */ }
+
+// Heartbeat nhẹ trước khi đăng nhập xong: ghi trạng thái đăng nhập hiện tại
+// mỗi ~10s để panel thấy tiến độ, chỉ ghi khi trạng thái thay đổi (tránh ghi trùng).
+let loginStatsTimer = null;
+let lastLoginStatState = null;
+function refreshLoginStats() {
+  try {
+    const state = loginMod.getLoginState?.();
+    if (state === lastLoginStatState) return;
+    lastLoginStatState = state;
+    let status = "starting";
+    let message = "Đang khởi động...";
+    if (state === "cookie_login") { status = "starting"; message = "Đang đăng nhập bằng cookie..."; }
+    else if (state === "qr_pending") { status = "waiting"; message = "Đang chờ quét mã QR"; }
+    else if (state === "qr_scanned") { status = "waiting"; message = "Đã quét QR, chờ xác nhận"; }
+    else if (state === "failed") { status = "failed"; message = "Đăng nhập thất bại"; }
+    db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
+      loginState: state, status, loginMessage: message, updatedAt: Date.now()
+    });
+  } catch { /* best effort */ }
+}
+refreshLoginStats();
+loginStatsTimer = setInterval(() => {
+  if (global.api) {
+    clearInterval(loginStatsTimer);
+    loginStatsTimer = null;
+    return;
+  }
+  refreshLoginStats();
+}, 10000);
+loginStatsTimer.unref?.();
+
+let api;
+try {
+  api = await login();
+} catch (error) {
+  logger.log(`Lỗi khởi động đăng nhập${BOT_TAG}: ${error.message || error}`, "error");
+  try {
+    db.saveData("BotStats", "name", process.env.JT_BOT_NAME || "main", {
+      loginState: "failed", status: "failed",
+      loginMessage: "Lỗi khởi động đăng nhập",
+      updatedAt: Date.now()
+    });
+  } catch { /* best effort */ }
+  process.exit(1);
+}
 
 global.api = api;
+
+if (loginStatsTimer) {
+  clearInterval(loginStatsTimer);
+  loginStatsTimer = null;
+}
 
 if (loginMod?.getLoginState && loginMod.getLoginState() !== 'logged_in') {
     loginMod.setLoginState?.('logged_in');

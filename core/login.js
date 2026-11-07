@@ -6,6 +6,13 @@ const logger = require("../utils/logger");
 const { registerStickerApi } = require("./stickerFactory");
 const { getJsonData, displayQRCodeInConsole } = require("../utils/index");
 
+let db;
+try {
+  db = require("../utils/db");
+} catch {
+  db = null;
+}
+
 let _loginState = 'starting'; // starting|cookie_login|qr_pending|qr_scanned|logged_in|failed
 function setLoginState(s) { _loginState = s; }
 function getLoginState() { return _loginState; }
@@ -20,6 +27,45 @@ const USER_AGENTS = {
 
 function resolveBotPath(target) {
     return path.isAbsolute(target) ? target : path.join(__dirname, "..", String(target));
+}
+
+// Đường file QR: ưu tiên JT_QRCODE_PATH (env tuyệt đối — trùng với env panel con truyền vào JT_QRCODE_PATH),
+// fallback về global.config.qrcode_path (resolved từ root dự án). Điều này khớp với botPaths(name).qrFile
+// mà panel phục vụ, khắc phục tình trạng panel hiện "Chưa có mã QR".
+function resolveQrPath() {
+  const envPath = process.env.JT_QRCODE_PATH;
+  if (envPath && path.isAbsolute(envPath)) return envPath;
+  return resolveBotPath(global.config?.qrcode_path || "qr.png");
+}
+
+const BOT_NAME = process.env.JT_BOT_NAME || "main";
+
+// Ghi trạng thái đăng nhập lên BotStats để panel hiển thị trạng thái thực trước khi đăng nhập xong.
+// Không bao giờ ném lỗi: nếu DB bị lỗi thì log debug và tiếp tục luồng đăng nhập.
+function saveBotStats(loginState, extra = {}) {
+  if (!db) return;
+  try {
+    const statusMap = {
+      starting: 'starting',
+      cookie_login: 'starting',
+      qr_pending: 'waiting',
+      qr_scanned: 'waiting',
+      logged_in: 'online',
+      failed: 'failed'
+    };
+    const data = {
+      loginState,
+      status: statusMap[loginState] || 'starting',
+      loginMessage: extra.loginMessage || '',
+      reason: extra.reason || '',
+      qrUpdatedAt: extra.qrUpdatedAt != null ? extra.qrUpdatedAt : Date.now(),
+      updatedAt: Date.now()
+    };
+    if (extra.qrPath) data.qrPath = path.basename(String(extra.qrPath));
+    db.saveData("BotStats", "name", BOT_NAME, data);
+  } catch (error) {
+    logger.logDebug(`[stats] Không ghi được BotStats (${loginState}): ${error.message || error}`);
+  }
 }
 
 // Thiết bị đăng nhập: ưu tiên config.device.user_agent, nếu không thì tự đo theo OS
@@ -105,6 +151,22 @@ async function loginWithQR() {
         const cookieFileName = accountData.cookie || "cookie.json";
         const cookiePath = resolveBotPath(cookieFileName);
 
+        const qrPath = resolveQrPath();
+        try { fs.mkdirSync(path.dirname(qrPath), { recursive: true }); } catch { /* thư mục đã có hoặc không thể tạo — displayQRCodeInConsole sẽ tạo lại */ }
+
+        function tryRemoveQr() {
+          try { if (qrPath && fs.existsSync(qrPath)) fs.unlinkSync(qrPath); } catch { /* bỏ qua */ }
+        }
+
+        function publishQrPending(message) {
+          setLoginState('qr_pending');
+          saveBotStats('qr_pending', { loginMessage: message, qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
+        }
+
+        // Giới hạn lại tạo mã QR khi hết hạn/từ chối để không vòng lặp vĩnh viễn im lặng.
+        let qrRetryAttempts = 0;
+        const MAX_QR_RETRIES = 8;
+
         const api = await zalo.loginQR({ userAgent }, async (qrData) => {
             const eventType = qrData?.type;
             const data = qrData?.data || {};
@@ -114,7 +176,8 @@ async function loginWithQR() {
                 const { image } = data;
                 if (!image) return;
 
-                const qrPath = resolveBotPath(global.config.qrcode_path);
+                qrRetryAttempts = 0; // có mã mới → reset bộ đếm lại
+
                 const isChild = process.env.JT_PANEL_CHILD === "1";
                 const isNonTTY = !process.stdout.isTTY || !!(process.env.PORT || process.env.RENDER || process.env.RENDER_SERVICE_ID);
                 const qrUrl = process.env.RENDER_EXTERNAL_URL
@@ -127,18 +190,18 @@ async function loginWithQR() {
                     if (!saved || !fs.existsSync(qrPath) || fs.statSync(qrPath).size === 0) {
                         logger.log(`[QR LOGIN] Không lưu được QR tại ${qrPath}; /qr sẽ chưa có mã.`, "error");
                     }
+                    publishQrPending(qrUrl ? `Mở ${qrUrl} để quét mã QR đăng nhập Zalo.` : "Mở /qr để quét mã QR đăng nhập Zalo.");
                     if (qrUrl) {
                         logger.log(`[QR LOGIN] Mở ${qrUrl} (hoặc /qr/main) để quét mã QR đăng nhập Zalo. (file: ${qrPath})`, "info");
                     } else {
                         logger.log("[QR LOGIN] Mở URL dịch vụ Render của bạn và truy cập /qr (hoặc /qr/main) để quét mã QR đăng nhập Zalo.", "info");
                     }
-                    setLoginState('qr_pending');
                     return;
                 }
 
                 logger.log("Vui lòng quét mã QRCode bên dưới để đăng nhập:", "info");
                 await displayQRCodeInConsole(image, qrPath);
-                setLoginState('qr_pending');
+                publishQrPending("Vui lòng quét mã QRCode để đăng nhập Zalo.");
                 return;
             }
 
@@ -146,22 +209,31 @@ async function loginWithQR() {
                 // QRCodeScanned
                 logger.log("Đã quét QRCode, vui lòng xác nhận trên điện thoại", "info");
                 setLoginState('qr_scanned');
+                saveBotStats('qr_scanned', { loginMessage: 'Đã quét QR, vui lòng xác nhận trên điện thoại', qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
                 return;
             }
 
-            if (eventType === LoginQRCallbackEventType.QRCodeExpired) {
-                // QRCodeExpired
-                logger.log("QRCode đã hết hạn, đang tạo mã mới...", "warn");
-                setLoginState('qr_pending');
-                qrData.actions.retry();
-                return;
-            }
-
-            if (eventType === LoginQRCallbackEventType.QRCodeDeclined) {
-                // QRCodeDeclined
-                logger.log("QRCode bị từ chối, đang tạo mã mới...", "warn");
-                setLoginState('qr_pending');
-                qrData.actions.retry();
+            if (eventType === LoginQRCallbackEventType.QRCodeExpired || eventType === LoginQRCallbackEventType.QRCodeDeclined) {
+                // QRCodeExpired / QRCodeDeclined — tạo lại mã với backoff có giới hạn
+                qrRetryAttempts += 1;
+                const label = eventType === LoginQRCallbackEventType.QRCodeExpired ? "hết hạn" : "bị từ chối";
+                if (qrRetryAttempts > MAX_QR_RETRIES) {
+                    const reason = `Mã QR ${label} quá ${MAX_QR_RETRIES} lần, dừng đăng nhập`;
+                    logger.log(`[QR LOGIN] ${reason}`, "error");
+                    setLoginState('failed');
+                    saveBotStats('failed', { loginMessage: reason, reason: 'qr_retries_exhausted', qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
+                    tryRemoveQr();
+                    process.exit(1);
+                    return;
+                }
+                const delayMs = Math.min(1000 * Math.pow(2, qrRetryAttempts - 1), 15000);
+                logger.log(`QRCode ${label}, thử lại sau ${delayMs}ms (lần ${qrRetryAttempts}/${MAX_QR_RETRIES})...`, "warn");
+                publishQrPending(`Mã QR ${label}, tạo lại sau ${Math.round(delayMs / 1000)}s (lần ${qrRetryAttempts}/${MAX_QR_RETRIES}).`);
+                setTimeout(() => {
+                    try { qrData.actions.retry(); } catch (err) {
+                        logger.log(`Không thể tạo lại mã QR: ${err.message || err}`, "error");
+                    }
+                }, delayMs);
                 return;
             }
 
@@ -186,9 +258,13 @@ async function loginWithQR() {
                     if (!isDev && process.env.JT_PANEL_CHILD !== "1") console.clear();
                     logger.clearReplaceable();
                     logger.log(`Đã lưu cookie vào ${cookieFileName} và cập nhật ${path.basename(accountPath)}`, "info");
+                    // Đăng nhập thành công → xoá file QR cũ, panel không còn hiển thị mã QR hết hạn
+                    tryRemoveQr();
+                    saveBotStats('logged_in', { loginMessage: 'Đã đăng nhập và lưu cookie thành công', qrUpdatedAt: Date.now() });
                 } catch (err) {
                     logger.log(`Lỗi khi ghi file: ${err.message || err}`, "error");
                     setLoginState('failed');
+                    saveBotStats('failed', { loginMessage: 'Lỗi khi lưu cookie/account', reason: 'save_files_error', qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
                     process.exit(1);
                 }
             }
@@ -199,6 +275,7 @@ async function loginWithQR() {
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng QR: ${error.message || error}`, "error");
         setLoginState('failed');
+        saveBotStats('failed', { loginMessage: 'Lỗi đăng nhập bằng QR', reason: 'login_error' });
         process.exit(1);
     }
 }
@@ -229,6 +306,7 @@ async function loginWithCookie() {
 async function login() {
     try {
         setLoginState('cookie_login');
+        saveBotStats('cookie_login', { loginMessage: 'Đang đăng nhập bằng cookie...' });
         logger.log("Tiến hành login bằng Cookie", "info");
         const api = await loginWithCookie();
         setLoginState('logged_in');
@@ -237,11 +315,13 @@ async function login() {
         if (!global.config.login_qrcode) {
             logger.log("Cookie không hợp lệ", "error");
             setLoginState('failed');
+            saveBotStats('failed', { loginMessage: 'Cookie không hợp lệ và đăng nhập QR bị tắt', reason: 'cookie_invalid' });
             process.exit(1);
         }
         logger.log("Login bằng Cookie thất bại, chuyển sang QRCode...", "warn");
         logger.log(`Thiết bị đăng nhập: ${deviceLabel(resolveUserAgent())}`, "info");
         setLoginState('qr_pending');
+        saveBotStats('qr_pending', { loginMessage: 'Cookie không hợp lệ, chuyển sang đăng nhập QRCode...', qrPath: path.basename(resolveQrPath()), qrUpdatedAt: Date.now() });
         return await loginWithQR();
     }
 }
@@ -253,3 +333,5 @@ module.exports.USER_AGENTS = USER_AGENTS;
 module.exports.getLoginState = getLoginState;
 module.exports.setLoginState = setLoginState;
 module.exports.loginState = getLoginState;
+module.exports.resolveQrPath = resolveQrPath;
+module.exports.saveBotStats = saveBotStats;
