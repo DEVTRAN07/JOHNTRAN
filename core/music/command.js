@@ -49,7 +49,7 @@ async function sendTrack(reply, threadId, type, track, providerName, api) {
   let filePath = null;
   try {
     const streamUrl = await music.resolve(providerName, track);
-    filePath = await music.downloadToFile(streamUrl, "mp3");
+    filePath = await music.downloadToFile(streamUrl, "mp3", { fallbackUrl: track.sourceUrl || track.permalink_url || track.permalinkUrl || "" });
     const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
 
     // NOW PLAYING — canvas card (cache) — hỏng thì rơi về text
