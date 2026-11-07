@@ -64,9 +64,11 @@ function uptime(ms) {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m ${s % 60}s`;
 }
-function toast(msg) {
+function toast(msg, type) {
   const t = $("toast");
   t.textContent = msg;
+  t.classList.remove("success", "error", "warn");
+  if (type === "success" || type === "error" || type === "warn") t.classList.add(type);
   t.classList.add("show");
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove("show"), 2400);
@@ -114,6 +116,8 @@ async function refresh() {
     setConn(false, e.message);
     $("mainBotCard").innerHTML = `<div class="empty">Không kết nối được: ${escapeHtml(e.message)}</div>`;
     $("childGrid").innerHTML = "";
+    clearTimeout(window.__reconnectTimer);
+    window.__reconnectTimer = setTimeout(() => { if (!API) return; refresh(); }, 5000);
   }
 }
 

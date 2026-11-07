@@ -1,287 +1,373 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#070a12">
-<title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Panel quản lý</title>
-<link rel="stylesheet" href="panel.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <meta name="color-scheme" content="dark">
+  <title>ᴶᴼᴴᴺ ᵀᴿᴬᴺ • Panel quản lý</title>
+  <link rel="stylesheet" href="panel.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 </head>
 <body>
-<div class="app">
+  <div class="app">
 
-  <!-- ===== Sidebar / bottom nav ===== -->
-  <aside class="sidebar">
-    <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ<small>BOT PANEL</small></div>
-    <button class="navbtn active" data-view="bots" onclick="showView('bots')"><span class="ico">🤖</span>Bot</button>
-    <button class="navbtn" data-view="chat" onclick="showView('chat')"><span class="ico">💬</span>Chat</button>
-    <button class="navbtn" data-view="commands" onclick="showView('commands')"><span class="ico">⌘</span>Lệnh</button>
-    <button class="navbtn" data-view="groups" onclick="showView('groups')"><span class="ico">👥</span>Theo nhóm</button>
-    <button class="navbtn" data-view="profile" onclick="showView('profile')"><span class="ico">🪪</span>Hồ sơ</button>
-    <button class="navbtn" data-view="system" onclick="showView('system')"><span class="ico">⚙️</span>Hệ thống</button>
-    <div class="foot">
-      <a class="btn" href="index.html" style="text-align:center;border:1px solid var(--border);border-radius:12px;padding:9px;font-size:13px;color:var(--sub)">📡 Trang trạng thái</a>
-    </div>
-  </aside>
+    <aside class="sidebar" aria-label="Điều hướng">
+      <div class="brand">ᴶᴼᴴᴺ ᵀᴿᴬᴺ<small>BOT PANEL</small></div>
 
-  <!-- ===== Content ===== -->
-  <div class="content">
-    <header class="topbar">
-      <h1 id="viewTitle">Tổng quan</h1>
-      <div class="spacer"></div>
-      <div class="conn"><span class="dot" id="connDot"></span><span id="connText">chưa kết nối</span></div>
-      <button class="icon" onclick="toggleDrawer()" title="Cấu hình kết nối">⚙️</button>
-      <button class="icon" onclick="refresh()" title="Làm mới">🔄</button>
-    </header>
+      <button class="navbtn active" data-view="bots" onclick="showView('bots')" type="button">
+        <span class="ico">🤖</span><span>Bot</span>
+      </button>
+      <button class="navbtn" data-view="chat" onclick="showView('chat')" type="button">
+        <span class="ico">💬</span><span>Chat</span>
+      </button>
+      <button class="navbtn" data-view="commands" onclick="showView('commands')" type="button">
+        <span class="ico">⌘</span><span>Lệnh</span>
+        <span class="pill badge" id="navCmdCount" style="display:none;margin-left:auto"></span>
+      </button>
+      <button class="navbtn" data-view="groups" onclick="showView('groups')" type="button">
+        <span class="ico">👥</span><span>Theo nhóm</span>
+      </button>
+      <button class="navbtn" data-view="profile" onclick="showView('profile')" type="button">
+        <span class="ico">🪪</span><span>Hồ sơ</span>
+      </button>
+      <button class="navbtn" data-view="system" onclick="showView('system')" type="button">
+        <span class="ico">⚙️</span><span>Hệ thống</span>
+      </button>
 
-    <!-- Config drawer -->
-    <div class="drawer" id="drawer">
-      <div class="card">
-        <label>REMOTE PANEL URL
-          <input id="remoteUrl" placeholder="https://johntran.onrender.com">
-        </label>
-        <label>TOKEN
-          <input id="token" placeholder="panel.token trong config.yml">
-        </label>
-        <div class="row">
-          <button class="primary" onclick="saveConfig()">Kết nối</button>
-          <span class="sub">Cấu hình lưu trong localStorage — lần sau tự kết nối.</span>
+      <div class="foot">
+        <a class="btn" href="index.html" style="text-align:center;border:1px solid rgba(120,145,190,.16);border-radius:12px;padding:9px;font-size:13px;color:var(--sub);display:block;text-decoration:none">📡 Trang trạng thái</a>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <h1 id="viewTitle">Tổng quan</h1>
+        <div class="spacer" style="flex:1"></div>
+        <div class="conn" aria-live="polite">
+          <span class="dot" id="connDot"></span>
+          <span id="connText">chưa kết nối</span>
+        </div>
+        <button class="icon" onclick="toggleDrawer()" title="Cấu hình kết nối" type="button">⚙️</button>
+        <button class="icon" onclick="refresh()" title="Làm mới" type="button">🔄</button>
+      </header>
+
+      <div class="drawer" id="drawer">
+        <div class="card">
+          <div class="section-header" style="margin-bottom:10px">
+            <h2 style="margin:0">Kết nối panel</h2>
+            <span class="sub">Lưu localStorage • tự kết nối lần sau</span>
+          </div>
+          <div class="grid two">
+            <label>REMOTE PANEL URL
+              <input id="remoteUrl" placeholder="https://johntran.onrender.com" autocomplete="url">
+            </label>
+            <label>TOKEN
+              <input id="token" placeholder="panel.token trong config.yml" autocomplete="off">
+            </label>
+          </div>
+          <div class="row" style="margin-top:4px">
+            <button class="primary" onclick="saveConfig()" type="button">Kết nối</button>
+            <span class="sub">Cần URL host và token hợp lệ để tải bot, chat, lệnh và hồ sơ.</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <main>
-      <!-- ===== BOT ===== -->
-      <section class="view active" id="view-bots">
-        <div class="metrics" id="metricsBar"></div>
-
-        <!-- Bot chính -->
-        <div class="card">
-          <h2>🤖 Bot chính <span class="badge" id="mainBotBadge" style="text-transform:none">—</span></h2>
-          <div id="mainBotCard"><div class="empty">Đang tải trạng thái bot...</div></div>
-        </div>
-
-        <!-- Bot con (nâng cao) -->
-        <div class="card">
-          <div class="row between" style="margin-bottom:4px">
-            <h2 style="margin:0">👥 Bot con <span class="count" id="child-count">0</span></h2>
-            <button class="small" onclick="toggleChildren()" id="childToggle">Mở rộng</button>
-          </div>
-          <div class="sub" style="margin-bottom:12px">Tùy chọn nâng cao: chạy thêm tài khoản Zalo khác, mỗi bot con có dữ liệu + đăng nhập riêng.</div>
-          <div id="childPanel" style="display:none">
-            <div class="row" style="margin-bottom:12px">
-              <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32" style="flex:1;min-width:180px">
-              <button class="primary" onclick="createBot()">+ Tạo bot con</button>
+      <main>
+        <section class="view active" id="view-bots">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Bảng điều khiển</h2>
+              <div class="sub">Trạng thái bot, hiệu suất hôm nay và thao tác nhanh.</div>
             </div>
-            <div class="bots" id="childGrid"><div class="empty">Chưa có bot con nào.</div></div>
           </div>
-        </div>
-      </section>
 
-      <!-- ===== CHAT (kiểu Zalo PC) ===== -->
-      <section class="view" id="view-chat">
-        <div class="chat-layout" id="chatLayout">
-          <!-- Danh sách hội thoại -->
-          <div class="chat-side">
-            <div class="chat-search">
-              <input id="chatSearch" placeholder="Tìm kiếm" oninput="renderThreadList()">
-            </div>
-            <div class="chat-threads" id="chatThreads"><div class="empty">Đang tải...</div></div>
+          <div class="metrics" id="metricsBar">
+            <div class="metric"><div class="k">Lệnh hôm nay</div><div class="v skeleton" style="height:32px;width:64px"></div></div>
+            <div class="metric"><div class="k">Lỗi</div><div class="v skeleton" style="height:32px;width:48px"></div></div>
+            <div class="metric"><div class="k">Tìm nhạc</div><div class="v skeleton" style="height:32px;width:48px"></div></div>
+            <div class="metric"><div class="k">Tải nhạc</div><div class="v skeleton" style="height:32px;width:48px"></div></div>
+            <div class="metric"><div class="k">AI requests</div><div class="v skeleton" style="height:32px;width:48px"></div></div>
+            <div class="metric"><div class="k">Uptime host</div><div class="v skeleton" style="height:32px;width:72px"></div></div>
+            <div class="metric"><div class="k">RAM host</div><div class="v skeleton" style="height:32px;width:72px"></div></div>
+            <div class="metric"><div class="k">Cache</div><div class="v skeleton" style="height:32px;width:48px"></div></div>
           </div>
-          <!-- Khung chat -->
-          <div class="chat-main">
-            <div class="chat-head" id="chatHead">
-              <button class="icon small" id="chatBack" onclick="closeThread()" style="display:none">←</button>
-              <img id="chatAvatar" class="avatar" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%230d1220'/%3E%3C/svg%3E">
-              <div class="chat-head-tx" onclick="openThreadInfo()">
-                <b id="chatTitle">Chọn hội thoại</b>
-                <div class="sub" id="chatSub">bạn bè hoặc nhóm</div>
+
+          <div class="card">
+            <div class="section-header" style="margin-bottom:14px">
+              <h2 style="margin:0">🤖 Bot chính <span class="badge" id="mainBotBadge" style="text-transform:none">—</span></h2>
+              <span class="sub">Tài khoản Zalo chính • QR / phiên / logs / auto-restart</span>
+            </div>
+            <div id="mainBotCard"><div class="empty">Đang tải trạng thái bot...</div></div>
+          </div>
+
+          <div class="card">
+            <div class="row between" style="margin-bottom:4px">
+              <h2 style="margin:0">👥 Bot con <span class="count" id="child-count">0</span></h2>
+              <button class="small" onclick="toggleChildren()" id="childToggle" type="button">Mở rộng</button>
+            </div>
+            <div class="sub" style="margin-bottom:12px">Tùy chọn nâng cao: chạy thêm tài khoản Zalo khác. Mỗi bot con có dữ liệu, phiên đăng nhập và QR riêng.</div>
+            <div id="childPanel" style="display:none">
+              <div class="row" style="margin-bottom:12px">
+                <input id="newBotName" placeholder="Tên bot con (vd: bot2)" maxlength="32" style="flex:1;min-width:180px">
+                <button class="primary" onclick="createBot()" type="button">+ Tạo bot con</button>
+              </div>
+              <div class="bots" id="childGrid"><div class="empty">Chưa có bot con nào.</div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-chat">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Chat với bot</h2>
+              <div class="sub">Giao diện kiểu Zalo PC: hội thoại, tin nhắn, kiểu chữ, màu sắc và thao tác nhóm/người dùng.</div>
+            </div>
+          </div>
+
+          <div class="chat-layout" id="chatLayout">
+            <div class="chat-side">
+              <div class="chat-search">
+                <input id="chatSearch" placeholder="Tìm bạn bè hoặc nhóm" oninput="renderThreadList()" autocomplete="off">
+              </div>
+              <div class="chat-threads" id="chatThreads"><div class="empty">Đang tải hội thoại...</div></div>
+            </div>
+
+            <div class="chat-main">
+              <div class="chat-head" id="chatHead">
+                <button class="icon small" id="chatBack" onclick="closeThread()" style="display:none" type="button" title="Quay lại danh sách">←</button>
+                <img id="chatAvatar" class="avatar" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%230d1220'/%3E%3C/svg%3E">
+                <div class="chat-head-tx" onclick="openThreadInfo()" title="Xem thông tin hội thoại">
+                  <b id="chatTitle">Chọn hội thoại</b>
+                  <div class="sub" id="chatSub">bạn bè hoặc nhóm</div>
+                </div>
+              </div>
+
+              <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div></div>
+
+              <div class="chat-stylebar" id="chatStylebar">
+                <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})" title="Cỡ chữ (Zalo: nhỏ/lớn)">
+                  <option value="">Cỡ chữ</option>
+                  <option value="13px">Nhỏ</option>
+                  <option value="18px">Lớn</option>
+                </select>
+                <select id="chatFontFamily" class="mini" onchange="setChatStyle({fontFamily:this.value})" title="Font chữ">
+                  <option value="">Font chữ</option>
+                  <option value="cursive">Cursive</option>
+                  <option value="monospace">Monospace</option>
+                  <option value="sans">Sans-serif</option>
+                  <option value="serif">Serif</option>
+                </select>
+                <button class="stbtn" id="glowBtn" onclick="toggleStyle('glow')" title="Phát sáng" type="button">✨</button>
+                <div class="style-btns">
+                  <button class="stbtn" data-k="b" onclick="toggleStyle('b')" type="button" title="In đậm"><b>B</b></button>
+                  <button class="stbtn" data-k="i" onclick="toggleStyle('i')" type="button" title="In nghiêng"><i>I</i></button>
+                  <button class="stbtn" data-k="u" onclick="toggleStyle('u')" type="button" title="Gạch chân"><u>U</u></button>
+                  <button class="stbtn" data-k="s" onclick="toggleStyle('s')" type="button" title="Gạch ngang"><s>S</s></button>
+                </div>
+                <button class="color-preview" id="colorPreview" onclick="openColorPicker()" title="Bảng kéo chọn màu" type="button">
+                  <span id="colorSwatch"></span>
+                  <span id="colorHex">Màu</span>
+                </button>
+              </div>
+
+              <form class="chat-input" id="chatForm" onsubmit="sendChat(event)">
+                <button type="button" class="icon" onclick="openStylePanel()" title="Kiểu chữ">🎨</button>
+                <button type="button" class="icon" title="Đính kèm (chưa hỗ trợ)" onclick="toastSoon()">📎</button>
+                <input id="chatInput" placeholder="Nhắn tin hoặc gõ / để dùng lệnh..." autocomplete="off" disabled>
+                <button class="primary" type="submit" id="chatSendBtn" disabled>Gửi</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-commands">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Danh sách lệnh</h2>
+              <div class="sub">Tìm kiếm, lọc theo nhóm/quyền, và xem trạng thái cấu hình lệnh.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="row between" style="margin-bottom:12px">
+              <h2 style="margin:0">⌘ Danh sách lệnh <span class="count" id="cmd-total">0</span></h2>
+              <button class="small" onclick="loadCommandList()" type="button">Tải lại</button>
+            </div>
+            <div class="filters">
+              <input id="cmdSearch" placeholder="🔍 Tìm lệnh, alias, mô tả..." oninput="renderCommands()">
+              <select id="cmdCategory" onchange="renderCommands()"><option value="">Tất cả nhóm</option></select>
+              <select id="cmdRole" onchange="renderCommands()">
+                <option value="">Mọi quyền</option>
+                <option value="0">Thành viên</option>
+                <option value="1">Support bot</option>
+                <option value="2">Admin bot</option>
+              </select>
+            </div>
+            <div class="cmds" id="cmdGrid" style="margin-top:12px"><div class="empty" style="grid-column:1/-1">Đang tải danh sách lệnh...</div></div>
+          </div>
+
+          <div class="card">
+            <div class="section-header" style="margin-bottom:8px">
+              <h2 style="margin:0">🩺 Trạng thái lệnh <span class="count" id="cmdStatusCount">—</span></h2>
+              <span class="sub">Lệnh thiếu API/config sẽ bị chặn.</span>
+            </div>
+            <div class="sub" id="cmdStatusHint" style="margin-bottom:12px">Đang tải...</div>
+            <div class="cmd-list" id="cmdStatusGrid"><div class="empty">Đang kiểm tra trạng thái lệnh...</div></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-groups">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Lệnh theo nhóm</h2>
+              <div class="sub">Nhập Group ID để bật/tắt từng lệnh cho nhóm Zalo cụ thể.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>👥 Bật/tắt lệnh theo nhóm</h2>
+            <div class="row">
+              <input id="cmdGroupId" placeholder="Group ID cần quản lý" style="flex:1;min-width:200px">
+              <button class="primary" onclick="loadGroupCommands()" type="button">Tải lệnh nhóm</button>
+            </div>
+            <div class="sub" id="cmdHint" style="margin-top:8px">Nhập ID nhóm rồi bấm "Tải lệnh nhóm" để bật/tắt từng lệnh.</div>
+            <div class="cmd-list" id="cmdGroupGrid" style="margin-top:12px"><div class="empty">Chưa chọn nhóm.</div></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-profile">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Hồ sơ bot</h2>
+              <div class="sub">Thông tin Zalo, bạn bè và nhóm mà bot đang tham gia.</div>
+            </div>
+            <button class="small" onclick="loadBotStats()" type="button">Tải lại</button>
+          </div>
+
+          <div class="card">
+            <h2>🪪 Hồ sơ bot <span class="badge on" id="botStateBadge" style="text-transform:none">—</span></h2>
+            <div class="profile">
+              <img id="botAvatar" class="avatar" alt="avatar bot" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%230d1220'/%3E%3C/svg%3E">
+              <div style="flex:1;min-width:230px">
+                <table class="info" id="profileInfo"><tr><td colspan="2" class="sub">(chưa tải — cần bot con gửi thống kê)</td></tr></table>
               </div>
             </div>
-            <div class="chat-msgs" id="chatMsgs"><div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div></div>
-            <!-- Thanh kiểu chữ -->
-            <div class="chat-stylebar" id="chatStylebar">
-              <select id="chatFont" class="mini" onchange="setChatStyle({font:this.value})" title="Cỡ chữ (Zalo: nhỏ/lớn)">
-                <option value="">Cỡ chữ</option>
-                <option value="13px">Nhỏ</option>
-                <option value="18px">Lớn</option>
-              </select>
-              <select id="chatFontFamily" class="mini" onchange="setChatStyle({fontFamily:this.value})" title="Font chữ">
-                <option value="">Font chữ</option>
-                <option value="cursive">Cursive</option>
-                <option value="monospace">Monospace</option>
-                <option value="sans">Sans-serif</option>
-                <option value="serif">Serif</option>
-              </select>
-              <button class="stbtn" id="glowBtn" onclick="toggleStyle('glow')" title="Phát sáng">✨</button>
-              <div class="style-btns">
-                <button class="stbtn" data-k="b" onclick="toggleStyle('b')"><b>B</b></button>
-                <button class="stbtn" data-k="i" onclick="toggleStyle('i')"><i>I</i></button>
-                <button class="stbtn" data-k="u" onclick="toggleStyle('u')"><u>U</u></button>
-                <button class="stbtn" data-k="s" onclick="toggleStyle('s')"><s>S</s></button>
+          </div>
+
+          <div class="two">
+            <div class="card">
+              <div class="section-header" style="margin-bottom:12px">
+                <h2 style="margin:0">💚 Bạn bè <span class="count" id="friendCount">0</span></h2>
               </div>
-              <button class="color-preview" id="colorPreview" onclick="openColorPicker()" title="Bảng kéo chọn màu">
-                <span id="colorSwatch"></span>
-                <span id="colorHex">Màu</span>
-              </button>
+              <div class="list" id="friendList"><div class="empty">(chưa tải)</div></div>
             </div>
-            <form class="chat-input" id="chatForm" onsubmit="sendChat(event)">
-              <button type="button" class="icon" onclick="openStylePanel()" title="Kiểu chữ">🎨</button>
-              <button type="button" class="icon" title="Đính kèm (chưa hỗ trợ)" onclick="toastSoon()">📎</button>
-              <input id="chatInput" placeholder="Nhắn tin hoặc gõ / để dùng lệnh..." autocomplete="off" disabled>
-              <button class="primary" type="submit" id="chatSendBtn" disabled>Gửi</button>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===== LỆNH ===== -->
-      <section class="view" id="view-commands">
-        <div class="card">
-          <div class="row between" style="margin-bottom:12px">
-            <h2 style="margin:0">⌘ Danh sách lệnh <span class="count" id="cmd-total">0</span></h2>
-            <button class="small" onclick="loadCommandList()">Tải lại</button>
-          </div>
-          <div class="filters">
-            <input id="cmdSearch" placeholder="🔍 Tìm lệnh..." oninput="renderCommands()">
-            <select id="cmdCategory" onchange="renderCommands()"><option value="">Tất cả nhóm</option></select>
-            <select id="cmdRole" onchange="renderCommands()">
-              <option value="">Mọi quyền</option>
-              <option value="0">Thành viên</option>
-              <option value="1">Support bot</option>
-              <option value="2">Admin bot</option>
-            </select>
-          </div>
-          <div class="cmds" id="cmdGrid" style="margin-top:12px"></div>
-        </div>
-        <div class="card">
-          <h2>🩺 Trạng thái lệnh <span class="count" id="cmdStatusCount">—</span></h2>
-          <div class="sub" id="cmdStatusHint" style="margin-bottom:12px">Đang tải...</div>
-          <div class="cmd-list" id="cmdStatusGrid"></div>
-        </div>
-      </section>
-
-      <!-- ===== THEO NHÓM ===== -->
-      <section class="view" id="view-groups">
-        <div class="card">
-          <h2>👥 Bật/tắt lệnh theo nhóm</h2>
-          <div class="row">
-            <input id="cmdGroupId" placeholder="Group ID cần quản lý" style="flex:1;min-width:200px">
-            <button class="primary" onclick="loadGroupCommands()">Tải lệnh nhóm</button>
-          </div>
-          <div class="sub" id="cmdHint" style="margin-top:8px">Nhập ID nhóm rồi bấm "Tải lệnh nhóm" để bật/tắt từng lệnh.</div>
-          <div class="cmd-list" id="cmdGroupGrid" style="margin-top:12px"></div>
-        </div>
-      </section>
-
-      <!-- ===== HỒ SƠ ===== -->
-      <section class="view" id="view-profile">
-        <div class="card">
-          <h2>🪪 Hồ sơ bot <span class="badge on" id="botStateBadge" style="text-transform:none">—</span></h2>
-          <div class="profile">
-            <img id="botAvatar" class="avatar" alt="avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%230d1220'/%3E%3C/svg%3E">
-            <div style="flex:1;min-width:230px">
-              <table class="info" id="profileInfo"><tr><td colspan="2" class="sub">(chưa tải — cần bot con gửi thống kê)</td></tr></table>
+            <div class="card">
+              <div class="section-header" style="margin-bottom:12px">
+                <h2 style="margin:0">👥 Nhóm bot đang ở <span class="count" id="groupCount">0</span></h2>
+              </div>
+              <div class="list" id="groupList"><div class="empty">(chưa tải)</div></div>
             </div>
           </div>
-        </div>
-        <div class="two">
-          <div class="card">
-            <h2>💚 Bạn bè <span class="count" id="friendCount">0</span></h2>
-            <div class="list" id="friendList"><div class="empty">(chưa tải)</div></div>
-          </div>
-          <div class="card">
-            <h2>👥 Nhóm bot đang ở <span class="count" id="groupCount">0</span></h2>
-            <div class="list" id="groupList"><div class="empty">(chưa tải)</div></div>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- ===== HỆ THỐNG ===== -->
-      <section class="view" id="view-system">
-        <div class="two">
-          <div class="card">
-            <h2>🖥️ Thông tin host</h2>
-            <table class="info" id="masterInfo"></table>
+        <section class="view" id="view-system">
+          <div class="section-header">
+            <div>
+              <h2 style="margin:0;font-size:17px">Hệ thống</h2>
+              <div class="sub">Thông tin host, lệnh phổ biến và audit log hành động admin.</div>
+            </div>
+            <button class="small" onclick="loadSystem(); loadMetrics()" type="button">Tải lại</button>
           </div>
+
+          <div class="two">
+            <div class="card">
+              <h2>🖥️ Thông tin host</h2>
+              <table class="info" id="masterInfo"><tr><td colspan="2" class="sub">Đang tải thông tin host...</td></tr></table>
+            </div>
+            <div class="card">
+              <h2>📊 Top lệnh hôm nay</h2>
+              <table class="info">
+                <tbody id="topCommands"><tr><td colspan="2" class="sub">Đang tải...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="card">
-            <h2>📜 Audit log (hành động admin)</h2>
+            <div class="section-header" style="margin-bottom:12px">
+              <h2 style="margin:0">📜 Audit log (hành động admin)</h2>
+              <span class="sub">Ghi nhận thao tác quản trị từ panel/API.</span>
+            </div>
             <pre class="logs small" id="auditLog">(chưa tải)</pre>
           </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header>
+        <strong id="modalTitle">Logs</strong>
+        <div class="spacer" style="flex:1"></div>
+        <button class="small" onclick="togglePause()" id="pauseBtn" type="button">Tạm dừng</button>
+        <button class="small" onclick="closeModal()" type="button">Đóng</button>
+      </header>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="infoModal" onclick="if(event.target===this) closeInfoModal()">
+    <div class="modal-box" style="max-width:460px" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <header>
+        <strong id="infoTitle">Thông tin</strong>
+        <div style="flex:1"></div>
+        <button class="small" onclick="closeInfoModal()" type="button">Đóng</button>
+      </header>
+      <div class="modal-body" id="infoBody"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="colorModal" onclick="if(event.target===this) closeColorPicker()">
+    <div class="modal-box" style="max-width:360px" role="dialog" aria-modal="true">
+      <header>
+        <strong>Bảng kéo chọn màu</strong>
+        <div style="flex:1"></div>
+        <button class="small" onclick="closeColorPicker()" type="button">Đóng</button>
+      </header>
+      <div class="modal-body">
+        <canvas id="svArea" width="300" height="170" style="width:100%;border-radius:12px;cursor:crosshair;touch-action:none"></canvas>
+        <div style="margin:14px 0 6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Sắc độ (Hue)</div>
+        <canvas id="hueBar" width="300" height="26" style="width:100%;border-radius:99px;cursor:pointer;touch-action:none"></canvas>
+        <div class="row" style="margin-top:16px">
+          <span id="colorPreview2" class="color-preview" style="pointer-events:none"><span id="colorSwatch2"></span><span id="colorHex2">—</span></span>
+          <input id="colorHexInput" placeholder="#ff0000" style="flex:1;font-family:ui-monospace,monospace" onchange="applyHexInput()">
+          <button class="primary" onclick="closeColorPicker()" type="button">Dùng màu này</button>
         </div>
-      </section>
-    </main>
-  </div>
-</div>
-
-<!-- ===== Modal (Logs / QR) ===== -->
-<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
-  <div class="modal-box">
-    <header>
-      <strong id="modalTitle">Logs</strong>
-      <div class="spacer" style="flex:1"></div>
-      <button class="small" onclick="togglePause()" id="pauseBtn">Tạm dừng</button>
-      <button class="small" onclick="closeModal()">Đóng</button>
-    </header>
-    <div class="modal-body" id="modalBody"></div>
-  </div>
-</div>
-
-<!-- Modal thông tin nhóm / hồ sơ người dùng -->
-<div class="modal" id="infoModal" onclick="if(event.target===this) closeInfoModal()">
-  <div class="modal-box" style="max-width:460px">
-    <header>
-      <strong id="infoTitle">Thông tin</strong>
-      <div style="flex:1"></div>
-      <button class="small" onclick="closeInfoModal()">Đóng</button>
-    </header>
-    <div class="modal-body" id="infoBody"></div>
-  </div>
-</div>
-
-<!-- Modal bảng kéo chọn màu (HSV) -->
-<div class="modal" id="colorModal" onclick="if(event.target===this) closeColorPicker()">
-  <div class="modal-box" style="max-width:360px">
-    <header>
-      <strong>Bảng kéo chọn màu</strong>
-      <div style="flex:1"></div>
-      <button class="small" onclick="closeColorPicker()">Đóng</button>
-    </header>
-    <div class="modal-body">
-      <canvas id="svArea" width="300" height="170" style="width:100%;border-radius:12px;cursor:crosshair;touch-action:none"></canvas>
-      <div style="margin:14px 0 6px;font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase">Sắc độ (Hue)</div>
-      <canvas id="hueBar" width="300" height="26" style="width:100%;border-radius:99px;cursor:pointer;touch-action:none"></canvas>
-      <div class="row" style="margin-top:16px">
-        <span id="colorPreview2" class="color-preview" style="pointer-events:none"><span id="colorSwatch2"></span><span id="colorHex2">—</span></span>
-        <input id="colorHexInput" placeholder="#ff0000" style="flex:1;font-family:ui-monospace,monospace" onchange="applyHexInput()">
-        <button class="primary" onclick="closeColorPicker()">Dùng màu này</button>
-      </div>
-      <div class="sub" style="margin-top:12px">Panel hiển thị ĐÚNG màu bạn chọn. Zalo chỉ có 4 màu (đỏ/cam/vàng/xanh) nên khi gửi tự quy về màu Zalo gần nhất. Nút nhanh:</div>
-      <div class="row" style="margin-top:10px">
-        <button class="small" onclick="pickZaloColor(&#39;#f43f5e&#39;)">Đỏ</button>
-        <button class="small" onclick="pickZaloColor(&#39;#f97316&#39;)">Cam</button>
-        <button class="small" onclick="pickZaloColor(&#39;#f59e0b&#39;)">Vàng</button>
-        <button class="small" onclick="pickZaloColor(&#39;#22c55e&#39;)">Xanh</button>
-        <button class="small" onclick="pickZaloColor(&#39;&#39;)">Mặc định</button>
+        <div class="sub" style="margin-top:12px">Panel hiển thị đúng màu bạn chọn. Zalo chỉ hỗ trợ một số màu/cỡ chữ nên khi gửi có thể được quy đổi gần nhất. Nút nhanh:</div>
+        <div class="row" style="margin-top:10px">
+          <button class="small" onclick="pickZaloColor('#f43f5e')" type="button">Đỏ</button>
+          <button class="small" onclick="pickZaloColor('#f97316')" type="button">Cam</button>
+          <button class="small" onclick="pickZaloColor('#f59e0b')" type="button">Vàng</button>
+          <button class="small" onclick="pickZaloColor('#22c55e')" type="button">Xanh</button>
+          <button class="small" onclick="pickZaloColor('')" type="button">Mặc định</button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- Modal kiểu chữ -->
-<div class="modal" id="styleModal" onclick="if(event.target===this) closeStylePanel()">
-  <div class="modal-box" style="max-width:420px">
-    <header>
-      <strong>🎨 Kiểu chữ</strong>
-      <div style="flex:1"></div>
-      <button class="small" onclick="closeStylePanel()">Đóng</button>
-    </header>
-    <div class="modal-body" id="styleBody"></div>
+  <div class="modal" id="styleModal" onclick="if(event.target===this) closeStylePanel()">
+    <div class="modal-box" style="max-width:420px" role="dialog" aria-modal="true">
+      <header>
+        <strong>🎨 Kiểu chữ</strong>
+        <div style="flex:1"></div>
+        <button class="small" onclick="closeStylePanel()" type="button">Đóng</button>
+      </header>
+      <div class="modal-body" id="styleBody"></div>
+    </div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
-<script src="panel.js"></script>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="panel.js"></script>
 </body>
 </html>

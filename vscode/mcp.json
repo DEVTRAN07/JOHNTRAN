@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "onepanel-lcylordkhosting": {
+      "headers": {
+        "Authorization": "Bearer sp_3f5f24bb141e755cd2094deb986680852a5b71b00297584a882691dfdfff9611"
+      },
+      "url": "https://onehost-wphn072607.000nethost.com:2023/api/mcp",
+      "type": "http"
+    }
+  }
+}
