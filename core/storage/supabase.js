@@ -12,6 +12,7 @@ const TABLE_MAP = {
 const SYNC_INTERVAL = Number(process.env.SUPABASE_SYNC_MS) || 30000;
 const BACKOFF_CAP = 5 * 60 * 1000;
 const LOG_COOLDOWN = 60 * 1000;
+const SYNC_ENABLED = process.env.JT_SUPABASE_SYNC !== "0";
 
 class SupabaseStore {
   constructor(url, serviceKey) {
@@ -31,14 +32,20 @@ class SupabaseStore {
     this.consecutiveFailures = 0;
     this.lastFailureLogAt = 0;
     this.nextSyncDelay = SYNC_INTERVAL;
-    this.readyPromise = this.sync().then(() => {
+    if (SYNC_ENABLED) {
+      this.readyPromise = this.sync().then(() => {
+        this.syncError = null;
+      }).catch((error) => {
+        this.syncError = error.message;
+        this.classified = this.classifyError(error);
+        const hint = this.classified === "network" ? " Kiểm tra SUPABASE_URL, SUPABASE_SERVICE_KEY và trạng thái project Supabase (có thể bị pause)." : "";
+        console.log(`[supabase] Lần đồng bộ đầu thất bại: ${error.message}${hint}`);
+      });
+      this.scheduleInterval(SYNC_INTERVAL);
+    } else {
+      this.readyPromise = Promise.resolve(this.getStatus());
       this.syncError = null;
-    }).catch((error) => {
-      this.syncError = error.message;
-      this.classified = this.classifyError(error);
-      console.log(`[supabase] Lần đồng bộ đầu thất bại: ${error.message}`);
-    });
-    this.scheduleInterval(SYNC_INTERVAL);
+    }
   }
 
   scheduleInterval(delay) {
@@ -65,18 +72,20 @@ class SupabaseStore {
     try { return new URL(this.url).host; } catch { return ""; }
   }
 
-  logFailure(msg, classified) {
+  logFailure(msg, classified, hint = false) {
     const now = Date.now();
     if (now - this.lastFailureLogAt < LOG_COOLDOWN) return;
     this.lastFailureLogAt = now;
     const host = this.safeHost();
-    console.log(`[supabase] ${classified} failure${host ? ` (${host})` : ""}: ${msg}`);
+    const extra = (hint && classified === "network") ? " Kiểm tra SUPABASE_URL, SUPABASE_SERVICE_KEY và trạng thái project Supabase (có thể bị pause)." : "";
+    console.log(`[supabase] ${classified} failure${host ? ` (${host})` : ""}: ${msg}${extra}`);
   }
 
   async ready() {
     await this.readyPromise;
     if (this.syncError && this.lastSyncAt === 0) {
-      console.log(`[supabase] ready: ${this.syncError}`);
+      const hint = this.classified === "network" ? " Kiểm tra SUPABASE_URL, SUPABASE_SERVICE_KEY và trạng thái project Supabase (có thể bị pause)." : "";
+      console.log(`[supabase] ready: ${this.syncError}${hint}`);
     }
     return this.getStatus();
   }
@@ -110,7 +119,7 @@ class SupabaseStore {
           const classified = this.classifyError(error);
           const msg = `Supabase ${dbTable}: ${error.message || error}`;
           if (!firstError) { firstError = msg; firstClassified = classified; }
-          this.logFailure(msg, classified);
+          this.logFailure(msg, classified, true);
           this.syncError = msg;
           this.classified = classified;
           if (!this.mirror[storeTable]) this.mirror[storeTable] = {};

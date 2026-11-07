@@ -6,6 +6,12 @@ const { botPaths } = require("./botManager");
 let dbUtils, storeDb;
 try { dbUtils = require("../utils/db"); storeDb = dbUtils.db || dbUtils; } catch { dbUtils = null; storeDb = null; }
 
+function maybeSyncStore() {
+  if (storeDb && typeof storeDb.sync === "function" && Date.now() - (storeDb.lastSyncAt || 0) > 15000) {
+    storeDb.sync().catch(() => {});
+  }
+}
+
 const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -414,11 +420,13 @@ function startPanel({ manager, config }) {
       if (!pathname.startsWith("/api") && serveStatic(pathname, res)) return;
 
       if (pathname === "/api/bots" && req.method === "GET") {
+        maybeSyncStore();
         const bots = manager.list().map(enrichBot);
         return sendJson(res, 200, { bots, master: { botCount: bots.length, uptimeMs: process.uptime() * 1000 } });
       }
 
       if (pathname === "/api/metrics" && req.method === "GET") {
+        maybeSyncStore();
         try {
           const metrics = require("../core/metrics");
           const { allStats } = require("../core/cache");
@@ -474,6 +482,7 @@ function startPanel({ manager, config }) {
       }
 
       if (pathname === "/api/stats" && req.method === "GET") {
+        maybeSyncStore();
         try {
           const db = require("../utils/db");
           const rows = db.allData("BotStats");
@@ -556,6 +565,7 @@ function startPanel({ manager, config }) {
       }
 
       if (pathname === "/api/master" && req.method === "GET") {
+        maybeSyncStore();
         let supabaseStatus = null;
         try { supabaseStatus = storeDb && typeof storeDb.getStatus === "function" ? storeDb.getStatus() : null; } catch { supabaseStatus = null; }
         return sendJson(res, 200, {
@@ -566,6 +576,7 @@ function startPanel({ manager, config }) {
 
       // health endpoint cho UptimeRobot / cloud monitor ping (luôn 200 để chống sleep)
       if (pathname === "/health" && req.method === "GET") {
+        maybeSyncStore();
         let supabaseStatus = null;
         try { supabaseStatus = storeDb && typeof storeDb.getStatus === "function" ? storeDb.getStatus() : null; } catch { supabaseStatus = null; }
         return sendJson(res, 200, {

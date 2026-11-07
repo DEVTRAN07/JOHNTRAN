@@ -12,6 +12,15 @@ function safe(fn, fallback) {
   }
 }
 
+function getSupabaseStatus() {
+  try {
+    const { db } = require("../utils/db");
+    return db && typeof db.getStatus === "function" ? db.getStatus() : (db?.db?.getStatus?.() || undefined);
+  } catch {
+    return undefined;
+  }
+}
+
 function healthPayload() {
   return {
     status: "ok",
@@ -22,7 +31,8 @@ function healthPayload() {
     uptimeSeconds: Math.floor(process.uptime()),
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     node: process.version,
-    startedAt: new Date(START_TIME).toISOString()
+    startedAt: new Date(START_TIME).toISOString(),
+    supabase: getSupabaseStatus()
   };
 }
 

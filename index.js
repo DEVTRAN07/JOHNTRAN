@@ -27,6 +27,8 @@ const configSystem = require("./core/config");
 
     if (panelEnabled) {
         // ===== CHẾ ĐỘ PANEL: master quản lý, bot con chạy riêng từng tiến trình =====
+        // Master panel không cần continuous sync loop — child bot owns sync.
+        process.env.JT_SUPABASE_SYNC = "0";
         const { BotManager } = require("./panel/botManager");
         const { startPanel } = require("./panel/server");
 
