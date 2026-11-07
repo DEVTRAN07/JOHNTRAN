@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const wallet = require('../../core/gameWallet');
-const pixelfx = require('../../core/pixelfx');
+function getPixelfx() { try { return require('../../core/pixelfx'); } catch { return null; } }
 
 const CONFIG_PATH = path.join(process.cwd(), 'data', 'game', 'mines.json');
 const sessions = new Map();
@@ -132,6 +132,8 @@ function safeFx() {
 }
 
 async function sendFx(api, threadId, type, msg, fxId) {
+  const pixelfx = getPixelfx();
+  if (!pixelfx) { try { await api.sendMessage({ msg }, threadId, type); } catch {} return; }
   let attachment;
   try {
     const fx = await pixelfx.renderFxGif(fxId, { fps: 12, frames: 10, scale: 2 });

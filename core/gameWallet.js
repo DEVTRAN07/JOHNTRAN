@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ECONOMY_PATH = path.join(process.cwd(), 'data', 'game', 'economy.json');
+const ECONOMY_PATH = path.join(__dirname, '..', 'data', 'game', 'economy.json');
 const DEFAULTS = { startCoins: 1000, dailyBonus: 500, minBet: 10, maxBet: 100000 };
 
 function loadConfig() {
