@@ -134,10 +134,114 @@ function pickDtTier(level) {
   if (lv <= 25) return 4; if (lv <= 40) return 5; return 6;
 }
 function hitsForTier(tier) { return tier <= 1 ? 1 : tier === 2 ? 2 : tier <= 4 ? 3 : 4; }
+// --- profile-based varied combat FX (stronger later) -------------------------
+// PIXELFX_DT_PROFILE env > C().dtFxProfile > global.config?.dtFxProfile > "remote"
+//   scene  : exact current behavior (local melee/combat-scene for PVE/PK win/loss).
+//   mixed  : same as scene (combat-scene primary), reserved for future extension.
+//   remote (default): pick varied FX ids from DEVTRAN07/Pixelfx by tier/mode; on any
+//           render failure/null fall back to local melee/combat-scene (scene). Local
+//           files always win, so ids present locally still work without fetching.
+// Tiered pools: low tiers get quick single strikes, high tiers get heavy/flashy
+// multi-hits. Picks rotate deterministically per fight via seed so consecutive
+// fights do not look identical, but a given (mode,tier,seed) is stable.
+const DT_PVE_WIN = [
+  ["melee/sword-slash","melee/thrust"],
+  ["melee/double-slash","melee/spin-slash"],
+  ["melee/double-slash","melee/spin-slash","melee/sword-slash"],
+  ["melee/spin-slash","melee/heavy-cleave","melee/sword-slash"],
+  ["melee/heavy-cleave","melee/dagger-flurry","moves/sword-combo"],
+  ["melee/heavy-cleave","melee/dagger-flurry","moves/sword-combo","melee/scythe-reap"],
+];
+const DT_PK_WIN = [
+  ["melee/double-slash","melee/claw-swipe"],
+  ["melee/claw-swipe","melee/uppercut"],
+  ["melee/uppercut","melee/spin-slash","melee/claw-swipe"],
+  ["melee/spin-slash","melee/dagger-flurry","melee/uppercut"],
+  ["melee/dagger-flurry","melee/heavy-cleave","melee/claw-swipe"],
+  ["melee/heavy-cleave","melee/dagger-flurry","melee/scythe-reap","moves/sword-combo"],
+];
+// Losses: try a readable impact FX first (stronger tier -> bigger slam / flash),
+// then ALWAYS fall back to the local combat-scene defeat scene for readability.
+const DT_LOSS = [
+  ["impacts/blunt-hit"],
+  ["impacts/blunt-hit","impacts/hit-flash"],
+  ["impacts/hit-flash","impacts/ground-slam"],
+  ["impacts/ground-slam","impacts/hit-flash"],
+  ["impacts/ground-slam","impacts/crit-hit"],
+  ["impacts/ground-slam","impacts/crit-hit","impacts/hit-flash"],
+];
+
+function dtFxProfile() {
+  const v = String(
+    process.env.PIXELFX_DT_PROFILE
+    || (C().dtFxProfile)
+    || (global.config && global.config.dtFxProfile)
+    || "remote"
+  ).toLowerCase();
+  return (v === "remote" || v === "mixed" || v === "scene") ? v : "remote";
+}
+
+// Deterministic-ish pick: rotate within the tier pool by seed so fights vary,
+// but the same (pool, seed) always returns the same id.
+function pickFromPool(pool, seed) {
+  if (!pool || !pool.length) return null;
+  const n = Number(seed) || 0;
+  const idx = Math.abs(n) % pool.length;
+  return pool[idx] || null;
+}
+
+function pickRemoteId({ mode, tier, result, seed }) {
+  const t = Math.max(1, Math.min(6, Number(tier) || 1));
+  if (result === "loss") return pickFromPool(DT_LOSS[t - 1], seed);
+  const pool = mode === "pk" ? DT_PK_WIN : DT_PVE_WIN;
+  return pickFromPool(pool[t - 1], seed);
+}
+
+// Render a remote id, then fall back to the local combat-scene. Returns a path or null.
+// Used as a function renderSpec: renderVisual(px) -> await spec(px).
+async function renderRemoteOrScene(px, id, fxOpts, sceneGifOpts) {
+  const remoteGif = { fps: 12, scale: 2, bg: 0xff101018, fxOpts };
+  const remotePng = { progress: 0.7, bg: 0xff101018, scale: 1, fxOpts };
+  try {
+    if (id && typeof px.renderFxGif === "function") {
+      const r = await px.renderFxGif(id, remoteGif);
+      if (r && r.path) return r.path;
+    }
+  } catch {}
+  try {
+    if (id && typeof px.renderFx === "function") {
+      const r = await px.renderFx(id, remotePng);
+      if (r && r.path) return r.path;
+    }
+  } catch {}
+  // fallback: local melee/combat-scene (always reliable)
+  try {
+    if (typeof px.renderFxGif === "function") {
+      const r = await px.renderFxGif("melee/combat-scene", sceneGifOpts);
+      if (r && r.path) return r.path;
+    }
+  } catch {}
+  try {
+    if (typeof px.renderFx === "function") {
+      const r = await px.renderFx("melee/combat-scene", { progress: 0.7, bg: 0xff101018, scale: 1, fxOpts });
+      if (r && r.path) return r.path;
+    }
+  } catch {}
+  return null;
+}
+
 function combatSceneFx({ mode, tier, hits, power, seed, result }) {
   const t = Math.max(1, Math.min(6, Number(tier) || 1));
   const fxOpts = { mode: mode === 'pk' ? 'pk' : 'pve', tier: t, hits: Math.max(1, Math.min(5, Number(hits) || hitsForTier(t))), power: Math.max(1, Math.min(6, Number(power) || t)), seed: Number(seed) || 7, result: result === 'loss' ? 'loss' : 'win' };
-  return { gifId: 'melee/combat-scene', gifOpts: { fps: 12, scale: 2, bg: 0xff101018, fxOpts }, pngId: 'melee/combat-scene', pngOpts: { progress: 0.7, bg: 0xff101018, scale: 1, fxOpts } };
+  const gifOpts = { fps: 12, scale: 2, bg: 0xff101018, fxOpts };
+  const pngOpts = { progress: 0.7, bg: 0xff101018, scale: 1, fxOpts };
+  // remote profile: varied ids with robust local fallback (function renderSpec).
+  if (dtFxProfile() === "remote") {
+    const id = pickRemoteId({ mode, tier: t, result, seed });
+    if (id) return (px) => renderRemoteOrScene(px, id, fxOpts, gifOpts);
+  }
+  // scene / mixed (default): exact current behavior.
+  return { gifId: 'melee/combat-scene', gifOpts, pngId: 'melee/combat-scene', pngOpts };
 }
 
 function combat(player, enemy) {

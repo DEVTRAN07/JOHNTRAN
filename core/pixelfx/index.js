@@ -10,6 +10,10 @@ const execFileAsync = promisify(execFile);
 
 const VENDOR = path.resolve(__dirname, "..", "..", "vendor", "pixelfx");
 
+// Known ids -> repo-relative path. Anything not listed here resolves by convention to
+// `src/fx/<id>.js` (and can be fetched from the raw repo in hybrid/raw mode). Local files
+// ALWAYS win over the raw repo, so project-custom effects like `melee/combat-scene` keep
+// working even when raw fetching is enabled.
 const FX_MAP = {
   "ui/level-up": "src/fx/ui/level-up.js",
   "ui/coin-collect": "src/fx/ui/coin-collect.js",
@@ -17,7 +21,27 @@ const FX_MAP = {
   "ui/damage-number": "src/fx/ui/damage-number.js",
   "impacts/hit-flash": "src/fx/impacts/hit-flash.js",
   "impacts/crit-hit": "src/fx/impacts/crit-hit.js",
+  "impacts/ground-slam": "src/fx/impacts/ground-slam.js",
+  "impacts/hit-spark": "src/fx/impacts/hit-spark.js",
+  "impacts/impact-frame": "src/fx/impacts/impact-frame.js",
+  "impacts/blunt-hit": "src/fx/impacts/blunt-hit.js",
+  "impacts/parry": "src/fx/impacts/parry.js",
+  "impacts/shield-block": "src/fx/impacts/shield-block.js",
   "melee/sword-slash": "src/fx/melee/sword-slash.js",
+  "melee/double-slash": "src/fx/melee/double-slash.js",
+  "melee/heavy-cleave": "src/fx/melee/heavy-cleave.js",
+  "melee/spin-slash": "src/fx/melee/spin-slash.js",
+  "melee/thrust": "src/fx/melee/thrust.js",
+  "melee/dagger-flurry": "src/fx/melee/dagger-flurry.js",
+  "melee/claw-swipe": "src/fx/melee/claw-swipe.js",
+  "melee/uppercut": "src/fx/melee/uppercut.js",
+  "melee/hammer-smash": "src/fx/melee/hammer-smash.js",
+  "melee/scythe-reap": "src/fx/melee/scythe-reap.js",
+  "melee/spear-sweep": "src/fx/melee/spear-sweep.js",
+  "melee/whip-crack": "src/fx/melee/whip-crack.js",
+  "moves/sword-combo": "src/fx/moves/sword-combo.js",
+  "moves/dash-strike": "src/fx/moves/dash-strike.js",
+  "moves/ground-pound": "src/fx/moves/ground-pound.js",
   "spawn/coin-drop": "src/fx/spawn/coin-drop.js",
   "pickups/chest-open": "src/fx/pickups/chest-open.js",
   "melee/combat-scene": "src/fx/melee/combat-scene.js",
@@ -31,10 +55,12 @@ const VALID_REL = /^[a-z0-9][a-z0-9_\/-]*\.js$/i;
 const fetchedPaths = new Set();
 
 function envSource() {
-  const v = String(process.env.PIXELFX_SOURCE || "local").toLowerCase();
-  return v === "raw" || v === "hybrid" ? v : "local";
+  // hybrid by default: local files always win (see resolveFx), only fetches
+  // missing FX from raw.githubusercontent.com when needed, and caches them.
+  const v = String(process.env.PIXELFX_SOURCE || "hybrid").toLowerCase();
+  return v === "raw" || v === "hybrid" ? v : "hybrid";
 }
-function rawRepo() { return String(process.env.PIXELFX_RAW_REPO || "patch-gg/pixelfx"); }
+function rawRepo() { return String(process.env.PIXELFX_RAW_REPO || "DEVTRAN07/Pixelfx"); }
 function rawRef() { return String(process.env.PIXELFX_RAW_REF || "main"); }
 function rawBaseUrl() {
   const o = process.env.PIXELFX_RAW_BASE;
@@ -79,6 +105,69 @@ function ensureCacheCore(root) {
   const src = path.join(VENDOR, "src", "core");
   if (!fs.existsSync(src)) throw new Error("Local pixelfx core unavailable and raw core fetch not implemented");
   copyDirSync(src, dst);
+}
+
+// Recursively fetch every relative import a fetched FX module needs (its _lib.js, sibling
+// effects, core/*). Without this, effects like `moves/sword-combo` that import other effects
+// fail at dynamic import time because only the entry file was fetched.
+const REL_IMPORT_RE = /\bfrom\s+['"]\.\/?[^'"]+['"]|\bimport\s+['"]\.\/?[^'"]+['"]|\bimport\s*\(\s*['"]\.\/?[^'"]+['"]\s*\)/g;
+const REL_FROM_RE = /\bfrom\s+['"]([^'"]+)['"]/g;
+const REL_IMPORT_ONLY_RE = /\bimport\s+['"]([^'"]+)['"]/g;
+
+function listRelativeImports(src) {
+  const out = new Set();
+  const push = (m) => { if (m && (m.startsWith(".") || m.startsWith("/"))) out.add(m); };
+  // dynamic import("...") and bare import "..."
+  let m;
+  REL_IMPORT_RE.lastIndex = 0;
+  while ((m = REL_IMPORT_RE.exec(src))) {
+    const q = m[0];
+    const i = q.indexOf('"');
+    const j = q.lastIndexOf('"');
+    if (i >= 0 && j > i) push(q.slice(i + 1, j));
+  }
+  // from "..."
+  REL_FROM_RE.lastIndex = 0;
+  while ((m = REL_FROM_RE.exec(src))) push(m[1]);
+  // bare import "..."
+  REL_IMPORT_ONLY_RE.lastIndex = 0;
+  while ((m = REL_IMPORT_ONLY_RE.exec(src))) push(m[1]);
+  return Array.from(out);
+}
+
+function resolveRelImport(importSpec, entryRel) {
+  // entryRel is like "src/fx/moves/sword-combo.js"; importSpec like "../melee/sword-slash.js"
+  const entryDir = entryRel.replace(/\\/g, "/").replace(/[^/]*$/, "");
+  const stack = entryDir.split("/").filter(Boolean);
+  const segs = importSpec.split("/").filter(Boolean);
+  for (const seg of segs) {
+    if (seg === ".") continue;
+    if (seg === "..") stack.pop();
+    else stack.push(seg);
+  }
+  return stack.join("/");
+}
+
+async function fetchDependencies(cacheRoot, entryRel, rawBase, seen = new Set()) {
+  if (seen.has(entryRel)) return;
+  seen.add(entryRel);
+  const entryPath = path.join(cacheRoot, entryRel);
+  if (!fs.existsSync(entryPath)) return;
+  let src;
+  try { src = fs.readFileSync(entryPath, "utf8"); } catch { return; }
+  for (const spec of listRelativeImports(src)) {
+    let rel;
+    try { rel = resolveRelImport(spec, entryRel); } catch { continue; }
+    if (!rel || !isSafeRel(rel)) continue;
+    if (seen.has(rel)) continue;
+    try {
+      await fetchToCache(cacheRoot, rel, rawBase);
+      await fetchDependencies(cacheRoot, rel, rawBase, seen);
+    } catch (e) {
+      // missing dep is non-fatal for optional imports; surface as a warning via the caller's catch
+      throw e;
+    }
+  }
 }
 
 async function fetchToCache(cacheRoot, relPath, rawBase) {
@@ -137,7 +226,13 @@ async function resolveFx(id) {
   ensurePackageJson(root);
   ensureCacheCore(root);
   const cachedFx = await fetchToCache(root, rel, rawBaseUrl());
-  // fx imports ../../core/* relative to src/fx/*, so core must exist in cache root.
+  // fx imports ../../core/* and sibling effects relative to src/fx/*, so fetch every
+  // dependency the entry needs (its _lib.js, other effects, core/*) into the cache root.
+  // Dependency fetch is best-effort and silent: a missing/failed dep surfaces naturally as
+  // a dynamic import error at render time, which the caller already handles with a fallback.
+  try {
+    await fetchDependencies(root, rel, rawBaseUrl());
+  } catch {}
   return { fxUrl: pathToFileURL(cachedFx).href, coreUrl: LOCAL_CORE_URL, metaHint: null };
 }
 
