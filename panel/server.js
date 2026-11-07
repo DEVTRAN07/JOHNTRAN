@@ -337,15 +337,41 @@ function isBotStatFresh(row) {
   return botStatUpdatedAtMs(row) > Date.now() - BOTSTATS_FRESH_MS;
 }
 function findBotStatsRow(botName) {
-  if (!storeDb) return null;
+  // 1) Ưu tiên store master (Supabase hoac store.json chung cua panel).
+  if (storeDb) {
+    try {
+      const rows = storeDb.allData("BotStats");
+      for (const row of rows || []) {
+        const key = row?.name || row?.id;
+        if (!key || key === "soundcloud_client_id") continue;
+        if (key === botName) return row;
+      }
+    } catch { /* BotStats/Supabase unavailable */ }
+  }
+  // 2) Fallback an toàn: bot con (panel-child mode) ghi BotStats vào
+  //    bots/<name>/store.json (JT_DB_FILE) — panel master không cùng file,
+  //    nên đọc trực tiếp file JSON đó để lấy loginState/loginMessage.
+  //    KHÔNG dùng chung JsonStore (nguy cơ concurrent writer).
   try {
-    const rows = storeDb.allData("BotStats");
-    for (const row of rows || []) {
-      const key = row?.name || row?.id;
-      if (!key || key === "soundcloud_client_id") continue;
-      if (key === botName) return row;
+    const childDbFile = botPaths(botName).dbFile;
+    if (childDbFile && fs.existsSync(childDbFile)) {
+      const raw = fs.readFileSync(childDbFile, "utf8");
+      const parsed = JSON.parse(raw);
+      const table = parsed?.BotStats;
+      if (table && typeof table === "object") {
+        const keys = Object.keys(table);
+        for (const key of keys) {
+          if (key === "soundcloud_client_id") continue;
+          if (key === botName) {
+            const rec = table[key];
+            return rec?.data != null
+              ? { name: key, data: rec.data, updatedAt: rec.updatedAt }
+              : { name: key, data: rec, updatedAt: rec.updatedAt };
+          }
+        }
+      }
     }
-  } catch { /* BotStats/Supabase unavailable */ }
+  } catch { /* child store unavailable/corrupt — bỏ qua */ }
   return null;
 }
 function enrichBot(bot) {
@@ -360,6 +386,10 @@ function enrichBot(bot) {
     }
   }
   out.loginState = loginState;
+  // Gợi ý lưu phiên (không chứa secrets) để Render redeploy không cần quét QR.
+  if (loginState === "logged_in") {
+    out.sessionHint = "Bot đã đăng nhập Zalo. Để không quét QR lại khi redeploy: set env JT_ACCOUNT_JSON và JT_COOKIE_JSON (Secret Text) từ phiên này trên Render Dashboard → Shell. Xem chi tiết nút 🔑 Phiên đăng nhập.";
+  }
   const waiting = ["qr_pending","qr_scanned","cookie_login","starting","waiting_login","unknown"];
   let displayStatus;
   if (loginState === "logged_in") displayStatus = "online";
@@ -667,6 +697,40 @@ function startPanel({ manager, config }) {
             return res.end(buffer);
           }
         }
+      }
+
+
+      // ===== Phiên đăng nhập (an toàn, không lộ secrets) =====
+      // Dùng để panel/UI hướng dẫn lưu phiên cho Render redeploy.
+      // CHỈ trả về metadata (tồn tại file, hình dạng hợp lệ) — KHÔNG trả
+      // JT_ACCOUNT_JSON / JT_COOKIE_JSON / cookie / imei / token.
+      const sessMatch = pathname.match(/^\/api\/bots\/([a-zA-Z0-9_-]+)\/session$/);
+      if (sessMatch) {
+        const name = sessMatch[1];
+        const paths = botPaths(name);
+        const enriched = enrichBot(manager.get(name)?.toJSON() || { name, status: "offline" });
+        const hasAccount = fs.existsSync(paths.accountFile);
+        const cookiePath = path.join(paths.dir, "cookie.json");
+        const hasCookie = fs.existsSync(cookiePath);
+        let cookieLooksValid = false;
+        if (hasCookie) {
+          try {
+            const ck = JSON.parse(fs.readFileSync(cookiePath, "utf8"));
+            if (ck && (Array.isArray(ck) ? ck.length : Object.keys(ck).length)) cookieLooksValid = true;
+          } catch { /* ignore */ }
+        }
+        return sendJson(res, 200, {
+          name,
+          loginState: enriched.loginState || null,
+          status: enriched.status || null,
+          hasAccountFile: hasAccount,
+          hasCookieFile: hasCookie,
+          cookieLooksValidShape: cookieLooksValid,
+          accountPathRelative: path.relative(ROOT, paths.accountFile),
+          cookiePathRelative: path.relative(ROOT, cookiePath),
+          dbPathRelative: path.relative(ROOT, paths.dbFile),
+          updatedAt: botStatUpdatedAtMs(findBotStatsRow(name)) || null
+        });
       }
 
       sendJson(res, 404, { error: "Không tìm thấy endpoint" });

@@ -27,7 +27,11 @@ function safeJsonParse(text) {
 
 function bootstrapFiles() {
   const config = global.config || {};
-  const accountFile = resolve(config.account_file || "account.json");
+  // Ưu tiên JT_ACCOUNT_FILE (panel child set bots/<name>/account.json tuyệt đối)
+  // để account/cookie được khôi phục đúng nơi login sẽ đọc — tránh ghi nhầm root.
+  const accountFile = process.env.JT_ACCOUNT_FILE
+    ? (path.isAbsolute(process.env.JT_ACCOUNT_FILE) ? process.env.JT_ACCOUNT_FILE : resolve(process.env.JT_ACCOUNT_FILE))
+    : resolve(config.account_file || "account.json");
 
   // 1. Ghi account.json
   const accountJson = process.env.JT_ACCOUNT_JSON;
@@ -48,9 +52,10 @@ function bootstrapFiles() {
 
   if (!cookieFile) {
     const account = safeJsonParse(fs.existsSync(accountFile) ? fs.readFileSync(accountFile, "utf8") : accountJson);
-    cookieFile = account && account.cookie
-      ? resolve(account.cookie)
-      : path.join(path.dirname(accountFile), "cookie.json");
+    const cookieRel = account && account.cookie ? account.cookie : "cookie.json";
+    cookieFile = path.isAbsolute(cookieRel)
+      ? cookieRel
+      : path.join(path.dirname(accountFile), cookieRel);
   }
 
   // 3. Ghi cookie.json

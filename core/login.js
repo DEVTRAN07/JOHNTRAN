@@ -38,6 +38,16 @@ function resolveQrPath() {
   return resolveBotPath(global.config?.qrcode_path || "qr.png");
 }
 
+// Đường dẫn account: ưu tiên env JT_ACCOUNT_FILE (panel child set bots/<name>/account.json
+// tuyệt đối) — nếu là đường tương đối thì resolve giống resolveBotPath (từ root bot).
+function resolveAccountPath() {
+  const envPath = process.env.JT_ACCOUNT_FILE;
+  if (envPath && String(envPath).trim()) {
+    return path.isAbsolute(envPath) ? envPath : resolveBotPath(envPath);
+  }
+  return resolveBotPath(global.config?.account_file || "account.json");
+}
+
 const BOT_NAME = process.env.JT_BOT_NAME || "main";
 
 // Ghi trạng thái đăng nhập lên BotStats để panel hiển thị trạng thái thực trước khi đăng nhập xong.
@@ -144,12 +154,17 @@ async function loginWithQR() {
     try {
         const userAgent = resolveUserAgent();
         const zalo = createZaloClient();
-        const accountPath = resolveBotPath(global.config.account_file);
+        const accountPath = resolveAccountPath();
         fs.mkdirSync(path.dirname(accountPath), { recursive: true });
 
         const accountData = getJsonData(accountPath);
         const cookieFileName = accountData.cookie || "cookie.json";
-        const cookiePath = resolveBotPath(cookieFileName);
+        // Cookie luôn resolve tương đốiso với thư mục của account file
+        // (child mode: bots/<name>/account.json → bots/<name>/cookie.json),
+        // tránh cookie bị ghi nhầm vào root bot.
+        const cookiePath = path.isAbsolute(cookieFileName)
+          ? cookieFileName
+          : path.join(path.dirname(accountPath), cookieFileName);
 
         const qrPath = resolveQrPath();
         try { fs.mkdirSync(path.dirname(qrPath), { recursive: true }); } catch { /* thư mục đã có hoặc không thể tạo — displayQRCodeInConsole sẽ tạo lại */ }
@@ -283,11 +298,15 @@ async function loginWithQR() {
 async function loginWithCookie() {
     try {
         const zalo = createZaloClient();
-        const accountPath = resolveBotPath(global.config.account_file);
+        const accountPath = resolveAccountPath();
         fs.mkdirSync(path.dirname(accountPath), { recursive: true });
 
         const accountData = getJsonData(accountPath);
-        const cookie = getJsonData(resolveBotPath(accountData.cookie));
+        const cookieFileName = accountData.cookie || "cookie.json";
+        const cookiePath = path.isAbsolute(cookieFileName)
+          ? cookieFileName
+          : path.join(path.dirname(accountPath), cookieFileName);
+        const cookie = getJsonData(cookiePath);
 
         const api = await zalo.login({
             cookie: cookie,
@@ -334,4 +353,5 @@ module.exports.getLoginState = getLoginState;
 module.exports.setLoginState = setLoginState;
 module.exports.loginState = getLoginState;
 module.exports.resolveQrPath = resolveQrPath;
+module.exports.resolveAccountPath = resolveAccountPath;
 module.exports.saveBotStats = saveBotStats;

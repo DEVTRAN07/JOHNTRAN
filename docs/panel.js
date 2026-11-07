@@ -139,7 +139,7 @@ function renderBots(bots) {
           <span class="dot ${st[0]}"></span>
           <div>
             <b>${escapeHtml(main.name)}</b>
-            <div class="sub">${st[1]} • pid <b>${main.pid || "–"}</b> • uptime <b>${uptime(main.uptimeMs || 0)}</b> • restart <b>${main.restarts || 0}</b> lần</div>
+            <div class="sub">${st[1]} • pid <b>${main.pid || "–"}</b> • uptime <b>${uptime(main.uptimeMs || 0)}</b> • restart <b>${main.restarts || 0}</b> lần${main.sessionHint ? ' • <span style="color:var(--accent)">${escapeHtml(main.sessionHint)}</span>' : ""}</div>
           </div>
         </div>
         <div class="badges">
@@ -151,6 +151,7 @@ function renderBots(bots) {
           <button class="primary" onclick="botAction('${escapeAttr(main.name)}','restart')">🔄 Khởi động lại</button>
           <button onclick="botAction('${escapeAttr(main.name)}','start')">▶ Chạy</button>
           <button onclick="botAction('${escapeAttr(main.name)}','stop')">⏹ Dừng</button>
+          <button class="primary" onclick="showSession('${escapeAttr(main.name)}')">🔑 Phiên đăng nhập</button>
           <button onclick="showLogs('${escapeAttr(main.name)}')">📜 Logs</button>
           ${shouldShowQr(main) ? `<button onclick="showQr('${escapeAttr(main.name)}')">📱 QR đăng nhập</button>` : ""}
         </div>
@@ -171,6 +172,7 @@ function renderBots(bots) {
         <span style="flex:1"></span>
         <span class="badge ${st[0] === "online" ? "on" : "off"}">${st[1]}</span>
       </header>
+      ${b.sessionHint ? `<div class="sub" style="color:var(--accent);margin-bottom:8px">${escapeHtml(b.sessionHint)}</div>` : ""}
       <div class="stats">
         <div><div class="k">Uptime</div><div class="v">${uptime(b.uptimeMs || 0)}</div></div>
         <div><div class="k">Restart</div><div class="v">${b.restarts || 0}</div></div>
@@ -180,6 +182,7 @@ function renderBots(bots) {
         <button class="primary small" onclick="botAction('${escapeAttr(b.name)}','start')">▶ Chạy</button>
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','stop')">⏹ Dừng</button>
         <button class="small" onclick="botAction('${escapeAttr(b.name)}','restart')">🔄 Khởi động lại</button>
+        <button class="small" onclick="showSession('${escapeAttr(b.name)}')">🔑 Phiên</button>
         <button class="small" onclick="showLogs('${escapeAttr(b.name)}')">📜 Logs</button>
         ${shouldShowQr(b) ? `<button class="small" onclick="showQr('${escapeAttr(b.name)}')">📱 QR</button>` : ""}
         <button class="small danger" onclick="removeBot('${escapeAttr(b.name)}')">🗑 Xoá</button>
@@ -525,6 +528,70 @@ async function showQr(name) {
   load();
   clearInterval(qrPoll);
   qrPoll = setInterval(load, 5000);
+}
+
+
+/* ---------- Phiên đăng nhập (metadata an toàn, không lộ secrets) ---------- */
+async function showSession(name) {
+  $("modalTitle").textContent = "Phiên đăng nhập • " + name;
+  $("modalBody").innerHTML = `
+    <div id="sessionBody" class="sub">Đang tải...</div>
+    <div style="margin-top:14px"><button class="small" onclick="document.getElementById('sessionBody').innerHTML=''">Đóng</button></div>
+  `;
+  $("modal").classList.add("open");
+  const load = async () => {
+    const body = $("sessionBody");
+    if (!body) return;
+    try {
+      const s = await api("/api/bots/" + encodeURIComponent(name) + "/session");
+      const bot = allBots.find((b) => b.name === name) || {};
+      const st = (s.loginState || bot.loginState || bot.status || "").toString();
+      const online = st === "logged_in" || st === "online";
+      const rows = [
+        ["Trạng thái", online
+          ? '<span class="badge on">ĐÃ ĐĂNG NHẬP ZALO</span>'
+          : (st === "failed" ? '<span class="badge off">Đăng nhập thất bại</span>'
+             : '<span class="badge off">Chờ đăng nhập</span>')],
+        ["loginState", escapeHtml(s.loginState || bot.loginState || "–")],
+        ["Cập nhật", s.updatedAt ? new Date(s.updatedAt).toLocaleString("vi-VN") : "–"],
+        ["account.json", s.hasAccountFile ? "có" : "không"],
+        ["cookie.json", s.hasCookieFile ? "có" : "không"],
+        ["Cookie hợp lệ", s.cookieLooksValidShape ? "có" : "không"],
+        ["accountPath", escapeHtml(s.accountPathRelative || "–")],
+        ["cookiePath", escapeHtml(s.cookiePathRelative || "–")],
+        ["dbPath", escapeHtml(s.dbPathRelative || "–")]
+      ];
+      body.innerHTML = `
+        <table class="info">
+          ${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}
+        </table>
+        ${online ? `
+          <div class="card" style="margin-top:14px;border-color:var(--accent)">
+            <h3 style="color:var(--accent)">Lưu phiên để Render redeploy không cần quét QR</h3>
+            <p class="sub" style="margin:8px 0">
+              Bot đang đăng nhập. Khi redeploy, account.json/cookie.json bị xoá — set env JT_ACCOUNT_JSON và JT_COOKIE_JSON từ phiên này.
+            </p>
+            <ol class="sub" style="margin:8px 0 14px 18px">
+              <li>Vào <b>Render Shell</b> (Dashboard → Shell) của service.</li>
+              <li>Điền 2 env vars (loại <b>Secret Text</b> để an toàn):</li>
+              <pre style="background:var(--bg);padding:10px;border-radius:8px;overflow:auto">
+JT_ACCOUNT_JSON=<i>nội dung file account.json</i>
+JT_COOKIE_JSON=<i>nội dung file cookie.json</i></pre>
+              <li>Chạy: <code>git push</code> hoặc redeploy.</li>
+            </ol>
+            <div class="sub" style="color:var(--red)">
+              ⚠️ KHÔNG commit account.json/cookie.json lên GitHub. Dùng Render Shell/env vars hoặc .env (gitignored).
+            </div>
+          </div>
+        ` : ""}
+      `;
+    } catch (e) {
+      $("sessionBody").innerHTML = '<div class="empty">Không tải được: ' + escapeHtml(e.message) + '</div>';
+    }
+  };
+  load();
+  clearInterval(qrPoll);
+  qrPoll = setInterval(load, 10000);
 }
 
 
