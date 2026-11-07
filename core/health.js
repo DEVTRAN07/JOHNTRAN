@@ -79,12 +79,7 @@ function requestHandler(req, res) {
 function startHealthServer() {
   const panel = global.config?.panel || {};
   const configuredPort = global.config?.health_port;
-  const port = Number(process.env.PORT) || (configuredPort ? Number(configuredPort) : 0);
-
-  if (!port) {
-    console.log("[health] Không bật health server (không có PORT env / health_port)");
-    return null;
-  }
+  const port = Number(process.env.PORT) || (configuredPort ? Number(configuredPort) : 8000);
 
   // panel đang chiếm port này rồi thì thôi (panel đã có /health riêng)
   if (panel.enabled && Number(panel.port) === port) {
