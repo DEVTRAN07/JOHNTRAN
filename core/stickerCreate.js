@@ -12,12 +12,11 @@ const converter = require("./stickerConvert");
 const { buildStickerUrl, stripStickerSuffix, jxlToJpg } = require("./stickerFactory");
 
 const CACHE_DIR = path.join(__dirname, "..", "assets", "cache", "sticker");
-// Catbox đã chặn anonymous upload (412 "Invalid uploader" mọi request) —
-// chuyển sang Litterbox (cùng hệ sinh thái, tạm thời 72h). Chỉ dùng khi
-// Zalo CDN thất bại — sticker Zalo CDN mới là bền vững.
-const CATBOX_URL = "https://litterbox.catbox.moe/resources/internals/api.php";
+// Fallback khi Zalo CDN thất bại: catbox.moe (user/api.php) với multipart đúng chuẩn.
+// Anonymous upload catbox trả "Invalid uploader" → cần userhash (CATBOX_USERHASH).
+const CATBOX_URL = "https://catbox.moe/user/api.php";
 const CATBOX_USERHASH = process.env.CATBOX_USERHASH || process.env.LITTERBOX_USERHASH || "";
-const CATBOX_FIELDS = [["reqtype", "fileupload"], ["time", "72h"]]
+const CATBOX_FIELDS = [["reqtype", "fileupload"]]
   .concat(CATBOX_USERHASH ? [["userhash", CATBOX_USERHASH]] : []);
 
 function cleanMediaUrl(url) {
@@ -45,7 +44,7 @@ function pickFetcher(api, url) {
   return null; // mặc định: core/http (có privacy guard)
 }
 
-// Upload Litterbox (multipart thủ công — core/http chỉ nhận string/Buffer body)
+// Upload catbox.moe (multipart thủ công — core/http chỉ nhận string/Buffer body)
 async function uploadCatbox(filePath) {
   const fileName = path.basename(filePath);
   const fileBuffer = fs.readFileSync(filePath);
@@ -78,7 +77,7 @@ async function uploadCatbox(filePath) {
 
   const text = (res.text() || "").trim();
   if (!text.startsWith("http")) {
-    const err = new Error("Litterbox trả về: " + text.slice(0, 120));
+    const err = new Error("catbox trả về: " + text.slice(0, 120));
     err.response = text;
     throw err;
   }
@@ -122,7 +121,7 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
     } catch (error) {
       console.error("[stk] Zalo upload lỗi:", error.message);
     }
-    // Zalo thất bại → Litterbox (72h)
+    // Zalo thất bại → catbox.moe
     if (!stickerUrl) {
       const catboxUrl = await uploadCatbox(file.path);
       stickerUrl = buildStickerUrl(catboxUrl, file.format === "webp");
@@ -134,7 +133,7 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
 
   if (!stickerUrl) {
     const err = new Error("UPLOAD_FAILED");
-    err.userMessage = "❌ Upload sticker thất bại (cả Zalo CDN và Litterbox). Thử lại sau hoặc đổi file khác.";
+    err.userMessage = "❌ Upload sticker thất bại (cả Zalo CDN và catbox.moe). Thử lại sau hoặc đổi file khác.";
     throw err;
   }
 
