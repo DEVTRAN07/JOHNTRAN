@@ -243,7 +243,7 @@ assets/
 - **TTL chuẩn hoá**: mọi tin nhắn TTL ≥ 60.000ms (Zalo chỉ tự xóa tin từ 1 phút) — `ttl.message/error/media/card` trong config.yml.
 - **Đổi storage**: bỏ better-sqlite3 (native), dùng JSON store atomic ghi `data/store.json`, mỗi bot con một file riêng.
 - **Web panel + bot con**: bật `panel.enabled: true` rồi chạy `npm start`, mở `http://localhost:3000` — tạo/dừng/xoá bot con, log realtime, QR đăng nhập, metrics bar, auto-restart, watchdog crash loop.
-- **Đã xoá toàn bộ lệnh game** (taixiu, baucua, daily, tiền tệ...) và dữ liệu liên quan.
+- **Đã xoá toàn bộ lệnh game** (taixiu, baucua, daily, tiền tệ, dt/dautruong...) và dữ liệu liên quan.
 
 **Nguyên tắc bảo mật:**
 - `privacy.allowed_hosts`: chỉ các host được liệt kê mới được phép gửi request (kiểm tra ở cả `core/http` và interceptor axios toàn cục).

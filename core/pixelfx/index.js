@@ -12,7 +12,7 @@ const VENDOR = path.resolve(__dirname, "..", "..", "vendor", "pixelfx");
 
 // Known ids -> repo-relative path. Anything not listed here resolves by convention to
 // `src/fx/<id>.js` (and can be fetched from the raw repo in hybrid/raw mode). Local files
-// ALWAYS win over the raw repo, so project-custom effects like `melee/combat-scene` keep
+// ALWAYS win over the raw repo, so project-custom effects keep
 // working even when raw fetching is enabled.
 const FX_MAP = {
   "ui/level-up": "src/fx/ui/level-up.js",
@@ -44,7 +44,6 @@ const FX_MAP = {
   "moves/ground-pound": "src/fx/moves/ground-pound.js",
   "spawn/coin-drop": "src/fx/spawn/coin-drop.js",
   "pickups/chest-open": "src/fx/pickups/chest-open.js",
-  "melee/combat-scene": "src/fx/melee/combat-scene.js",
 };
 
 const LOCAL_CORE_FILE = path.join(VENDOR, "src", "core", "index.js");
@@ -213,7 +212,7 @@ async function resolveFx(id) {
   const localFx = path.join(VENDOR, rel);
   const localFxExists = fs.existsSync(localFx);
   const source = envSource();
-  // melee/combat-scene and any existing local file always prefer local, even in raw mode.
+  // any existing local file always prefers local, even in raw mode.
   if (localFxExists) {
     return { fxUrl: pathToFileURL(localFx).href, coreUrl: LOCAL_CORE_URL, metaHint: null };
   }
