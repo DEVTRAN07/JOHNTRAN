@@ -1,6 +1,5 @@
 const fs = require("fs");
 const logger = require("../../utils/logger");
-const menuCard = require("../../core/canvas/menu");
 
 const PAGE_SIZE = 9; // khớp canvas 3 cột x 3 hàng
 const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
@@ -102,6 +101,7 @@ async function renderPage({ api, event, Threads, commands, page, totalPages, thr
     let gridPath = menuCache.get(cacheKey);
     if (!gridPath || !fs.existsSync(gridPath)) {
         try {
+            const menuCard = require("../../core/canvas/menu");
             gridPath = await menuCard.renderMenuGrid({
                 botName: global.config.name_bot,
                 avatarUrl: data.avatar,

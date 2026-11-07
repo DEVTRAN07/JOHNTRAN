@@ -36,8 +36,8 @@ module.exports.run = async ({ args, event, reply }) => {
 
   // Có từ khóa → tìm trên Zing rồi lấy lyric bài đầu tiên
   try {
-    const tracks = await music.search("zing", args.join(" "), 1);
-    return showLyric(reply, "zing", tracks[0]);
+    const tracks = await music.search("soundcloud", args.join(" "), 1);
+    return showLyric(reply, "soundcloud", tracks[0]);
   } catch (error) {
     await reply.failed();
     return reply.error(error.notAvailable ? error.message : `Lỗi khi tìm bài hát: ${error.message}`);

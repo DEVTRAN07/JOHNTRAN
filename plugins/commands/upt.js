@@ -23,7 +23,7 @@ module.exports.config = {
 
 // author @GwenDev
 const CACHE_DIR = path.join(__dirname, 'temp');
-if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+function ensureCacheDir() { if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true }); }
 
 function getIpAddress() {
   return '127.0.0.1';
@@ -228,6 +228,7 @@ ctx.fill();
 
 
 module.exports.run = async ({ event, api, args }) => {
+    ensureCacheDir();
     const start = Date.now();
     const ram = getSystemRAMUsage();
     const heap = getHeapMemoryUsage();

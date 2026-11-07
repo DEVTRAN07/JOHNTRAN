@@ -2,7 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const { ThreadType } = require("zalo-client");
 
-const GIF_LIST = require("../../assets/autosend.json"); // 64 gif imgur
+let GIF_LIST = [];
+try { GIF_LIST = require("../../assets/autosend.json"); } catch { GIF_LIST = []; } // 64 gif imgur
 const TEMP_DIR = path.join(__dirname, "temp");
 
 module.exports.config = {

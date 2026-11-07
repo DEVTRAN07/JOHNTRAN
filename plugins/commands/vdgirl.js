@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { processVideo } = require("../../utils/index");
 
-const vdgirl = require('../../assets/vdgirl.json');
+let vdgirl = [];
+try { vdgirl = require('../../assets/vdgirl.json'); } catch { vdgirl = []; }
 
 module.exports.config = {
   name: 'vdgirl',

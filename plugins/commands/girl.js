@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const girlImages = require('../../assets/girl.json');
+let vdgirl = [];
+try { vdgirl = require('../../assets/vdgirl.json'); } catch { vdgirl = []; }
 
 module.exports.config = {
   name: 'girl',

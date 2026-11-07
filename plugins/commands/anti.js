@@ -48,7 +48,7 @@ async function isAdmin(api, userId, threadId) {
 
   const isCreator = groupInfo.creatorId === userId;
   const isDeputy = Array.isArray(groupInfo.adminIds) && groupInfo.adminIds.includes(userId);
-  isGroupAdmin = isCreator || isDeputy;
+  let isGroupAdmin = isCreator || isDeputy;
 
   return isGroupAdmin;
 }
@@ -70,7 +70,7 @@ module.exports.handleEvent = async function ({ event, api, Threads, eventType, i
   try {
     // === Anti Link ===
     if (threadData.anti_link) {
-      if ((data.msgType == "chat.recommended" && data.content.action == "recommened.link") || (data.msgType == "webchat" && String(data.content).match(/https?:\/\/[^\s]+/))) {
+      if ((data.msgType == "chat.recommended" && data.content.action == "recommended.link") || (data.msgType == "webchat" && String(data.content).match(/https?:\/\/[^\s]+/))) {
         if (isAdmin(api, userId, threadId)) return;
         await api.deleteMessage({
           threadId,
@@ -173,10 +173,10 @@ module.exports.handleEvent = async function ({ event, api, Threads, eventType, i
         case "chat.recommended": {
           const { action, href, title, params } = messageCache.content;
 
-          if (action === "recommened.link") {
+          if (action === "recommended.link") {
             const msg = formatUndoMessage(name, timeSend, timeUndo, title.replace(href, ""));
             await api.sendLink({ msg, link: href }, threadId, typeUndo);
-          } else if (action === "recommened.user") {
+          } else if (action === "recommended.user") {
             await sendUndoMessage(formatUndoMessage(name, timeSend, timeUndo));
             await api.sendCard({ userId: params }, threadId, typeUndo);
           }

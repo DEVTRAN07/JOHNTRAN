@@ -11,7 +11,6 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const http = require("../../core/http");
-const card = require("../../core/canvas/profileCard");
 const { fetchSocial } = require("../../core/socialFetch");
 
 module.exports.config = {
@@ -107,6 +106,7 @@ module.exports.run = async function ({ api, event, args, reply }) {
         ttl: 60000
       }, threadId, type);
     }
+    const card = require("../../core/canvas/profileCard");
     cardPath = await card.render({
       name: String(info.nickname || info.username || target),
       avatarBuffer,
@@ -148,7 +148,7 @@ async function downloadTikTok(api, threadId, type, link, ext, label) {
         msg: `${label}\n❌ Không lấy được link media (API TikTok đang chặn).\n💡 Thử lại sau hoặc dùng link khác.`
       }, threadId, type);
     }
-    const { buffer } = await getBuffer(mediaUrl, { timeout: 120000 });
+    const { buffer } = await http.getBuffer(mediaUrl, { timeout: 120000 });
     fs.writeFileSync(filePath, buffer);
     await api.sendMessage({ msg: `${label} — ${(buffer.length / 1048576).toFixed(1)}MB`, attachments: [filePath], ttlKind: "media" }, threadId, type);
   } catch (error) {

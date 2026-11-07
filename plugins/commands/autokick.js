@@ -13,9 +13,10 @@ module.exports.config = {
   dependencies: {}
 };
 
-function getConfig(threadId) {
+async function getConfig(threadId) {
   const Threads = require("../../core/controller/controllerThreads");
-  return Threads.getData(threadId).data || {};
+  const thread = await Threads.getData(threadId);
+  return (thread && thread.data) || {};
 }
 
 async function setConfig(threadId, data) {
