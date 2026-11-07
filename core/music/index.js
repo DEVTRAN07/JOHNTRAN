@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { spawn } = require("child_process");
 const path = require("path");
 const http = require("../http");
 const db = require("../../utils/db");
@@ -92,7 +93,7 @@ async function downloadHlsToFile(streamUrl, extension) {
   const filePath = path.join(tempDir, `music_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extension}`);
   await new Promise((resolve, reject) => {
     const cmd = ffmpeg(streamUrl)
-      .inputOptions(["-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-allowed_extensions", "ALL"])
+      .inputOptions(["-nostdin", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-allowed_extensions", "ALL"])
       .audioCodec("libmp3lame")
       .audioBitrate("128k")
       .format("mp3")
