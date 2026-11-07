@@ -21,12 +21,25 @@ module.exports.config = {
     ]
 };
 
+function getSafePluginPath(name) {
+  if (name == null || typeof name !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(name)) return null;
+  const safeName = path.basename(name).replace(/\.js$/, '');
+  const resolved = path.resolve(__dirname, `${safeName}.js`);
+  const base = path.resolve(__dirname);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) return null;
+  return resolved;
+}
+
 module.exports.run = async function ({ api, event, args }) {
   const { threadId, type, data } = event;
 
   if (!args[0]) return api.sendMessage("Vui lòng nhập tên file hoặc reply link chứa code!", threadId, type);
 
   const name = args[0].replace(/\.js$/, '');
+  const filePath = getSafePluginPath(name);
+  if (!filePath) {
+    return api.sendMessage("Tên file không hợp lệ hoặc đường dẫn vượt ngoài thư mục plugin. Chỉ cho phép chữ cái, số, gạch dưới và gạch ngang.", threadId, type);
+  }
   let link;
 
   if (data?.quote?.cliMsgId) {
@@ -35,7 +48,6 @@ module.exports.run = async function ({ api, event, args }) {
   }
 
   if (!link) {
-    const filePath = path.join(__dirname, `${name}.js`);
     try {
       const fileData = fs.readFileSync(filePath, "utf-8");
       const dpasteUrl = await uploadToDpaste(fileData);
@@ -86,9 +98,8 @@ module.exports.run = async function ({ api, event, args }) {
       const idMatch = url.match(/[-\w]{25,}/);
       if (!idMatch) return api.sendMessage("Không lấy được ID từ link Google Drive.", threadId, type);
       const fileID = idMatch[0];
-      const savePath = path.join(__dirname, `${name}.js`);
-      await downloadFile(`https://drive.google.com/u/0/uc?id=${fileID}&export=download`, savePath);
-      return api.sendMessage(`Đã tải plugin "${name}.js". Hãy dùng cmd load ${name} để sử dụng.`, threadId, type);
+      await downloadFile(`https://drive.google.com/u/0/uc?id=${fileID}&export=download`, filePath);
+      return api.sendMessage(`Đã tải plugin "${name}.js". ⚠️ Cảnh báo: tính năng tải code từ link chỉ dành cho admin, có nguy cơ RCE - chỉ chạy code từ nguồn tin cậy. Hãy dùng cmd load ${name} để sử dụng.`, threadId, type);
     }
 
     else {
@@ -100,12 +111,15 @@ module.exports.run = async function ({ api, event, args }) {
 };
 
 async function writeCodeToFile(name, code, api, threadId, type) {
-  const filePath = path.join(__dirname, `${name}.js`);
+  const filePath = getSafePluginPath(name);
+  if (!filePath) {
+    return api.sendMessage("Tên file không hợp lệ hoặc đường dẫn vượt ngoài thư mục plugin.", threadId, type);
+  }
   fs.writeFile(filePath, code, 'utf-8', (err) => {
     if (err) {
       return api.sendMessage(`Không thể ghi file "${name}.js".`, threadId, type);
     }
-    api.sendMessage(`Đã tải plugin "${name}.js". Hãy dùng cmd load ${name} để sử dụng.`, threadId, type);
+    api.sendMessage(`Đã tải plugin "${name}.js". ⚠️ Cảnh báo: tính năng ghi code từ link chỉ dành cho admin, có nguy cơ RCE - chỉ áp dụng code bạn tin cậy. Hãy dùng cmd load ${name} để sử dụng.`, threadId, type);
   });
 }
 

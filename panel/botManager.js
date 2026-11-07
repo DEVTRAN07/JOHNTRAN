@@ -49,6 +49,7 @@ class BotInstance {
   constructor(name, options = {}) {
     // Cổng cầu nối chat nội bộ — bot con tăng dần từ 3902
     this.bridgePort = Number(options.bridgePort) || (name === "main" ? 3901 : 0);
+    this.bridgeToken = options.bridgeToken || "";
     this.name = name;
     this.autoRestart = options.autoRestart !== false;
     this.process = null;
@@ -90,6 +91,9 @@ class BotInstance {
       JT_QRCODE_PATH: paths.qrFile,
       JT_PANEL_CHILD: "1",
       JT_BRIDGE_PORT: String(this.bridgePort || 3901),
+      // Token bảo vệ cầu nối panel↔bot: bot con dùng GIỐNG panel proxy.
+      // (JT_PANEL__TOKEN bị xoá dưới đây — token panel ≠ token bridge.)
+      ...(this.bridgeToken ? { JT_BRIDGE_TOKEN: String(this.bridgeToken) } : {}),
       // Chuẩn bị sẵn phiên đăng nhập cho bot con (nếu host set sẵn qua env)
       ...(process.env.JT_ACCOUNT_JSON ? { JT_ACCOUNT_JSON: process.env.JT_ACCOUNT_JSON } : {}),
       ...(process.env.JT_COOKIE_JSON ? { JT_COOKIE_JSON: process.env.JT_COOKIE_JSON } : {})
@@ -189,13 +193,20 @@ class BotInstance {
 }
 
 class BotManager {
-  constructor() {
+  constructor(options = {}) {
+    this.bridgeToken = options.bridgeToken || "";
     this.bots = new Map();
     ensureDirs();
     const registry = readRegistry();
     for (const name of Object.keys(registry.bots || {})) {
-      this.bots.set(name, new BotInstance(name, registry.bots[name]));
+      this.bots.set(name, new BotInstance(name, { ...registry.bots[name], bridgeToken: this.bridgeToken }));
     }
+  }
+
+  // Gọi từ panel/server.startPanel để đảm bảo cùng 1 token (proxy ↔ bot con).
+  setBridgeToken(token) {
+    this.bridgeToken = String(token || "");
+    for (const bot of this.bots.values()) bot.bridgeToken = this.bridgeToken;
   }
 
   list() {
@@ -220,7 +231,7 @@ class BotManager {
       const used = new Set([3901, ...[...this.bots.values()].map((b) => b.bridgePort).filter(Boolean)]);
       while (used.has(bridgePort)) bridgePort += 1;
     }
-    const bot = new BotInstance(name, { ...options, bridgePort });
+    const bot = new BotInstance(name, { ...options, bridgePort, bridgeToken: this.bridgeToken });
     this.bots.set(name, bot);
     this.persist();
     return bot;

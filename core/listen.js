@@ -87,7 +87,7 @@ function startListening(api) {
 
     // Lệnh từ tin self: chỉ chạy khi bật config allow_self_command
     // (selfListen: true → uidFrom bị rewrite thành uid bot = admin, cần flag rõ ràng)
-    const allowSelfCommand = global.config.allow_self_command !== false;
+    const allowSelfCommand = global.config.allow_self_command === true;
     const canRunCommand = !event.isSelf || allowSelfCommand;
 
     if (canRunCommand && typeof content === "string" && content.startsWith(prefix)) {

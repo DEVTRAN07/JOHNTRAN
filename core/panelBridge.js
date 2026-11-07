@@ -3,6 +3,7 @@
 // Bot con và panel chạy cùng máy nên bot mở 1 HTTP server nội bộ (127.0.0.1)
 // để panel gọi — real-time, không đi mạng ngoài, không cần auth (chỉ localhost).
 const http = require("http");
+const crypto = require("crypto");
 const { ThreadType } = require("zalo-client");
 const stats = require("./stats");
 const logger = require("../utils/logger");
@@ -105,6 +106,12 @@ function recordIncoming(event) {
 
 let server = null;
 let apiRef = null;
+
+// Token bảo mật cầu nối panel↔bot (chỉ localhost, nhưng vẫn cần để tránh
+// ai đó bind thêm cổng 127.0.0.1 và gọi được bot). Ưu tiên: token arg → env
+// JT_BRIDGE_TOKEN → config.panel.bridge_token/token → env JT_PANEL__TOKEN →
+// fallback ngẫu nhiên (luôn bảo vệ, không bao giờ để trống).
+let BRIDGE_TOKEN = "";
 const historyAt = new Map(); // threadId → ts lần cuối kéo lịch sử nhóm
 
 // Zalo trả ts GIÂY cho lịch sử nhóm, ms cho tin realtime — quy về ms
@@ -144,6 +151,18 @@ async function loadGroupHistory(threadId, limit) {
 // ===== HTTP server nội bộ =====
 async function handleRequest(req, res, url) {
   const route = url.pathname;
+  // Bảo mật: mọi route đều yêu cầu token (x-bridge-token hoặc Bearer).
+  // health endpoint vẫn cần auth để panel proxy /health có thể kiểm tra bot.
+  const header = req.headers["x-bridge-token"] || "";
+  const authz = req.headers.authorization || "";
+  const provided = header || (authz.startsWith("Bearer ") ? authz.slice(7) : "");
+  if (BRIDGE_TOKEN && provided !== BRIDGE_TOKEN) {
+    const json = (code, obj) => {
+      res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(obj));
+    };
+    return json(401, { error: "Unauthorized bridge token" });
+  }
   const json = (code, obj) => {
     res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(obj));
@@ -362,10 +381,28 @@ function findPort(preferred) {
   });
 }
 
-async function start({ api, port = 3901 } = {}) {
+async function start({ api, port = 3901, token } = {}) {
   if (!api?.sendMessage) return;
   if (server) return server.address().port;
   apiRef = api;
+
+  // ---- Token resolution (không bao giờ log giá trị token) ----
+  let source = "random";
+  let resolved = "";
+  if (token) { resolved = String(token); source = "arg"; }
+  else if (process.env.JT_BRIDGE_TOKEN) { resolved = process.env.JT_BRIDGE_TOKEN; source = "env:JT_BRIDGE_TOKEN"; }
+  else if (global.config?.panel?.bridge_token) { resolved = global.config.panel.bridge_token; source = "config:panel.bridge_token"; }
+  else if (global.config?.panel?.token) { resolved = global.config.panel.token; source = "config:panel.token"; }
+  else if (process.env.JT_PANEL__TOKEN) { resolved = process.env.JT_PANEL__TOKEN; source = "env:JT_PANEL__TOKEN"; }
+
+  if (resolved) {
+    BRIDGE_TOKEN = resolved;
+  } else {
+    // Fallback ngẫu nhiên per-process → luôn bảo vệ, không để trống.
+    BRIDGE_TOKEN = crypto.randomBytes(24).toString("hex");
+    if (typeof global !== "undefined") global.__JT_BRIDGE_TOKEN = BRIDGE_TOKEN;
+  }
+  logger.log(`[bridge] auth source: ${source}`, "info");
 
   loadRingFromDisk();
   const finalPort = await findPort(port);

@@ -117,9 +117,16 @@ const DEFAULTS = {
   login_qrcode: true,
   qrcode_path: "qr.png",
   save_cookie: true,
-  allow_private_command: true,
+  allow_private_command: false,
+  allow_self_command: false,
   admin_bot: [],
   support_bot: [],
+  admin: {
+    // Lệnh nhạy (role 2 = admin bot) chỉ cho phép chạy trong nhóm đã đăng ký
+    // làm admin group qua Panel. Giảm bề mặt tấn công khi uidFrom có thể bị
+    // giả mạo (spoof) thành ID admin. false = chạy như cũ (chỉ kiểm tra uidFrom).
+    require_admin_group_for_sensitive: false
+  },
   check_update: true,
   hot_reload: true,
   logging_level: "info",
@@ -132,13 +139,27 @@ const DEFAULTS = {
     enabled: false,
     host: "0.0.0.0",
     port: 3000,
-    token: ""
+    token: "",
+    bridge_token: ""
   },
   zalo_client_config: {},
   // Tải media pure JS (autodown) — cookies cho fetch khi trang yêu cầu đăng nhập
   media: {
     tiktok_cookies: "",
-    facebook_cookies: ""
+    facebook_cookies: "",
+    youtube_cookies: ""
+  },
+  // Autodown: tự tải media từ link trong nhóm (pure JS)
+  autodown: {
+    enabled: true,
+    rate_limit_max: 5,
+    rate_limit_window_ms: 300000,
+    circuit_fail_threshold: 3,
+    circuit_cooldown_ms: 600000,
+    url_dedup_ttl_ms: 120000,
+    cache_ttl_ms: 600000,
+    max_concurrent_downloads: 3,
+    max_video_mb: 200
   },
   privacy: {
     allow_all_hosts: false,

@@ -139,7 +139,8 @@ listener(api);
 // Cầu nói panel (chat Zalo thu nhỏ) — server nội bộ localhost
 require("./core/panelBridge").start({
   api,
-  port: Number(process.env.JT_BRIDGE_PORT) || 3901
+  port: Number(process.env.JT_BRIDGE_PORT) || 3901,
+  token: process.env.JT_BRIDGE_TOKEN || global.config?.panel?.bridge_token || global.config?.panel?.token || undefined
 }).catch(() => { /* hỏng bridge không được làm chết bot */ });
 
 // Preload NỀN các thư viện nặng (jimp ~1.6s, cheerio ~4s, canvas ~0.9s,

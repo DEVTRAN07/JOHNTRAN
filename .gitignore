@@ -3,7 +3,10 @@ account.json
 cookie.json
 cookies.txt
 qr.png
-data/
+# data dir - ignore runtime, keep game balance data
+data/*
+!data/game/
+!data/game/dt.json
 plugins/*/temp/
 plugins/**/temp/
 bots/

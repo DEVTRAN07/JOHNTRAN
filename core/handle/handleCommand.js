@@ -1,11 +1,19 @@
 const logger = require("../../utils/logger");
 const { wrapApi } = require("../message");
 const metrics = require("../metrics");
+const fs = require("fs");
+const path = require("path");
 
 const Users = require("../controller/controllerUsers");
 const Threads = require("../controller/controllerThreads");
 
 const { ThreadType, Reactions } = require("zalo-client");
+
+const ADMIN_GROUPS_FILE = path.join(__dirname, "..", "..", "data", "bot_admin_groups.json");
+
+function readAdminGroups() {
+  try { return JSON.parse(fs.readFileSync(ADMIN_GROUPS_FILE, "utf8")) || []; } catch { return []; }
+}
 
 const SPAM_WINDOW_MS = 10000;
 const SPAM_MAX_COMMANDS = 12;
@@ -120,6 +128,19 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   const role = command.config.role || 0;
   const isBotAdmin = global.users?.admin?.includes(UIDUsage);
   const isSupport = global.users?.support?.includes(UIDUsage);
+
+  // Bảo mật: lệnh nhạy (role 2 = admin bot) chỉ cho phép chạy trong nhóm
+  // đã đăng ký làm admin group qua Panel. Ngăn trường hợp uidFrom bị giả mạo
+  // (spoof) thành ID admin từ nhóm lẻ / tin riêng (đã chặn riêng ở trên).
+  if (role === 2 && config.admin?.require_admin_group_for_sensitive) {
+    const adminGroups = readAdminGroups();
+    const isAdminGroup = Array.isArray(adminGroups) && adminGroups.includes(String(threadId));
+    if (!isAdminGroup) {
+      return api.sendMessage({
+        msg: "🚫 Lệnh này chỉ được dùng trong nhóm quản trị (admin group) đã đăng ký qua Panel."
+      }, threadId, type);
+    }
+  }
 
   if ((role === 2 && !isBotAdmin) || (role === 1 && !isBotAdmin && !isSupport)) {
     return api.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này." }, threadId, type);

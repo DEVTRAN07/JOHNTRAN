@@ -1,4 +1,5 @@
 const http = require("http");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { botPaths } = require("./botManager");
@@ -288,6 +289,15 @@ function commandStatusFromFiles(config) {
 
 function startPanel({ manager, config }) {
   const token = config?.panel?.token || "";
+  // Token dùng để proxy chat sang cầu nối bot (127.0.0.1) — phải GIỐNG nhau
+  // giữa panel proxy và env JT_BRIDGE_TOKEN mà bot con nhận được. Nếu để trống
+  // → sinh ngẫu nhiên một lần, dùng chung cho proxy + (nếu manager hỗ trợ) bot con.
+  let bridgeToken = config?.panel?.bridge_token || config?.panel?.token
+    || process.env.JT_BRIDGE_TOKEN || process.env.JT_PANEL__TOKEN || "";
+  if (!bridgeToken) bridgeToken = crypto.randomBytes(24).toString("hex");
+  if (manager && typeof manager.setBridgeToken === "function") {
+    manager.setBridgeToken(bridgeToken);
+  }
   // Koyeb/Railway inject PORT — panel phải bind đúng port đó để health check + routing
   const port = Number(process.env.PORT) || Number(config?.panel?.port) || 3000;
   const host = config?.panel?.host || "0.0.0.0";
@@ -430,7 +440,10 @@ function startPanel({ manager, config }) {
         // GET (messages, thread-info) giữ nguyên query string
         if (req.method === "GET" && url.search) target += url.search;
 
-        const proxyReq = http.request(target, { method: req.method }, (proxyRes) => {
+        const proxyReq = http.request(target, {
+          method: req.method,
+          headers: { "x-bridge-token": bridgeToken }
+        }, (proxyRes) => {
           let body = "";
           proxyRes.on("data", (c) => { body += c; });
           proxyRes.on("end", () => {

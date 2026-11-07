@@ -26,7 +26,9 @@ const configSystem = require("./core/config");
         const { BotManager } = require("./panel/botManager");
         const { startPanel } = require("./panel/server");
 
-        const manager = new BotManager();
+        const manager = new BotManager({
+          bridgeToken: config?.panel?.bridge_token || config?.panel?.token || process.env.JT_PANEL__TOKEN || ""
+        });
         startPanel({ manager, config });
 
         logger.log("Panel mode: dùng web panel để tạo và quản lý bot con", "info");

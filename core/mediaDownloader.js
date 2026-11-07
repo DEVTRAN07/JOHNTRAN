@@ -5,6 +5,7 @@ const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const logger = require("../utils/logger");
 
 const DOWNLOAD_TIMEOUT = 180000;
 

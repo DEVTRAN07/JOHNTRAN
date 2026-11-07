@@ -45,12 +45,24 @@ function handleChange(dir, type) {
   return (eventType, fileName) => {
     if (!fileName || !fileName.endsWith(".js")) return;
     const filePath = path.join(dir, fileName);
-    if (!fs.existsSync(filePath)) return;
     if (pending.has(fileName)) return;
     pending.set(fileName, setTimeout(() => {
       pending.delete(fileName);
-      if (type === "command") registerCommand(filePath, { silent: false });
-      else registerEvent(filePath, { silent: false });
+      if (fs.existsSync(filePath)) {
+        if (type === "command") registerCommand(filePath, { silent: false });
+        else registerEvent(filePath, { silent: false });
+      } else {
+        // File deleted or renamed away: remove from collections + clear cache.
+        const resolved = path.resolve(filePath);
+        const cached = require.cache[resolved];
+        const name = cached?.exports?.config?.name?.toLowerCase();
+        if (name) {
+          if (type === "command") global.client.commands.delete(name);
+          else global.client.events.delete(name);
+          logger.log(`[hot-reload] Đã gỡ '${name}' (file ${fileName} không còn tồn tại)`, "info");
+        }
+        delete require.cache[resolved];
+      }
     }, DEBOUNCE_MS));
   };
 }

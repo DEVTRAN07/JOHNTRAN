@@ -16,7 +16,14 @@ module.exports.config = {
 
 async function loadModule(api, event, moduleName) {
     const { threadId, type } = event;
-    const commandPath = path.join(__dirname, `${moduleName}.js`);
+    if (!/^[a-zA-Z0-9_-]+$/.test(moduleName)) {
+        return api.sendMessage(`Tên module không hợp lệ: '${moduleName}'.`, threadId, type);
+    }
+    const commandPath = path.resolve(__dirname, `${moduleName}.js`);
+    const baseDir = path.resolve(__dirname);
+    if (commandPath !== baseDir && !commandPath.startsWith(baseDir + path.sep)) {
+        return api.sendMessage(`Đường dẫn module không hợp lệ (vượt ngoài thư mục lệnh): '${moduleName}'.`, threadId, type);
+    }
     if (!fs.existsSync(commandPath)) {
         return api.sendMessage(`Không tìm thấy plugin '${moduleName}'.`, threadId, type);
     }
@@ -42,8 +49,15 @@ async function unloadModule(api, event, moduleName) {
     if (!global.client.commands.has(moduleName)) {
         return api.sendMessage(`Lệnh '${moduleName}' chưa được tải.`, threadId, type);
     }
+    if (!/^[a-zA-Z0-9_-]+$/.test(moduleName)) {
+        return api.sendMessage(`Tên module không hợp lệ: '${moduleName}'.`, threadId, type);
+    }
     global.client.commands.delete(moduleName);
-    const commandPath = path.join(__dirname, `${moduleName}.js`);
+    const commandPath = path.resolve(__dirname, `${moduleName}.js`);
+    const baseDir = path.resolve(__dirname);
+    if (commandPath !== baseDir && !commandPath.startsWith(baseDir + path.sep)) {
+        return api.sendMessage(`Đường dẫn module không hợp lệ (vượt ngoài thư mục lệnh): '${moduleName}'.`, threadId, type);
+    }
     delete require.cache[require.resolve(commandPath)];
     return api.sendMessage(`✅ Đã gỡ thành công lệnh '${moduleName}'.`, threadId, type);
 }
@@ -51,7 +65,7 @@ async function unloadModule(api, event, moduleName) {
 module.exports.run = async function({ api, event, args }) {
     const { threadId, type } = event;
 
-    if (!global.users.admin.includes(event.data.uidFrom)) {
+    if (!global.users.admin.includes(event?.data?.uidFrom)) {
         return api.sendMessage("Bạn không có quyền sử dụng lệnh này.", threadId, type);
     }
 
@@ -61,11 +75,17 @@ module.exports.run = async function({ api, event, args }) {
     switch (action) {
         case "load":
             if (!moduleName) return api.sendMessage("Vui lòng nhập tên lệnh cần tải.", threadId, type);
+            if (!/^[a-zA-Z0-9_-]+$/.test(moduleName)) {
+                return api.sendMessage("Tên module không hợp lệ. Chỉ cho phép chữ cái, số, gạch dưới và gạch ngang.", threadId, type);
+            }
             await loadModule(api, event, moduleName);
             break;
 
         case "unload":
             if (!moduleName) return api.sendMessage("Vui lòng nhập tên lệnh cần gỡ.", threadId, type);
+            if (!/^[a-zA-Z0-9_-]+$/.test(moduleName)) {
+                return api.sendMessage("Tên module không hợp lệ. Chỉ cho phép chữ cái, số, gạch dưới và gạch ngang.", threadId, type);
+            }
             await unloadModule(api, event, moduleName);
             break;
 
@@ -104,10 +124,11 @@ module.exports.run = async function({ api, event, args }) {
             }
             break;
 
-        case "list":
+        case "list": {
             const list = Array.from(global.client.commands.keys());
             api.sendMessage(`📦 Hiện có ${list.length} lệnh đang hoạt động:\n${list.join(", ")}`, threadId, type);
             break;
+        }
 
         case "info":
             if (!moduleName) return api.sendMessage("Vui lòng nhập tên lệnh cần xem thông tin.", threadId, type);
