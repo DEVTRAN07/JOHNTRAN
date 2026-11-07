@@ -9,30 +9,53 @@ const API_BASE = "https://api-v2.soundcloud.com";
 const HOME_URL = "https://soundcloud.com/";
 const CLIENT_ID_CACHE = path.join(__dirname, "..", "..", "data", "soundcloud_client_id.txt");
 const CLIENT_ID_TTL = 24 * 60 * 60 * 1000;
-const CLIENT_ID_KEY = "soundcloud_client_id"; // khoá trong bảng bot_stats (bền vững qua deploy)
+const CLIENT_ID_NEGATIVE_TTL = 5 * 60 * 1000;
+const CLIENT_ID_KEY = "soundcloud_client_id";
 
 let cachedClientId = null;
 let discovering = null;
+let negativeUntil = 0;
 
 function readCachedClientId() {
   try {
     const raw = fs.readFileSync(CLIENT_ID_CACHE, "utf8").trim();
     const [clientId, timestamp] = raw.split("|");
     if (clientId && timestamp && Date.now() - Number(timestamp) < CLIENT_ID_TTL) return clientId;
-  } catch { /* bỏ qua */ }
+  } catch { /* bo qua */ }
   return null;
 }
 
 function writeCachedClientId(clientId) {
-  // Ghi cả 2 nơi: file local (nhanh) + Supabase (sống sót qua mọi lần
-  // restart/deploy trên Render — data/ trong container là tạm).
   try {
     fs.mkdirSync(path.dirname(CLIENT_ID_CACHE), { recursive: true });
-    fs.writeFileSync(CLIENT_ID_CACHE, `${clientId}|${Date.now()}`, "utf8");
-  } catch { /* bỏ qua */ }
+    fs.writeFileSync(CLIENT_ID_CACHE, clientId + "|" + Date.now(), "utf8");
+  } catch { /* bo qua */ }
   try {
     db.saveData("BotStats", "name", CLIENT_ID_KEY, { value: clientId });
-  } catch { /* bỏ qua */ }
+  } catch { /* bo qua */ }
+}
+
+function scriptUrlsFromHtml(html) {
+  const urls = [];
+  const re = /src="(https:\/\/a-v2\.sndcdn\.com[^"]+\.js)"/g;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    urls.push(match[1]);
+  }
+  return [...new Set(urls)];
+}
+
+function extractClientIdFromJs(js) {
+  const patterns = [
+    /client_id[=:"\s]{1,4}([A-Za-z0-9]{32})/,
+    /"client_id"\s*:\s*"([A-Za-z0-9]{32})"/,
+    /client_id:\s*"([A-Za-z0-9]{32})"/
+  ];
+  for (const pattern of patterns) {
+    const m = js.match(pattern);
+    if (m) return m[1];
+  }
+  return null;
 }
 
 async function discoverClientId() {
@@ -46,8 +69,6 @@ async function discoverClientId() {
     return cached;
   }
 
-  // Supabase: chỉ cần discovery 1 lần DUY NHẤT, mọi lần khởi động sau đều
-  // đọc từ DB (Render reset file data/ mỗi deploy → trước đây mất ~1.5s mỗi lần)
   try {
     const row = db.getData("BotStats", "name", CLIENT_ID_KEY);
     const stored = row?.data?.value;
@@ -55,23 +76,44 @@ async function discoverClientId() {
       cachedClientId = stored;
       return stored;
     }
-  } catch { /* bỏ qua */ }
+  } catch { /* bo qua */ }
 
   if (discovering) return discovering;
+  if (Date.now() < negativeUntil) {
+    const error = new Error("Dich vu SoundCloud tam thoi khong kha dung (khong lay duoc client_id), vui long thu lai sau.");
+    error.notAvailable = true;
+    throw error;
+  }
+
   discovering = (async () => {
     try {
-      const home = await http.request(HOME_URL, { timeout: 20000 });
-      const scriptUrls = [...home.body.toString("utf8").matchAll(/src="(https:\/\/a-v2\.sndcdn\.com[^"]+\.js)"/g)].map((m) => m[1]);
-      for (const scriptUrl of scriptUrls.slice(0, 12)) {
-        const script = await http.request(scriptUrl, { timeout: 20000 });
-        const match = script.body.toString("utf8").match(/client_id[=:"'\s]{1,4}([A-Za-z0-9]{32})/);
-        if (match) {
-          cachedClientId = match[1];
-          writeCachedClientId(match[1]);
-          return match[1];
+      let home;
+      try {
+        home = await http.request(HOME_URL, { timeout: 20000 });
+      } catch (error) {
+        const err = new Error("Khong ket noi duoc trang chu SoundCloud de lay client_id.");
+        err.notAvailable = true;
+        throw err;
+      }
+      const html = home && home.body ? home.body.toString("utf8") : "";
+      const scriptUrls = scriptUrlsFromHtml(html).slice(0, 20);
+      for (const scriptUrl of scriptUrls) {
+        try {
+          const script = await http.request(scriptUrl, { timeout: 20000 });
+          const js = script && script.body ? script.body.toString("utf8") : "";
+          const clientId = extractClientIdFromJs(js);
+          if (clientId) {
+            cachedClientId = clientId;
+            writeCachedClientId(clientId);
+            negativeUntil = 0;
+            return clientId;
+          }
+        } catch {
+          continue;
         }
       }
-      const error = new Error("Không tìm thấy client_id của SoundCloud");
+      negativeUntil = Date.now() + CLIENT_ID_NEGATIVE_TTL;
+      const error = new Error("Khong tim thay client_id cua SoundCloud (trang web da thay doi cau truc).");
       error.notAvailable = true;
       throw error;
     } finally {
@@ -84,7 +126,7 @@ async function discoverClientId() {
 async function apiGet(apiPath, params = {}) {
   const clientId = await discoverClientId();
   const query = new URLSearchParams({ ...params, client_id: clientId });
-  const { data } = await http.getJson(`${API_BASE}${apiPath}?${query.toString()}`, {
+  const { data } = await http.getJson(API_BASE + apiPath + "?" + query.toString(), {
     headers: { Accept: "application/json" }
   });
   return data;
@@ -94,29 +136,25 @@ function toTrack(item) {
   return createTrack({
     id: item.id,
     title: item.title,
-    artist: item.user?.username,
+    artist: item.user ? item.user.username : null,
     duration: Math.round((item.duration || item.full_duration || 0) / 1000),
     thumbnail: (item.artwork_url || "").replace("-large.", "-t500x500."),
     source: SOURCE,
     sourceUrl: item.permalink_url,
     plays: item.playback_count || 0,
     likes: item.likes_count || item.favoritings_count || 0,
-    // preview 30s: bài Go+/chặn vẫn nghe được đoạn đầu
-    previewUrl: item.media?.transcodings?.find((t) => t.format?.protocol === "hls")?.url || ""
+    previewUrl: item.media && item.media.transcodings ? (item.media.transcodings.find((t) => t.format && t.format.protocol === "hls") || {}).url || "" : ""
   });
 }
 
-// Điểm phổ biến: lượt nghe + like (like nặng hơn vì chứng tỏ bài hay)
 function popularity(item) {
   return (item.playback_count || 0) + (item.likes_count || item.favoritings_count || 0) * 3;
 }
 
-// Tìm nhạc: lấy NHIỀU rồi xếp bài nhiều người nghe/thích nhất lên đầu
-// (SoundCloud không sort được phía server nên sort phía bot).
 async function search(query, limit) {
   const wanted = Math.max(Number(limit) || 20, 20);
   const data = await apiGet("/search/tracks", { q: query, limit: Math.max(wanted, 40) });
-  const collection = data?.collection || [];
+  const collection = data ? data.collection : [];
   const tracks = collection
     .filter((item) => item && item.id && !(item.policy || "").includes("BLOCK"))
     .sort((a, b) => popularity(b) - popularity(a))
@@ -126,18 +164,25 @@ async function search(query, limit) {
 }
 
 async function resolve(track) {
-  const data = await apiGet(`/tracks/${encodeURIComponent(track.id)}`);
-  const transcodings = data?.media?.transcodings || [];
-  const progressive = transcodings.find((item) => item.format?.protocol === "progressive");
+  const clientId = await discoverClientId();
+  const data = await apiGet("/tracks/" + encodeURIComponent(track.id));
+  const transcodings = data && data.media && data.media.transcodings ? data.media.transcodings : [];
+  const progressive = transcodings.find((item) => item && item.format && item.format.protocol === "progressive");
   if (!progressive) {
-    const error = new Error("Bài hát này không có bản tải xuống (có thể là Go+ hoặc bị giới hạn)");
+    const error = new Error("Bai hat nay khong co ban tai xuong (co the la Go+ hoac bi gioi han)");
     error.notAvailable = true;
     throw error;
   }
-  const clientId = await discoverClientId();
-  const stream = await http.getJson(`${progressive.url}?client_id=${clientId}`);
-  if (!stream?.data?.url) {
-    const error = new Error("Không lấy được link stream từ SoundCloud");
+  let stream;
+  try {
+    stream = await http.getJson(progressive.url + "?client_id=" + clientId);
+  } catch {
+    const error = new Error("Khong lay duoc link stream tu SoundCloud (mang/loi API).");
+    error.notAvailable = true;
+    throw error;
+  }
+  if (!stream || !stream.data || !stream.data.url) {
+    const error = new Error("Khong lay duoc link stream tu SoundCloud");
     error.notAvailable = true;
     throw error;
   }
