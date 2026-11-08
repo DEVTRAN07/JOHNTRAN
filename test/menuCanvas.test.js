@@ -5,7 +5,7 @@ const { test } = require("node:test");
 const theme = require("../core/canvas/theme");
 const { renderMenuGrid } = require("../core/canvas/menu");
 
-test("menu renders grouped command cards inside a macOS window", async () => {
+test("menu renders individual command cards inside a macOS window", async () => {
   const filePath = await renderMenuGrid({
     requesterName: "Nguyễn Văn A",
     requesterAvatarUrl: "",
@@ -14,9 +14,9 @@ test("menu renders grouped command cards inside a macOS window", async () => {
     page: 1,
     totalPages: 1,
     totalCommands: 2,
-    categories: [
-      { name: "Info", commands: [{ name: "help" }] },
-      { name: "Music", commands: [{ name: "play" }] }
+    commands: [
+      { name: "help", usage: "help", category: "Info" },
+      { name: "play", usage: "play <tên nhạc>", category: "Music" }
     ]
   });
 
@@ -27,5 +27,26 @@ test("menu renders grouped command cards inside a macOS window", async () => {
     assert.ok(image.height > 44 * scale);
   } finally {
     fs.unlinkSync(filePath);
+  }
+});
+
+test("menu does not treat /menu <command> as a command-info shortcut", async () => {
+  const command = require("../plugins/commands/menu");
+  const previousConfig = global.config;
+  const sent = [];
+  global.config = { prefix: "/" };
+
+  try {
+    await command.run({
+      api: { sendMessage: (...args) => sent.push(args) },
+      event: { threadId: "thread", type: 1, data: { uidFrom: "12345" } },
+      args: ["play"]
+    });
+
+    assert.match(sent[0][0].msg, /gõ next \/ prev/);
+    assert.doesNotMatch(sent[0][0].msg, /\/menu next/);
+    assert.doesNotMatch(sent[0][0].msg, /Cách dùng: play/);
+  } finally {
+    global.config = previousConfig;
   }
 });

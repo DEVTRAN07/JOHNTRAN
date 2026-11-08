@@ -3,7 +3,7 @@ const logger = require("../../utils/logger");
 const { fetchProfile } = require("../../core/zaloProfile");
 const botVersion = require("../../package.json").version;
 
-const PAGE_SIZE = 12; // tối đa 3 cột x 4 hàng
+const PAGE_SIZE = 9; // 3 cột x 3 hàng
 const NAV_WORDS = ["next", "prev", "previous", "back", "out", "exit", "close"];
 
 module.exports.config = {
@@ -14,12 +14,9 @@ module.exports.config = {
     author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
     description: "Xem danh sách lệnh và info",
     category: "Tiện ích",
-    usage: "[tên lệnh/all/next/prev/out]",
+    usage: "[next/prev/số trang/out]",
     cooldowns: 1,
-    dependencies: {
-        "string-similarity": "",
-        "moment-timezone": ""
-    }
+    dependencies: {}
 };
 
 function collectCommands(userId) {
@@ -40,32 +37,12 @@ function collectCommands(userId) {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function groupCommands(commands) {
-    const categoryOrder = ["info", "public", "music", "game", "tools", "test", "anti", "manager", "admin", "mybot", "hidden"];
-    const groups = new Map();
-    for (const command of commands) {
-        const category = command.category || "Khác";
-        if (!groups.has(category)) groups.set(category, []);
-        groups.get(category).push(command);
-    }
-    return Array.from(groups, ([name, groupedCommands]) => ({ name, commands: groupedCommands }))
-        .sort((a, b) => {
-            const orderA = categoryOrder.indexOf(a.name.toLowerCase());
-            const orderB = categoryOrder.indexOf(b.name.toLowerCase());
-            if (orderA !== -1 || orderB !== -1) {
-                return (orderA === -1 ? categoryOrder.length : orderA) - (orderB === -1 ? categoryOrder.length : orderB);
-            }
-            return a.name.localeCompare(b.name);
-        });
-}
-
 // ===== Điều hướng phân trang: "next"/"prev"/"out"/số — GHÉP CHUNG cho cả lệnh lẫn handleEvent =====
 async function navigate({ api, event, Threads, action, senderId }) {
     const { threadId, type } = event;
     const prefix = global.config.prefix;
     const commands = collectCommands(senderId);
-    const categories = groupCommands(commands);
-    const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
 
     const threadData = (await Threads.getData(threadId)).data || {};
 
@@ -93,10 +70,10 @@ async function navigate({ api, event, Threads, action, senderId }) {
     threadData.menu_page = page;
     await Threads.setData(threadId, threadData);
 
-    return renderPage({ api, event, Threads, commands, categories, page, totalPages, threadData, senderId });
+    return renderPage({ api, event, commands, page, totalPages, senderId });
 }
 
-async function renderPage({ api, event, Threads, commands, categories, page, totalPages, threadData, senderId }) {
+async function renderPage({ api, event, commands, page, totalPages, senderId }) {
     const { threadId, type } = event;
     const prefix = global.config.prefix;
     let requester = { name: String(senderId), avatar: "" };
@@ -115,8 +92,8 @@ async function renderPage({ api, event, Threads, commands, categories, page, tot
     const mentions = [{ uid: String(senderId), pos: 0, len: mentionText.length }];
 
     // ===== MENU CHỈ CANVAS (ảnh) =====
-    // Cache theo trang và nhóm lệnh để menu mở lại nhanh.
-    const slice = categories.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    // Cache theo trang và lệnh để mở lại menu nhanh.
+    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const cacheKey = JSON.stringify({
         requesterId: String(senderId),
         requesterName: requester.name,
@@ -126,7 +103,7 @@ async function renderPage({ api, event, Threads, commands, categories, page, tot
         page,
         totalPages,
         minute: Math.floor(Date.now() / 60000),
-        categories: slice.map((category) => `${category.name}:${category.commands.map((command) => command.name).join(",")}`)
+        commands: slice.map((command) => `${command.name}:${command.usage}:${command.category}`)
     });
 
     let gridPath = menuCache.get(cacheKey);
@@ -140,7 +117,7 @@ async function renderPage({ api, event, Threads, commands, categories, page, tot
                 prefix,
                 page,
                 totalPages,
-                categories: slice,
+                commands: slice,
                 totalCommands: commands.length
             });
             menuCache.set(cacheKey, gridPath);
@@ -158,7 +135,7 @@ async function renderPage({ api, event, Threads, commands, categories, page, tot
                     msg: `⚠️ Không render được ảnh menu: ${error.message}\n${stack}\n(Dạng text hiển thị tạm)`
                 }, threadId, type);
             } catch { /* bỏ qua */ }
-            return showTextMenu(categories, page, totalPages, prefix, commands.length, mentionText, mentions, api, threadId, type);
+            return showTextMenu(commands, page, totalPages, prefix, commands.length, mentionText, mentions, api, threadId, type);
         }
     }
 
@@ -255,74 +232,28 @@ module.exports.run = async function ({ api, event, args, Threads, reply }) {
         return navigate({ api, event, Threads, action: argType, senderId });
     }
 
-    if (argType === "all") {
-        return showAllCommands(senderId, prefix, api, threadId, type);
-    }
-
-    // Xem chi tiết 1 lệnh
-    if (argType && !NAV_WORDS.includes(argType) && !/^\d{1,2}$/.test(argType)) {
-        return showCommandInfo(argType, senderId, prefix, api, threadId, type);
+    if (argType) {
+        return api.sendMessage({
+            msg: `Cách dùng: ${prefix}menu để mở danh sách, sau đó gõ next / prev để chuyển trang hoặc out để đóng.`,
+            plain: true
+        }, threadId, type);
     }
 
     // Không tham số → mở trang 1
     const commands = collectCommands(senderId);
-    const categories = groupCommands(commands);
-    const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(commands.length / PAGE_SIZE));
     const threadData = (await Threads.getData(threadId)).data || {};
     threadData.menu_page = 1;
     await Threads.setData(threadId, threadData);
 
-    return renderPage({ api, event, Threads, commands, categories, page: 1, totalPages, threadData, senderId });
+    return renderPage({ api, event, commands, page: 1, totalPages, senderId });
 };
 
-function showTextMenu(categories, page, totalPages, prefix, totalCommands, mentionText, mentions, api, threadId, type) {
-    const slice = categories.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    const sections = slice
-        .map(({ name, commands }) => `【 ${name.toUpperCase()} 】\n${commands.map((cmd) => `${prefix}${cmd.name}`).join(" • ")}`)
-        .join("\n\n");
+function showTextMenu(commands, page, totalPages, prefix, totalCommands, mentionText, mentions, api, threadId, type) {
+    const slice = commands.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const lines = slice.map((command) => `${prefix}${command.usage || command.name}  ·  ${command.category}`);
     return api.sendMessage({
-        msg: `${mentionText}\n╭─「 ${global.config.name_bot} 」\n│ 🔖 Trang ${page}/${totalPages} • ${totalCommands} lệnh\n${sections}\n╰── ${prefix}menu <trang|next|prev|out>`,
+        msg: `${mentionText}\n╭─「 ${global.config.name_bot} 」\n│ 🔖 Trang ${page}/${totalPages} • ${totalCommands} lệnh\n${lines.join("\n")}\n╰── Gõ next / prev để chuyển trang, out để đóng.`,
         mentions
     }, threadId, type);
-}
-
-function showAllCommands(senderId, prefix, api, threadId, type) {
-    const categories = groupCommands(collectCommands(senderId));
-    const sections = categories
-        .map(({ name, commands }) => `【 ${name.toUpperCase()} 】\n${commands.map((command) => `${prefix}${command.name}`).join(" • ")}`)
-        .join("\n\n");
-    return api.sendMessage({ msg: `📋 Tất cả lệnh\n\n${sections}` }, threadId, type);
-}
-
-async function showCommandInfo(argType, senderId, prefix, api, threadId, type) {
-    const stringSimilarity = require("string-similarity");
-    const command = global.client.commands.get(argType);
-
-    if (!command) {
-        const checker = stringSimilarity.findBestMatch(argType, Array.from(global.client.commands.keys()));
-        if (checker.bestMatch.rating < 0.5) {
-            return api.sendMessage({ msg: `❌ Không tìm thấy lệnh '${argType}'`, }, threadId, type);
-        }
-        const match = global.client.commands.get(checker.bestMatch.target);
-        return api.sendMessage({
-            msg: `🔍 Có phải bạn muốn dùng lệnh '${checker.bestMatch.target}'?\n\n` + formatCommandInfo(match.config, prefix),
-            }, threadId, type);
-    }
-
-    return api.sendMessage({
-        msg: `╭─「 ${command.config.name.toUpperCase()} 」\n` + formatCommandInfo(command.config, prefix),
-        }, threadId, type);
-}
-
-function formatCommandInfo(config, prefix) {
-    const roleText = config.role === 2 ? "Admin Bot" : config.role === 1 ? "Support Bot" : "Thành viên";
-    return [
-        `│ 📛 Tên: ${config.name}`,
-        `│ 📖 Mô tả: ${config.description}`,
-        `│ 🏷️ Nhóm: ${config.category}`,
-        `│ 👤 Quyền: ${roleText}`,
-        `│ 💡 Cách dùng: ${prefix}${config.usage}`,
-        `│ ⏱️ Cooldown: ${config.cooldowns || 0}s`,
-        `╰──────────◆`
-    ].join("\n");
 }

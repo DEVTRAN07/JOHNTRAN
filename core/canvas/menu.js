@@ -1,18 +1,11 @@
+const fs = require("fs");
+const path = require("path");
+const { loadImage } = require("canvas");
 const theme = require("./theme");
 
-const CATEGORY_STYLES = [
-  { icon: "i", color: "#8b72e8" },
-  { icon: "✦", color: "#4b8ff5" },
-  { icon: "♪", color: "#e681b8" },
-  { icon: "G", color: "#6d788c" },
-  { icon: "▣", color: "#eebd43" },
-  { icon: "›_", color: "#62666e" },
-  { icon: "S", color: "#547eea" },
-  { icon: "⚙", color: "#9196a0" },
-  { icon: "A", color: "#8567dc" },
-  { icon: "M", color: "#58a9c8" },
-  { icon: "H", color: "#a568d5" }
-];
+const COMMAND_ICONS = ["✦", "♪", "◆", "●", "▣", "⌘", "★", "◈", "✚", "▲", "♧", "◉"];
+const CATEGORY_COLORS = ["#8b72e8", "#4b8ff5", "#e681b8", "#eebd43", "#58a9c8", "#a568d5"];
+const BACKGROUND_IMAGE = path.join(__dirname, "..", "..", "assets", "bg", "theme.jpg");
 
 async function renderMenuGrid({
   requesterName,
@@ -21,7 +14,7 @@ async function renderMenuGrid({
   prefix,
   page,
   totalPages,
-  categories,
+  commands,
   totalCommands
 }) {
   theme.initFonts();
@@ -30,26 +23,21 @@ async function renderMenuGrid({
   const { text, font, newCanvas } = theme;
 
   const cols = 3;
-  const marginX = S(24);
+  const marginX = S(25);
   const gapX = S(10);
   const gapY = S(10);
   const headerH = S(66);
   const cardH = S(82);
   const footerH = S(82);
-  const rows = Math.ceil(categories.length / cols);
+  const rows = Math.ceil(commands.length / cols);
   const cardW = (W - marginX * 2 - gapX * (cols - 1)) / cols;
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = newCanvas(W, H);
-  const background = ctx.createLinearGradient(0, 0, W, H);
-  background.addColorStop(0, "#35251f");
-  background.addColorStop(0.52, "#42281d");
-  background.addColorStop(1, "#281d1a");
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, W, H);
+  await paintMenuBackground(ctx, W, H);
 
   const glow = ctx.createRadialGradient(W * 0.1, 0, 0, W * 0.1, 0, S(420));
-  glow.addColorStop(0, "rgba(255, 216, 170, .11)");
+  glow.addColorStop(0, "rgba(255, 216, 170, .08)");
   glow.addColorStop(1, "rgba(255, 216, 170, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
@@ -72,41 +60,34 @@ async function renderMenuGrid({
     align: "right"
   });
 
-  for (const [index, category] of categories.entries()) {
+  for (const [index, command] of commands.entries()) {
     const col = index % cols;
     const row = Math.floor(index / cols);
     const x = marginX + col * (cardW + gapX);
     const y = headerH + row * (cardH + gapY);
-    const style = CATEGORY_STYLES[index % CATEGORY_STYLES.length];
+    const accent = categoryColor(command.category);
 
     drawCard(ctx, x, y, cardW, cardH, S);
-    drawCategoryIcon(ctx, x + S(12), y + S(20), S(42), style, S);
-
-    text(ctx, category.name, x + S(62), y + S(34), {
-      size: 18,
+    drawCommandIcon(ctx, x + S(12), y + S(20), S(42), COMMAND_ICONS[hash(command.name) % COMMAND_ICONS.length], accent, S);
+    text(ctx, command.name, x + S(62), y + S(34), {
+      size: 17,
       family: "JT-Round-Bold",
       color: "#fff",
       maxWidth: cardW - S(78)
     });
-
-    const examples = category.commands.slice(0, 2).map((command) => command.name);
-    const more = category.commands.length - examples.length;
-    const commandSummary = examples.join(" · ") + (more > 0 ? ` +${more}` : "");
-    text(ctx, commandSummary || `${category.commands.length} lệnh`, x + S(62), y + S(53), {
-      size: 12,
+    text(ctx, `${prefix}${command.usage || command.name}`, x + S(62), y + S(54), {
+      size: 11,
       family: "JT",
       color: "#c5cada",
-      maxWidth: cardW - S(76)
+      maxWidth: cardW - S(78)
     });
-
-    text(ctx, `${category.commands.length} lệnh`, x + S(62), y + S(70), {
-      size: 10,
+    text(ctx, command.category.toUpperCase(), x + S(62), y + S(71), {
+      size: 9,
       family: "JT-Bold",
-      color: style.color,
-      maxWidth: cardW - S(76)
+      color: accent,
+      maxWidth: cardW - S(78)
     });
-
-    text(ctx, "›", x + cardW - S(15), y + S(53), {
+    text(ctx, "›", x + cardW - S(15), y + S(51), {
       size: 20,
       family: "JT",
       color: "#aeb7c9",
@@ -123,14 +104,13 @@ async function renderMenuGrid({
     requesterName,
     requesterAvatarUrl,
     botVersion,
-    prefix,
     totalCommands,
     page,
     totalPages,
     S,
     text
   });
-  text(ctx, `Gõ ${prefix}menu all để xem đầy đủ  ·  ${prefix}menu next / prev để chuyển trang`, W / 2, H - S(7), {
+  text(ctx, `Gõ next / prev để chuyển trang  ·  out để đóng`, W / 2, H - S(7), {
     size: 10,
     family: "JT",
     color: "#c5bdba",
@@ -139,6 +119,21 @@ async function renderMenuGrid({
   });
 
   return theme.save(canvas, "menu");
+}
+
+async function paintMenuBackground(ctx, width, height) {
+  const image = await loadImage(fs.readFileSync(BACKGROUND_IMAGE));
+  const scale = Math.max(width / image.width, height / image.height);
+  const imageWidth = image.width * scale;
+  const imageHeight = image.height * scale;
+  ctx.drawImage(image, (width - imageWidth) / 2, (height - imageHeight) / 2, imageWidth, imageHeight);
+
+  const warmOverlay = ctx.createLinearGradient(0, 0, width, height);
+  warmOverlay.addColorStop(0, "rgba(63, 39, 29, .92)");
+  warmOverlay.addColorStop(0.52, "rgba(68, 42, 30, .94)");
+  warmOverlay.addColorStop(1, "rgba(39, 29, 26, .94)");
+  ctx.fillStyle = warmOverlay;
+  ctx.fillRect(0, 0, width, height);
 }
 
 function drawCard(ctx, x, y, width, height, S) {
@@ -150,11 +145,10 @@ function drawCard(ctx, x, y, width, height, S) {
   ctx.stroke();
 }
 
-function drawCategoryIcon(ctx, x, y, size, style, S) {
-  const radius = S(12);
-  theme.roundRect(ctx, x, y, size, size, radius);
+function drawCommandIcon(ctx, x, y, size, icon, accent, S) {
+  theme.roundRect(ctx, x, y, size, size, S(12));
   const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
-  gradient.addColorStop(0, style.color);
+  gradient.addColorStop(0, accent);
   gradient.addColorStop(1, "#4e65bd");
   ctx.fillStyle = gradient;
   ctx.fill();
@@ -162,9 +156,19 @@ function drawCategoryIcon(ctx, x, y, size, style, S) {
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(style.icon, x + size / 2, y + size / 2 + S(1));
+  ctx.fillText(icon, x + size / 2, y + size / 2 + S(1));
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+}
+
+function categoryColor(category) {
+  return CATEGORY_COLORS[hash(String(category || "")) % CATEGORY_COLORS.length];
+}
+
+function hash(value) {
+  let result = 0;
+  for (let i = 0; i < value.length; i++) result = (result * 31 + value.charCodeAt(i)) >>> 0;
+  return result;
 }
 
 function drawClock(ctx, x, y, size, color) {
@@ -217,7 +221,6 @@ async function drawFooter(ctx, {
     family: "JT",
     color: "#c5cada"
   });
-
   text(ctx, `v${botVersion}`, x + width - S(12), y + S(26), {
     size: 13,
     family: "JT-Bold",
