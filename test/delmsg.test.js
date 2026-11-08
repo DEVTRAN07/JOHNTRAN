@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { ThreadType } = require("zalo-client");
 const { getTargetUid, getRecentMessages } = require("../plugins/commands/delmsg");
 const delmsg = require("../plugins/commands/delmsg");
+const { shouldReplayOldMessage } = require("../core/listen");
 
 test("delmsg selects the tagged user", () => {
   assert.equal(getTargetUid({
@@ -40,35 +41,38 @@ test("delmsg returns only the latest matching group messages in the 24-hour wind
   assert.deepEqual(selected.map((message) => message.cliMsgId), ["latest"]);
 });
 
-test("delmsg reads SDK group history when the local cache has no matching messages", async () => {
+test("delmsg accepts cached message timestamps in seconds", () => {
+  const now = Date.now();
+  const message = {
+    threadId: "g1",
+    type: ThreadType.Group,
+    uidFrom: "u1",
+    timestamp: Math.floor((now - 1000) / 1000),
+    msgId: 7,
+    cliMsgId: "seconds-timestamp"
+  };
+  assert.deepEqual(
+    getRecentMessages({ one: message }, "g1", "u1", 1, now).map((item) => item.cliMsgId),
+    ["seconds-timestamp"]
+  );
+});
+
+test("delmsg explains that old group history is unavailable when cache is empty", async () => {
   const previousUsers = global.users;
   const callerUid = "delmsg-history-caller";
   const threadId = "delmsg-history-group";
-  const now = Date.now();
-  const deleted = [];
-  let historyRequest;
   global.users = { admin: [callerUid] };
+  let historyRequested = false;
+  let response;
 
   try {
     await delmsg.run({
       api: {
-        getGroupChatHistory: async (...args) => {
-          historyRequest = args;
-          return {
-            groupMsgs: [{
-              threadId,
-              type: ThreadType.Group,
-              data: {
-                uidFrom: callerUid,
-                idTo: threadId,
-                ts: now,
-                msgId: "history-msg",
-                cliMsgId: "history-client-msg"
-              }
-            }]
-          };
+        getGroupChatHistory: async () => {
+          historyRequested = true;
+          throw new Error("endpoint unavailable");
         },
-        deleteMessage: async (destination, onlyMe) => deleted.push({ destination, onlyMe })
+        deleteMessage: async () => assert.fail("must not delete without cached messages")
       },
       event: {
         threadId,
@@ -78,18 +82,29 @@ test("delmsg reads SDK group history when the local cache has no matching messag
       args: ["1"],
       reply: {
         error: (message) => message,
-        text: (message) => message,
+        text: (message) => { response = message; },
         success: (message) => message,
         warn: (message) => message
       }
     });
 
-    assert.deepEqual(historyRequest, [threadId, 100]);
-    assert.equal(deleted.length, 1);
-    assert.equal(deleted[0].destination.data.msgId, "history-msg");
-    assert.equal(deleted[0].destination.data.cliMsgId, "history-client-msg");
-    assert.equal(deleted[0].onlyMe, false);
+    assert.equal(historyRequested, false);
+    assert.match(response, /Zalo không còn cho bot tải lịch sử nhóm/);
   } finally {
     global.users = previousUsers;
   }
+});
+
+test("startup backfill caches old messages without replaying their commands", () => {
+  const reconnectSince = Date.now();
+  assert.equal(shouldReplayOldMessage({
+    data: { ts: Math.floor((reconnectSince - 60_000) / 1000) }
+  }, reconnectSince), false);
+  assert.equal(shouldReplayOldMessage({
+    data: { ts: reconnectSince - 60_000 }
+  }, reconnectSince), false);
+  assert.equal(shouldReplayOldMessage({
+    data: { ts: reconnectSince }
+  }, reconnectSince), true);
+  assert.equal(shouldReplayOldMessage({ data: {} }, reconnectSince), false);
 });

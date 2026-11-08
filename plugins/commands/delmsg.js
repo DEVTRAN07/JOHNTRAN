@@ -116,27 +116,11 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return reply.error("Chỉ admin bot hoặc admin nhóm mới được dùng lệnh này.");
   }
 
-  let messages = getRecentMessages(getMessageCache(), threadId, targetUid, count);
-  let historyError = null;
-  if (messages.length < count) {
-    try {
-      const history = await api.getGroupChatHistory(threadId, 100);
-      messages = getRecentMessages(
-        [...messages, ...(Array.isArray(history?.groupMsgs) ? history.groupMsgs : [])],
-        threadId,
-        targetUid,
-        count
-      );
-    } catch (error) {
-      historyError = error;
-      logger.log(`Không thể lấy lịch sử nhóm cho /delmsg: ${error?.message || error}`, "warn");
-    }
-  }
+  const messages = getRecentMessages(getMessageCache(), threadId, targetUid, count);
   if (messages.length === 0) {
-    if (historyError) {
-      return reply.error("Không lấy được lịch sử tin nhắn nhóm. Vui lòng thử lại sau.");
-    }
-    return reply.text("Không tìm thấy tin nhắn nào của người này trong lịch sử nhóm 24 giờ gần đây.");
+    return reply.text(
+      "Không tìm thấy tin phù hợp trong cache. Zalo không còn cho bot tải lịch sử nhóm; /delmsg chỉ xử lý tin bot đã nhận khi đang chạy, tối đa trong 24 giờ."
+    );
   }
 
   let deleted = 0;

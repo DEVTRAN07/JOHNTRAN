@@ -16,6 +16,13 @@ const WATCHDOG_INTERVAL = 30000;
 // 30 phút không có frame nào MỚI coi là half-open (nhóm im lặng vài phút là bình thường)
 const WATCHDOG_STALE_MS = 1800000;
 
+function shouldReplayOldMessage(message, reconnectSince) {
+  const rawTimestamp = Number(message?.data?.ts);
+  if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return false;
+  const timestamp = rawTimestamp < 1e12 ? rawTimestamp * 1000 : rawTimestamp;
+  return timestamp >= reconnectSince - 5000;
+}
+
 function startListening(api) {
   if (!api?.listener?.on || !api.listener.start) {
     logger.log("API listener không hợp lệ.", "error");
@@ -155,8 +162,7 @@ function startListening(api) {
   listener.on("message", handleIncoming);
 
   // ===== Backfill: tin nhắn gửi lúc socket rớt =====
-  // Khởi tạo = thời điểm bot start: backfill lần ĐẦU chỉ lấy tin từ lúc đó trở đi,
-  // không replay lịch sử cũ (tránh bot thực thi lại toàn bộ lệnh trong quá khứ)
+  // Tin lịch sử được cache nhưng không thực thi lại lệnh cũ.
   let reconnectSince = Date.now();
 
   listener.on("old_messages", (messages) => {
@@ -164,9 +170,10 @@ function startListening(api) {
     for (const message of messages) {
       const cliMsgId = message?.data?.cliMsgId;
       if (cliMsgId && (processedIds.has(cliMsgId) || getMessageCache()[cliMsgId])) continue; // đã xử lý rồi
-      const ts = Number(message?.data?.ts);
-      // bỏ tin cũ hơn thời điểm rớt kết nối (ts là ms 13 chữ số)
-      if (Number.isFinite(ts) && ts > 1e12 && ts < reconnectSince - 5000) continue;
+      if (!shouldReplayOldMessage(message, reconnectSince)) {
+        if (!message?.isSelf) updateMessageCache(message);
+        continue;
+      }
       handleIncoming(message);
     }
   });
@@ -300,3 +307,4 @@ function startListening(api) {
 }
 
 module.exports = startListening;
+module.exports.shouldReplayOldMessage = shouldReplayOldMessage;
