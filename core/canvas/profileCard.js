@@ -12,6 +12,7 @@ const os = require("os");
 const path = require("path");
 const Jimp = require("jimp");
 const { createCanvas, loadImage, registerFont } = require("canvas");
+const { withMacWindow } = require("./macWindow");
 
 const W = 750, H = 520; // cùng tỉ lệ 1600x900 của bản gốc
 const BG = path.join(__dirname, "..", "..", "assets", "bg", "theme.jpg");
@@ -119,7 +120,7 @@ async function render(o = {}) {
     }
 
     const outPath = path.join(tmpDir, "card.png");
-    fs.writeFileSync(outPath, canvas.toBuffer("image/png"));
+    fs.writeFileSync(outPath, withMacWindow(canvas, "Profile Card").toBuffer("image/png"));
     // tmpDir được dọn ở caller qua cleanup; giữ đường dẫn riêng
     return outPath;
   } finally {

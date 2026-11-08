@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { createCanvas, registerFont } = require("canvas");
+const { withMacWindow } = require("./macWindow");
 
 const FONT_CANDIDATES = {
   darwin: [
@@ -241,7 +242,7 @@ function renderCard(spec = {}) {
 function renderCardToFile(spec, filePath) {
   const canvas = renderCard(spec);
   const outPath = filePath || path.join(os.tmpdir(), `jt_card_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.png`);
-  fs.writeFileSync(outPath, canvas.toBuffer("image/png"));
+  fs.writeFileSync(outPath, withMacWindow(canvas, spec?.title || spec?.chip || "JOHN TRAN").toBuffer("image/png"));
   return outPath;
 }
 

@@ -4,6 +4,7 @@ const path = require('path');
 const { fileURLToPath } = require('url');
 const moment = require('moment-timezone');
 const { networkInterfaces } = require('os');
+const { withMacWindow } = require('../../core/canvas/macWindow');
 
 module.exports.config = {
   name: 'upt',
@@ -124,30 +125,6 @@ ctx.fill();
 
   ctx.fill();
 
-  ctx.fillStyle = '#232b3e';
-  roundedRect(ctx, padding, padding - 28, width - 2 * padding, 70, 18);
-  ctx.fill();
-
-  const lights = ['#ff5f57', '#febb2e', '#28c840'];
-  lights.forEach((color, i) => {
-    ctx.beginPath();
-    ctx.fillStyle = color;
-    ctx.arc(padding + 34 + i * 40, padding + 9, 12, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  ctx.font = "bold 36px Arial";
-  ctx.fillStyle = "#F3F4FA";
-  ctx.textAlign = "center";
-  ctx.fillText("SYSTEM DASHBOARD", width / 2, padding + 29);
-
-  ctx.strokeStyle = "#47b7f5";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(padding + 50, padding + 63);
-  ctx.lineTo(width - padding - 50, padding + 63);
-  ctx.stroke();
-
   ctx.globalAlpha = 0.09;
   ctx.fillStyle = "#fff";
   roundedRect(ctx, padding + 6, padding + 74, width - 2 * padding - 12, height - 2 * padding - 56, 24);
@@ -220,7 +197,7 @@ ctx.fill();
 
   const filePath = path.join(CACHE_DIR, `upt_${Date.now()}.png`);
   const out = fs.createWriteStream(filePath);
-  const stream = canvas.createPNGStream();
+  const stream = withMacWindow(canvas, "System Dashboard").createPNGStream();
   stream.pipe(out);
   await new Promise(resolve => out.on("finish", resolve));
   return filePath;

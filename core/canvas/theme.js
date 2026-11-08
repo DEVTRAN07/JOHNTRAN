@@ -5,6 +5,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { createCanvas, registerFont, loadImage } = require("canvas");
+const { withMacWindow } = require("./macWindow");
 
 // Nền ảnh: assets/bg/theme.jpg (đổi file này là đổi nền toàn bộ ảnh của bot)
 const BG_IMAGE = path.join(__dirname, "..", "..", "assets", "bg", "theme.jpg");
@@ -18,22 +19,22 @@ const PALETTE = {};   // resolveTheme() fill lúc module load
 const THEME_STYLE = {}; // kiểu vẽ (viền/bóng/góc...) theo preset
 
 const BASE_PALETTE = {
-  bg0: "#070a14", bg1: "#0d1224", bg2: "#111735",
-  ink: "#ffffff", ink2: "#aab6cf", mute: "#6b7a99",
-  accent: "#38bdf8", accent2: "#a78bfa",
-  green: "#34d399", red: "#fb7185", gold: "#fbbf24"
+  bg0: "#080d18", bg1: "#10192a", bg2: "#17243a",
+  ink: "#f5f8ff", ink2: "#b7c5dd", mute: "#788ba8",
+  accent: "#65d8ff", accent2: "#9b8cff",
+  green: "#52dfb0", red: "#ff7189", gold: "#f6c76b"
 };
 
 const BASE_STYLE = {
-  panelBg: "rgba(13, 18, 36, 0.78)",
-  panelBorderAlpha: 0.55,
-  panelLineWidth: 1.5,
-  panelRadius: 16,
-  btnRadius: 14,
+  panelBg: "rgba(17, 27, 45, 0.88)",
+  panelBorderAlpha: 0.48,
+  panelLineWidth: 1.2,
+  panelRadius: 18,
+  btnRadius: 12,
   frame: false,
-  glowCorners: ["rgba(56, 189, 248, .16)", "rgba(167, 139, 250, .16)"],
-  bgImageAlpha: 0.28,
-  shade: "rgba(7, 10, 20, .7)",
+  glowCorners: ["rgba(56, 189, 248, .13)", "rgba(139, 117, 255, .12)"],
+  bgImageAlpha: 0.2,
+  shade: "rgba(7, 11, 20, .72)",
   foil: false
 };
 
@@ -300,14 +301,29 @@ async function paintBackground(ctx, w, h) {
 // Thẻ dùng chung (bo góc, nền mờ, viền sáng)
 function panel(ctx, x, y, w, h, r = THEME_STYLE.panelRadius, accent = THEME_STYLE.panelBorder) {
   ensureTheme();
-  ctx.fillStyle = THEME_STYLE.panelBg;
   roundRect(ctx, x, y, w, h, r);
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, .28)";
+  ctx.shadowBlur = S(18);
+  ctx.shadowOffsetY = S(7);
+  const fill = ctx.createLinearGradient(x, y, x + w * 0.8, y + h);
+  fill.addColorStop(0, "rgba(255, 255, 255, .055)");
+  fill.addColorStop(1, THEME_STYLE.panelBg);
+  ctx.fillStyle = fill;
   ctx.fill();
+  ctx.restore();
+
+  roundRect(ctx, x, y, w, h, r);
   ctx.strokeStyle = accent;
   ctx.globalAlpha = THEME_STYLE.panelBorderAlpha;
   ctx.lineWidth = THEME_STYLE.panelLineWidth;
   ctx.stroke();
   ctx.globalAlpha = 1;
+
+  roundRect(ctx, x + S(1), y + S(1), w - S(2), h - S(2), Math.max(0, r - S(1)));
+  ctx.strokeStyle = "rgba(255, 255, 255, .07)";
+  ctx.lineWidth = Math.max(1, S(1));
+  ctx.stroke();
 }
 
 // Nút dùng chung (PREV / NEXT / OUT...)
@@ -354,7 +370,13 @@ function newCanvas(w, h) {
 
 function save(canvas, prefix) {
   const filePath = path.join(os.tmpdir(), `jt_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.png`);
-  fs.writeFileSync(filePath, canvas.toBuffer("image/png"));
+  const title = ({
+    menu: "Menu",
+    music_grid: "Music Search",
+    music_now: "Now Playing",
+    card: "JOHN TRAN"
+  })[prefix] || "JOHN TRAN";
+  fs.writeFileSync(filePath, withMacWindow(canvas, title).toBuffer("image/png"));
   return filePath;
 }
 
