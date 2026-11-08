@@ -16,3 +16,19 @@ jobs:
       - run: npm install
       - run: node scripts/test-commands.js
       - run: node scripts/test-all.js
+
+  deploy:
+    name: Deploy to Render
+    needs: test
+    # Chỉ deploy khi push lên main (không deploy trên PR)
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Render CLI
+        run: npm install -g @render/render-cli
+      - name: Deploy via render.yaml blueprint
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          render deploy --blueprint render.yaml --yes
