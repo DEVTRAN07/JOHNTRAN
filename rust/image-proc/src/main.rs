@@ -1,42 +1,101 @@
-use image::imageops::FilterType;
+use image::imageops::{crop_imm, FilterType, resize, thumbnail};
+use image::GenericImageView;
 use serde::Deserialize;
-use serde_json::Value;
-use std::io::{self, Read, Write};
+use std::io::{self, Cursor, Write};
 
 #[derive(Deserialize)]
-struct Spec { op: String, width: Option<u32>, height: Option<u32>, size: Option<u32> }
+struct Spec {
+    op: String,
+    w: Option<u32>,
+    h: Option<u32>,
+    size: Option<u32>,
+    x: Option<u32>,
+    y: Option<u32>,
+}
+
+fn fail(msg: &str) -> ! {
+    eprintln!("{msg}");
+    std::process::exit(1);
+}
+
+fn req(v: Option<u32>, what: &str) -> u32 {
+    v.unwrap_or_else(|| fail(&format!("missing required field: {what}")))
+}
+
+fn round_clip(img: image::DynamicImage, size: u32) -> image::DynamicImage {
+    let mut out = img.to_rgba8();
+    let c = size as f32 / 2.0;
+    let r2 = c * c;
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 + 0.5 - c;
+            let dy = y as f32 + 0.5 - c;
+            if dx * dx + dy * dy > r2 {
+                out.get_pixel_mut(x, y).0[3] = 0;
+            }
+        }
+    }
+    image::DynamicImage::ImageRgba8(out)
+}
+
+fn cover_fit(img: &image::DynamicImage, size: u32) -> image::DynamicImage {
+    let (w, h) = img.dimensions();
+    let scale = f32::max(size as f32 / w as f32, size as f32 / h as f32);
+    let nw = (w as f32 * scale) as u32;
+    let nh = (h as f32 * scale) as u32;
+    let resized = resize(img, nw, nh, FilterType::Triangle);
+    let x = nw.saturating_sub(size) / 2;
+    let y = nh.saturating_sub(size) / 2;
+    crop_imm(&resized, x, y, size, size).to_image().into()
+}
 
 fn main() {
-    let mut input = Vec::new();
-    if io::stdin().read_to_end(&mut input).is_err() { eprintln!("stdin read error"); std::process::exit(1); }
-    // try parse spec from args or expect JSON header + raw image not supported here; simple CLI: reads JSON with base64? No — easier: take JSON spec as argv[1], read image bytes from stdin.
-    let spec_json = std::env::args().nth(1).unwrap_or_else(|| r#"{"op":"to_png"}"#.into());
-    let spec: Spec = serde_json::from_str(&spec_json).unwrap_or(Spec{op:"to_png".into(), width:None, height:None, size:None});
-    let img = match image::load_from_memory(&input) {
-        Ok(i) => i,
-        Err(e) => { eprintln!("decode error: {e}"); std::process::exit(1); }
-    };
+    let path = std::env::args().nth(1).unwrap_or_else(|| {
+        fail("usage: image-proc <image_path> <json_spec>")
+    });
+    let spec_json = std::env::args().nth(2).unwrap_or_else(|| {
+        fail("usage: image-proc <image_path> <json_spec>")
+    });
+    let spec: Spec = serde_json::from_str(&spec_json).unwrap_or_else(|e| {
+        fail(&format!("invalid json spec: {e}"))
+    });
+
+    let img = image::open(&path).unwrap_or_else(|e| {
+        fail(&format!("cannot open image {path}: {e}"))
+    });
+
     let out = match spec.op.as_str() {
         "resize" => {
-            let w = spec.width.unwrap_or(256); let h = spec.height.unwrap_or(256);
-            img.resize_exact(w, h, FilterType::Lanczos3)
+            let w = req(spec.w, "w");
+            let h = req(spec.h, "h");
+            image::DynamicImage::ImageRgba8(thumbnail(&img, w, h))
         }
         "round" => {
-            let s = spec.size.unwrap_or(256);
-            let resized = img.resize_exact(s, s, FilterType::Lanczos3).to_rgba8();
-            let mut out = resized.clone();
-            let c = s as f32 / 2.0; let r = c;
-            for y in 0..s { for x in 0..s {
-                let dx = x as f32 + 0.5 - c; let dy = y as f32 + 0.5 - c;
-                if dx*dx + dy*dy > r*r { out.get_pixel_mut(x,y).0[3] = 0; }
-            }}
-            image::DynamicImage::ImageRgba8(out)
+            let size = req(spec.size, "size");
+            round_clip(image::DynamicImage::ImageRgba8(thumbnail(&img, size, size)), size)
         }
-        _ => img,
+        "crop" => {
+            let x = req(spec.x, "x");
+            let y = req(spec.y, "y");
+            let w = req(spec.w, "w");
+            let h = req(spec.h, "h");
+            let (iw, ih) = img.dimensions();
+            let x = x.min(iw);
+            let y = y.min(ih);
+            let w = w.min(iw.saturating_sub(x));
+            let h = h.min(ih.saturating_sub(y));
+            crop_imm(&img, x, y, w, h).to_image().into()
+        }
+        "to_png" => img,
+        "thumbnail" => {
+            let size = req(spec.size, "size");
+            round_clip(cover_fit(&img, size), size)
+        }
+        op => fail(&format!("unknown op: {op}")),
     };
+
     let mut buf = Vec::new();
-    if out.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).is_err() {
-        eprintln!("encode error"); std::process::exit(1);
-    }
-    let _ = io::stdout().write_all(&buf);
+    out.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+        .unwrap_or_else(|e| fail(&format!("encode error: {e}")));
+    io::stdout().write_all(&buf).unwrap_or_else(|e| fail(&format!("stdout write error: {e}")));
 }

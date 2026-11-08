@@ -2,10 +2,14 @@
 resolver = "2"
 members = [
   "canvas-render",
+  "ui-core",
   "image-proc",
   "http-client",
   "media",
   "bridge",
+  "storage",
+  "music-cmd",
+  "john-tran",
 ]
 
 [profile.release]
