@@ -52,30 +52,10 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false, 
   }
 
   const file = await converter.makeStickerFile(url, CACHE_DIR, forceStatic, pickFetcher(api, url));
-  let previewPath = null;
   let stickerUrl = null;
 
   try {
-    try {
-      if (file.previewPath) {
-        previewPath = file.previewPath;
-      } else {
-        previewPath = await converter.makePreviewFile(file.path);
-      }
-    } catch (error) {
-      // Preview thất bại KHÔNG làm fail sticker — sticker vẫn được upload + gửi.
-      // (ffmpeg build không hỗ trợ animated WebP preview là điều phổ biến)
-      console.warn("[stk] preview skipped (sticker vẫn gửi):", error?.message || String(error));
-      previewPath = null;
-    }
-    if (previewPath) {
-      await api.sendMessage(
-        { msg: "👀 Xem trước sticker có khung:", attachments: [previewPath], ttlKind: "media" },
-        threadId,
-        type
-      );
-    }
-
+    // Không gửi ảnh xem trước (preview) — upload + gửi sticker trực tiếp.
     let uploaded;
     try {
       uploaded = await api.uploadStickerImage({ filePath: file.path, threadId, threadType: type });
@@ -104,9 +84,6 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false, 
     stickerUrl = buildStickerUrl(String(cdnUrl), file.format === "webp");
   } finally {
     try { fs.unlinkSync(file.path); } catch { /* bỏ qua */ }
-    if (previewPath) {
-      try { fs.unlinkSync(previewPath); } catch { /* bỏ qua */ }
-    }
   }
 
   const replyMsgId = event?.data?.quote?.msgId || null;

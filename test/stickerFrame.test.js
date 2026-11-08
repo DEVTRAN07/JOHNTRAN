@@ -58,20 +58,15 @@ test("/stk <URL> cũng đi qua xử lý ghép khung", { skip: !hasFfmpeg }, asyn
   ctx.fillStyle = "#3366cc";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   let uploadedFileWasValid = false;
-  let previewWasValid = false;
   let sentSticker;
   const operations = [];
 
   await stickerCommand.run({
     api: {
+      // Không gửi ảnh xem trước (preview) — upload + gửi sticker trực tiếp.
       sendMessage: async (payload) => {
-        if (payload.attachments) {
-          assert.ok(Array.isArray(payload.attachments));
-          assert.equal(payload.ttlKind, "media");
-          const preview = fs.readFileSync(payload.attachments[0]);
-          previewWasValid = preview.subarray(1, 4).toString() === "PNG";
-          operations.push("preview");
-        }
+        // Không có payload nào gửi attachments (không preview).
+        assert.ok(!payload.attachments, "không nên gửi attachments (preview đã bị xoá)");
       },
       fetchZaloMedia: async () => ({ buffer: canvas.toBuffer("image/png") }),
       uploadStickerImage: async ({ filePath }) => {
@@ -91,7 +86,6 @@ test("/stk <URL> cũng đi qua xử lý ghép khung", { skip: !hasFfmpeg }, asyn
   });
 
   assert.ok(uploadedFileWasValid, "URL input should be converted before upload");
-  assert.ok(previewWasValid, "preview should be a valid PNG");
-  assert.deepEqual(operations, ["preview", "upload", "sticker"]);
+  assert.deepEqual(operations, ["upload", "sticker"], "only upload + sticker, no preview");
   assert.equal(sentSticker.staticImgUrl, sentSticker.animationImgUrl);
 });
