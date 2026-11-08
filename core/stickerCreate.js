@@ -59,15 +59,16 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false, 
     try {
       previewPath = await converter.makePreviewFile(file.path);
       await api.sendMessage(
-        { msg: "👀 Xem trước sticker có khung:", attachments: previewPath },
+        { msg: "👀 Xem trước sticker có khung:", attachments: [previewPath], ttlKind: "media" },
         threadId,
         type
       );
     } catch (error) {
-      console.error("[stk] preview failed:", error?.message || error, error?.stack || "");
+      const detail = error?.message || String(error);
+      console.error("[stk] preview failed:", detail, error?.stack || "");
       const err = new Error("STICKER_PREVIEW_FAILED");
       err.cause = error;
-      err.userMessage = "❌ Không thể gửi ảnh xem trước sticker. Vui lòng thử lại.";
+      err.userMessage = `❌ Không thể gửi ảnh xem trước sticker: ${detail}`;
       throw err;
     }
 

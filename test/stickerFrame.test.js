@@ -66,7 +66,9 @@ test("/stk <URL> cũng đi qua xử lý ghép khung", { skip: !hasFfmpeg }, asyn
     api: {
       sendMessage: async (payload) => {
         if (payload.attachments) {
-          const preview = fs.readFileSync(payload.attachments);
+          assert.ok(Array.isArray(payload.attachments));
+          assert.equal(payload.ttlKind, "media");
+          const preview = fs.readFileSync(payload.attachments[0]);
           previewWasValid = preview.subarray(1, 4).toString() === "PNG";
           operations.push("preview");
         }
