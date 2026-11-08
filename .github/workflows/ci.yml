@@ -41,9 +41,9 @@ jobs:
           services="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services?limit=100")"
-          service_id="$(jq -er --arg name "$SERVICE_NAME" '
+          service_id="$(jq -r --arg name "$SERVICE_NAME" '
             [.. | objects | select(.name? == $name) | .id? // empty] | unique
-            | if length == 1 then .[0] else empty end
+            | if length == 1 then .[0] else "" end
           ' <<< "$services")"
           if [[ -z "$service_id" ]]; then
             service_names="$(jq -r '[.. | objects | .name? | select(type == "string")] | unique | join(", ")' <<< "$services")"
