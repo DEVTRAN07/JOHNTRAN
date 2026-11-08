@@ -1,6 +1,7 @@
 import { ThreadType, type TMessage, type AttachmentSource } from "../models/index.js";
 export type SendMessageResult = {
     msgId: number;
+    cliMsgId?: string;
 };
 export type SendMessageResponse = {
     message: SendMessageResult | null;

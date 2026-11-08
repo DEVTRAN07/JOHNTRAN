@@ -54,6 +54,10 @@ export const sendCardFactory = apiFactory()((api, ctx, utils) => {
                 params: encryptedParams,
             }),
         });
-        return utils.resolve(response);
+        const result = await utils.resolve(response);
+        if (result && typeof result === "object" && !result.cliMsgId) {
+            result.cliMsgId = clientId;
+        }
+        return result;
     };
 });

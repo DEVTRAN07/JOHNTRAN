@@ -5,7 +5,42 @@ const styledText = require("./styled");
 const fs = require("fs");
 const crypto = require("crypto");
 
-// Tin nhắn KHÔNG còn tự xoá (đã bỏ toàn bộ hệ thống TTL theo yêu cầu).
+const DEFAULT_AUTO_RECALL_MS = 60 * 1000;
+
+function scheduleRecall(api, response, threadId, type) {
+  const messages = [];
+  if (response?.message) messages.push(response.message);
+  if (Array.isArray(response?.attachment)) messages.push(...response.attachment);
+  if (response?.msgId) messages.push(response);
+
+  const seen = new Set();
+  for (const message of messages) {
+    const { msgId, cliMsgId } = message || {};
+    if ((typeof msgId !== "number" && typeof msgId !== "string") ||
+        (typeof cliMsgId !== "number" && typeof cliMsgId !== "string")) {
+      logger.log("Không thể lên lịch thu hồi tin nhắn: thiếu msgId hoặc cliMsgId.", "warn");
+      continue;
+    }
+
+    const key = `${msgId}:${cliMsgId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (typeof api?.undo !== "function") {
+      logger.log("Không thể thu hồi tin nhắn: API undo không khả dụng.", "error");
+      continue;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        await api.undo({ msgId, cliMsgId }, threadId, type);
+      } catch (error) {
+        logger.log(`Không thể thu hồi tin ${msgId}: ${error?.message || error}`, "warn");
+      }
+    }, DEFAULT_AUTO_RECALL_MS);
+    timer.unref?.();
+  }
+}
 
 // ===== CACHE ẢNH THẺ ĐÃ RENDER =====
 // Render 1 thẻ canvas mất ~0.7s trên máy mạnh, 2-3s trên Render free tier.
@@ -157,8 +192,6 @@ function defineWrapped(wrapped, name, fn) {
 
 function wrapApi(api, threadId, type, commandName, event = null) {
   if (!api) return api;
-  const reply = new Reply(api, threadId, type, commandName, event);
-
   const wrapped = Object.create(api);
 
   defineWrapped(wrapped, "sendMessage", async (message, tid, ty) => {
@@ -166,17 +199,48 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     const targetType = type || ty;
     const content = typeof message === "string" ? { msg: message } : { ...message };
     if (content.plain) delete content.plain;
-    return api.sendMessage(content, targetThreadId, targetType);
+    const response = await api.sendMessage(content, targetThreadId, targetType);
+    scheduleRecall(api, response, targetThreadId, targetType);
+    return response;
   });
 
   defineWrapped(wrapped, "sendVoice", async (payload, tid, ty) => {
     const content = typeof payload === "string" ? { voiceUrl: payload } : { ...payload };
-    return api.sendVoice(content, threadId || tid, type || ty);
+    const targetThreadId = threadId || tid;
+    const targetType = type || ty;
+    const response = await api.sendVoice(content, targetThreadId, targetType);
+    scheduleRecall(api, response, targetThreadId, targetType);
+    return response;
   });
 
   defineWrapped(wrapped, "sendVideo", async (payload, tid, ty) => {
-    return api.sendVideo({ ...payload }, threadId || tid, type || ty);
+    const targetThreadId = threadId || tid;
+    const targetType = type || ty;
+    const response = await api.sendVideo({ ...payload }, targetThreadId, targetType);
+    scheduleRecall(api, response, targetThreadId, targetType);
+    return response;
   });
+
+  for (const method of ["sendSticker", "sendCard"]) {
+    if (typeof api[method] !== "function") continue;
+    defineWrapped(wrapped, method, async (payload, tid, ty) => {
+      const targetThreadId = threadId || tid;
+      const targetType = type || ty;
+      const response = await api[method](payload, targetThreadId, targetType);
+      scheduleRecall(api, response, targetThreadId, targetType);
+      return response;
+    });
+  }
+
+  if (typeof api.sendCustomStickerUrl === "function") {
+    defineWrapped(wrapped, "sendCustomStickerUrl", async (payload) => {
+      const targetThreadId = payload?.threadId || threadId;
+      const targetType = payload?.threadType ?? type;
+      const response = await api.sendCustomStickerUrl(payload);
+      scheduleRecall(api, response, targetThreadId, targetType);
+      return response;
+    });
+  }
 
   // ===== Cache tầng API Zalo: giảm gọi API, phản hồi nhanh hơn =====
   defineWrapped(wrapped, "getGroupInfo", async (tid) => {
@@ -194,8 +258,9 @@ function wrapApi(api, threadId, type, commandName, event = null) {
     if (kind === "user") cache.caches.userInfo.delete(String(key));
   });
 
+  const reply = new Reply(wrapped, threadId, type, commandName, event);
   Object.defineProperty(wrapped, "__reply", { value: reply, enumerable: false });
   return wrapped;
 }
 
-module.exports = { Reply, wrapApi };
+module.exports = { Reply, wrapApi, DEFAULT_AUTO_RECALL_MS };

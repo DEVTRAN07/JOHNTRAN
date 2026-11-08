@@ -6,5 +6,6 @@ export type SendCardOptions = {
 };
 export type SendCardResponse = {
     msgId: number;
+    cliMsgId?: string;
 };
 export declare const sendCardFactory: (ctx: import("../index.js").ContextBase, api: import("./index.js").ZaloApi) => (options: SendCardOptions, threadId: string, type?: ThreadType) => Promise<SendCardResponse>;

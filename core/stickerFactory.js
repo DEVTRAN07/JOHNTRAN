@@ -174,8 +174,9 @@ function registerStickerApi(api) {
 
     // ext.sSrcStr ĐẶC BIỆT: "@NGH_STICKER" cho bản stk, "@STICKER" cho stkvd
     const srcStr = variant === "std" ? "@STICKER" : "@NGH_STICKER";
+    const clientId = now() * 6000;
     const params = {
-      clientId: now() * 6000,
+      clientId,
       title: "",
       oriUrl: staticImgUrl,
       thumbUrl: staticImgUrl,
@@ -210,7 +211,11 @@ function registerStickerApi(api) {
       body: "params=" + encodeURIComponent(utils.encodeAES(JSON.stringify(params)))
     });
 
-    return utils.resolve(res);
+    const result = await utils.resolve(res);
+    if (result && typeof result === "object" && !result.cliMsgId) {
+      result.cliMsgId = String(clientId);
+    }
+    return result;
   });
 }
 

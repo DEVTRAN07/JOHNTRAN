@@ -6,5 +6,6 @@ export type SendStickerPayload = {
 };
 export type SendStickerResponse = {
     msgId: number;
+    cliMsgId?: string;
 };
 export declare const sendStickerFactory: (ctx: import("../index.js").ContextBase, api: import("./index.js").ZaloApi) => (sticker: SendStickerPayload, threadId: string, type?: ThreadType) => Promise<SendStickerResponse>;

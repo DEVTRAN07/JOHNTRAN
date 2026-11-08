@@ -240,7 +240,7 @@ assets/
 - **8 family font** để ảnh đa dạng: `JT` (sans), `JT-Display` (serif, tiêu đề), `JT-Round` (bo tròn), `JT-Mono` (số liệu/thời gian) — kèm bản Bold; tự động đăng ký theo hệ điều hành (macOS/Windows/Linux).
 - **Mọi lệnh đều thả icon**: 👍 khi bắt đầu xử lý → ✅ khi xong / 😢 khi lỗi (lệnh tự thả reaction — nhạc, autodown — thì bot không thả thêm).
 - **Menu phân trang thật sự**: `/menu next` / `/menu prev` / `/menu <số>` / `/menu out`; khi menu đang mở thì gõ trần `next` / `prev` / `out` (khỏi prefix) cũng chuyển trang được — không bị cooldown chặn. Nhạc (`/scl next`) cũng vậy.
-- **TTL chuẩn hoá**: mọi tin nhắn TTL ≥ 60.000ms (Zalo chỉ tự xóa tin từ 1 phút) — `ttl.message/error/media/card` trong config.yml.
+- **Tự thu hồi tin bot**: tin nhắn, ảnh/tệp, voice, video, sticker và thẻ liên hệ do bot gửi được thu hồi bằng API `undo` sau 1 phút. Đây không phải TTL gốc của Zalo nên không có đồng hồ đếm hay hiệu ứng nứt; lịch thu hồi trong RAM sẽ mất nếu bot khởi động lại trước hạn.
 - **Đổi storage**: bỏ better-sqlite3 (native), dùng JSON store atomic ghi `data/store.json`, mỗi bot con một file riêng.
 - **Web panel + bot con**: bật `panel.enabled: true` rồi chạy `npm start`, mở `http://localhost:3000` — tạo/dừng/xoá bot con, log realtime, QR đăng nhập, metrics bar, auto-restart, watchdog crash loop.
 - **Đã xoá toàn bộ lệnh game** (taixiu, baucua, daily, tiền tệ, dt/dautruong...) và dữ liệu liên quan.

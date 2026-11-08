@@ -8,5 +8,6 @@ export type SendVoiceOptions = {
 };
 export type SendVoiceResponse = {
     msgId: string;
+    cliMsgId?: string;
 };
 export declare const sendVoiceFactory: (ctx: import("../index.js").ContextBase, api: import("./index.js").ZaloApi) => (options: SendVoiceOptions, threadId: string, type?: ThreadType) => Promise<SendVoiceResponse>;

@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const { ThreadType } = require("zalo-client");
 const stats = require("./stats");
 const logger = require("../utils/logger");
+const { wrapApi } = require("./message");
 
 // ===== Bộ nhớ tin nhắn: RAM + lưu đĩa (sống sót qua restart) =====
 // Zalo đã XOÁ API lịch sử nhóm (getGroupChatHistory → 404) nên panel chỉ
@@ -351,7 +352,7 @@ async function handleRequest(req, res, url) {
         const safeStyles = (Array.isArray(styles) ? styles : [])
           .filter((st) => st && Number.isFinite(st.start) && Number.isFinite(st.len) && typeof st.st === "string")
           .slice(0, 8);
-        await apiRef.sendMessage(
+        await wrapApi(apiRef, threadId, Number(type) === 1 ? ThreadType.Group : ThreadType.User, "panel").sendMessage(
           { msg: String(msg), ...(safeStyles.length ? { styles: safeStyles } : {}) },
           threadId,
           Number(type) === 1 ? ThreadType.Group : ThreadType.User

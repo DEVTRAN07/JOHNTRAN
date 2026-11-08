@@ -102,10 +102,11 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   const commandName = args.shift()?.toLowerCase();
   if (!commandName) return;
 
+  const wrappedApi = wrapApi(api, threadId, type, commandName, event);
   const command = resolveCommand(commandName);
   if (!command) {
-    if (api && threadId && type) {
-      await api.sendMessage({ msg: "⚠️ Lệnh không tồn tại!" }, threadId, type);
+    if (wrappedApi && threadId && type) {
+      await wrappedApi.sendMessage({ msg: "⚠️ Lệnh không tồn tại!" }, threadId, type);
     }
     return;
   }
@@ -113,14 +114,14 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
   // Lệnh bị tắt trong nhóm này (quản lý từ panel)
   const disabledCommands = threadInfo?.disabled_commands;
   if (Array.isArray(disabledCommands) && disabledCommands.includes(commandName)) {
-    if (api && threadId && type) {
-      await api.sendMessage({ msg: `🚫 Lệnh '${commandName}' đã bị tắt trong nhóm này.` }, threadId, type);
+    if (wrappedApi && threadId && type) {
+      await wrappedApi.sendMessage({ msg: `🚫 Lệnh '${commandName}' đã bị tắt trong nhóm này.` }, threadId, type);
     }
     return;
   }
 
   if (!checkSpam(UIDUsage)) {
-    return api.sendMessage({
+    return wrappedApi.sendMessage({
       msg: "🚫 Bạn đang gửi lệnh quá nhanh. Vui lòng chậm lại!"
     }, threadId, type);
   }
@@ -136,19 +137,19 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
     const adminGroups = readAdminGroups();
     const isAdminGroup = Array.isArray(adminGroups) && adminGroups.includes(String(threadId));
     if (!isAdminGroup) {
-      return api.sendMessage({
+      return wrappedApi.sendMessage({
         msg: "🚫 Lệnh này chỉ được dùng trong nhóm quản trị (admin group) đã đăng ký qua Panel."
       }, threadId, type);
     }
   }
 
   if ((role === 2 && !isBotAdmin) || (role === 1 && !isBotAdmin && !isSupport)) {
-    return api.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này." }, threadId, type);
+    return wrappedApi.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này." }, threadId, type);
   }
 
   const groupCheck = await checkGroupPermissions({ api, threadId, type, UIDUsage, threadInfo });
   if (groupCheck.denied) {
-    return api.sendMessage({ msg: groupCheck.denied }, threadId, type);
+    return wrappedApi.sendMessage({ msg: groupCheck.denied }, threadId, type);
   }
 
   const cdTime = (command.config.cooldowns || 0) * 1000;
@@ -165,7 +166,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
 
     if (lastUsed && Date.now() - lastUsed < cdTime) {
       const timeLeft = ((cdTime - (Date.now() - lastUsed)) / 1000).toFixed(1);
-      return api.sendMessage({
+      return wrappedApi.sendMessage({
         msg: `⏳ Vui lòng chờ ${timeLeft}s để dùng lại lệnh '${commandName}'`
       }, threadId, type);
     }
@@ -182,7 +183,6 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
       cliMsgId: event.data.cliMsgId,
       ts: event.data.ts,
     };
-    const wrappedApi = wrapApi(api, threadId, type, commandName, event);
     metrics.track("command", { command: commandName });
 
     // MỌI lệnh đều có reaction trạng thái: 👍 đang xử lý → ✅ xong / 😢 lỗi.

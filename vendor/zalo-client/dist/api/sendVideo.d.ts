@@ -31,5 +31,6 @@ export type SendVideoOptions = {
 };
 export type SendVideoResponse = {
     msgId: number;
+    cliMsgId?: string;
 };
 export declare const sendVideoFactory: (ctx: import("../index.js").ContextBase, api: import("./index.js").ZaloApi) => (options: SendVideoOptions, threadId: string, type?: ThreadType) => Promise<SendVideoResponse>;
