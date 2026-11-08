@@ -19,16 +19,18 @@ module.exports.config = {
 
 function getTargetUid(event, callerUid) {
   const rawMentions = event?.data?.mentions;
-  const mentioned = (Array.isArray(rawMentions)
+  const rawMentionList = Array.isArray(rawMentions)
     ? rawMentions
     : rawMentions && typeof rawMentions === "object"
       ? Object.values(rawMentions)
-      : [])
-    .map((mention) => String(mention?.uid || "").trim())
-    .filter(Boolean);
-  const extracted = mentioned.length ? mentioned : extractMentions({
-    mentions: rawMentions
-  });
+      : [];
+  const normalizedMentions = Array.isArray(event?.mentions) ? event.mentions : [];
+  const mentioned = [...new Set(
+    [...normalizedMentions, ...rawMentionList]
+      .map((mention) => String(mention?.uid ?? mention ?? "").trim())
+      .filter(Boolean)
+  )];
+  const extracted = mentioned.length ? mentioned : extractMentions({ mentions: rawMentions });
   if (extracted.length > 1) return null;
   if (extracted.length === 1) return String(extracted[0]);
   return callerUid ? String(callerUid) : null;
@@ -37,9 +39,11 @@ function getTargetUid(event, callerUid) {
 function getTimestampMs(message) {
   const timestamp = Number(message?.timestamp);
   if (Number.isFinite(timestamp) && timestamp > 0) {
-    return timestamp < 1e12 ? timestamp * 1000 : timestamp;
+    if (timestamp < 1e12) return timestamp * 1000;
+    if (timestamp > 1e14) return timestamp / 1000;
+    return timestamp;
   }
-  const parsed = Date.parse(message?.timestampString || "");
+  const parsed = Date.parse(message?.timestamp || message?.timestampString || "");
   return Number.isFinite(parsed) ? parsed : 0;
 }
 

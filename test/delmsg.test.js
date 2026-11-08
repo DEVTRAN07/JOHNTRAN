@@ -14,6 +14,13 @@ test("delmsg selects the tagged user", () => {
   }, "admin-id"), "12345");
 });
 
+test("delmsg selects a mention normalized by the message listener", () => {
+  assert.equal(getTargetUid({
+    mentions: [{ uid: "12345" }],
+    data: {}
+  }, "admin-id"), "12345");
+});
+
 test("delmsg defaults to the caller even when replying to another user", () => {
   assert.equal(getTargetUid({
     data: { quote: { uidFrom: "quoted-user" } }
@@ -54,6 +61,25 @@ test("delmsg accepts cached message timestamps in seconds", () => {
   assert.deepEqual(
     getRecentMessages({ one: message }, "g1", "u1", 1, now).map((item) => item.cliMsgId),
     ["seconds-timestamp"]
+  );
+});
+
+test("delmsg normalizes microsecond and ISO message timestamps", () => {
+  const now = Date.now();
+  const base = {
+    threadId: "g1",
+    type: ThreadType.Group,
+    uidFrom: "u1",
+    msgId: 8,
+    cliMsgId: "timestamp"
+  };
+  const cache = {
+    microseconds: { ...base, timestamp: (now - 1000) * 1000, cliMsgId: "microseconds" },
+    iso: { ...base, timestamp: new Date(now - 2000).toISOString(), cliMsgId: "iso" }
+  };
+  assert.deepEqual(
+    getRecentMessages(cache, "g1", "u1", 2, now).map((message) => message.cliMsgId),
+    ["microseconds", "iso"]
   );
 });
 

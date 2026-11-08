@@ -163,8 +163,12 @@ function cleanOldMessages() {
 
     Object.keys(messageCache).forEach((key) => {
         const timestamp = Number(messageCache[key]?.timestamp);
-        const timestampMs = timestamp > 0 && timestamp < 1e12
-            ? timestamp * 1000
+        const timestampMs = timestamp > 0
+            ? timestamp < 1e12
+                ? timestamp * 1000
+                : timestamp > 1e14
+                    ? timestamp / 1000
+                    : timestamp
             : timestamp;
         if (Number.isFinite(timestampMs) && timestampMs < oneDayAgo) {
             delete messageCache[key];
