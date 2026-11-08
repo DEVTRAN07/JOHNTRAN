@@ -39,11 +39,11 @@ function uploadErrorMessage(detail) {
     ". Vui lòng thử lại sau hoặc kiểm tra phiên đăng nhập Zalo.";
 }
 
-async function createAndSend({ api, event, variant = "ai", forceStatic = false }) {
+async function createAndSend({ api, event, variant = "ai", forceStatic = false, sourceUrl = null }) {
   const { threadId, type } = event;
   const { parseQuote } = require("./mediaReply");
   const media = parseQuote(event);
-  const url = pickMediaUrl(media);
+  const url = sourceUrl ? cleanMediaUrl(sourceUrl) : pickMediaUrl(media);
 
   if (!url) {
     const err = new Error("NO_MEDIA");
@@ -52,9 +52,25 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
   }
 
   const file = await converter.makeStickerFile(url, CACHE_DIR, forceStatic, pickFetcher(api, url));
+  let previewPath = null;
   let stickerUrl = null;
 
   try {
+    try {
+      previewPath = await converter.makePreviewFile(file.path);
+      await api.sendMessage(
+        { msg: "👀 Xem trước sticker có khung:", attachments: previewPath },
+        threadId,
+        type
+      );
+    } catch (error) {
+      console.error("[stk] preview failed:", error?.message || error, error?.stack || "");
+      const err = new Error("STICKER_PREVIEW_FAILED");
+      err.cause = error;
+      err.userMessage = "❌ Không thể gửi ảnh xem trước sticker. Vui lòng thử lại.";
+      throw err;
+    }
+
     let uploaded;
     try {
       uploaded = await api.uploadStickerImage({ filePath: file.path, threadId, threadType: type });
@@ -83,6 +99,9 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false }
     stickerUrl = buildStickerUrl(String(cdnUrl), file.format === "webp");
   } finally {
     try { fs.unlinkSync(file.path); } catch { /* bỏ qua */ }
+    if (previewPath) {
+      try { fs.unlinkSync(previewPath); } catch { /* bỏ qua */ }
+    }
   }
 
   const replyMsgId = event?.data?.quote?.msgId || null;

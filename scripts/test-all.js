@@ -85,7 +85,6 @@ async function runCmd(name, args = [], eventOverride = {}) {
     ["s120-26-ava-talk.zadn.vn", "avatar Zalo"],
     ["api-v2.soundcloud.com", "SoundCloud"],
     ["translate.google.com", "Google TTS (/noi)"],
-    ["api.checkphatnguoi.vn", "phát nguội"],
     ["dpaste.com", "paste (adc)"],
     ["api.spotify.com", "Spotify (đã bỏ)"]
   ]) {
@@ -109,9 +108,9 @@ async function runCmd(name, args = [], eventOverride = {}) {
   }
 
   // 5. Lệnh có tham số (chỉ giữ lệnh còn tồn tại)
-  // Lệnh gọi API ngoài (autodown/lyric/phatnguoi) chỉ cần không crash —
+  // Lệnh gọi API ngoài (autodown/lyric) chỉ cần không crash —
   // dịch vụ ngoài down là chuyện bình thường, không phải lỗi bot.
-  const NETWORK_CMDS = new Set(["autodown", "lyric", "phatnguoi"]);
+  const NETWORK_CMDS = new Set(["autodown", "lyric"]);
   const withArgs = [
     ["menu", ["menu", "2"]],
     ["menu", ["next"]],
@@ -127,7 +126,6 @@ async function runCmd(name, args = [], eventOverride = {}) {
     ["lyric", ["Nơi Này Có Anh"]],
     ["spam", ["off"]],
     ["spamsticker", ["off"]],
-    ["phatnguoi", ["30A12345"]],
     ["upt", []],
     ["noi", []]
   ];

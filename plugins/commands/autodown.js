@@ -1,8 +1,3 @@
-/**
- * /autodown — pure-JS media auto-downloader for group links.
- * Toggle per-group; extracts media from supported platforms and sends attachments.
- * No yt-dlp/Python dependency.
- */
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -22,9 +17,6 @@ module.exports.config = {
   dependencies: {}
 };
 
-// =========================
-// Config / defaults
-// =========================
 const DEFAULTS = {
   enabled: true,
   rate_limit_max: 5,
@@ -41,25 +33,18 @@ function cfg() {
   return Object.assign({}, DEFAULTS, global.config?.autodown || {});
 }
 
-// =========================
-// In-memory state
-// =========================
-const rateBuckets = new Map();   // threadId -> { tokens, resetAt }
-const dedupMap = new Map();      // threadId::urlKey -> expireAt
-const cacheMap = new Map();      // urlKey -> { expireAt, value }
-const circuitMap = new Map();    // platform -> { fails, openUntil }
+const rateBuckets = new Map();
+const dedupMap = new Map();
+const cacheMap = new Map();
+const circuitMap = new Map();
 let activeDownloads = 0;
 
-// =========================
-// Helpers
-// =========================
 function now() { return Date.now(); }
 
 function normalizeUrl(raw) {
   try {
     const u = new URL(String(raw).trim());
     u.hash = "";
-    // Normalize common tracking params for dedup/keying but keep URL usable for fetch.
     return u.toString();
   } catch {
     return String(raw || "").trim();
@@ -69,7 +54,6 @@ function normalizeUrl(raw) {
 function urlKey(raw) {
   try {
     const u = new URL(normalizeUrl(raw));
-    // strip noisy tracking params for TikTok etc.
     ["_r", "_t", "is_from_webapp", "sender_device", "web_id"].forEach((k) => u.searchParams.delete(k));
     u.hash = "";
     return u.toString().toLowerCase();
@@ -109,9 +93,6 @@ function fmtBytes(n) {
   return `${mb.toFixed(mb >= 10 ? 1 : 2)}MB`;
 }
 
-// =========================
-// Rate limit / dedup / cache / circuit / concurrency
-// =========================
 function consumeRate(threadId) {
   const c = cfg();
   const t = now();
@@ -174,9 +155,6 @@ function releaseSlot() {
   activeDownloads = Math.max(0, activeDownloads - 1);
 }
 
-// =========================
-// URL extraction from event
-// =========================
 function collectStrings(value, out, depth = 0) {
   if (depth > 6 || value == null) return;
   if (typeof value === "string") { out.push(value); return; }
@@ -223,9 +201,6 @@ function detectPlatform(url) {
   return "generic";
 }
 
-// =========================
-// HTTP helpers (privacy-compliant)
-// =========================
 function getHttp() { return require("../../core/http"); }
 
 async function fetchText(url, options = {}) {
@@ -249,9 +224,6 @@ function canFetchHost(url) {
   } catch { return false; }
 }
 
-// =========================
-// Extractors
-// =========================
 async function extractTikTok(url) {
   const candidates = [];
   const u = normalizeUrl(url);
@@ -270,7 +242,6 @@ async function extractTikTok(url) {
     Accept: "application/json, text/plain, */*",
     Referer: "https://www.tikwm.com/"
   };
-  // TikTok cookies config (not required by tikwm but harmless in future fallbacks)
   const tkCookies = global.config?.media?.tiktok_cookies || process.env.TIKTOK_COOKIES;
   if (tkCookies) headers.Cookie = tkCookies;
 
@@ -314,7 +285,7 @@ async function extractTikTok(url) {
 function extractMeta(html, patterns) {
   for (const re of patterns) {
     const m = html.match(re);
-    if (m && m[1]) return m[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+    if (m && m[1]) return m[1].replace(/&amp;/g, "&").replace(/&quot;/g, "\x22");
   }
   return "";
 }
@@ -332,22 +303,22 @@ async function extractOgMedia(url, platform) {
 
   const html = await fetchText(url, { headers, timeout: 30000, retries: 1 });
   const videoUrl = extractMeta(html, [
-    /<meta[^>]+property=["']og:video:secure_url["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video:secure_url["']/i,
-    /<meta[^>]+property=["']og:video:url["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video:url["']/i,
-    /<meta[^>]+property=["']og:video["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video["']/i,
-    /<meta[^>]+name=["']twitter:player:stream["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:player:stream["']/i
+    /<meta[^>]+property=["\x27]og:video:secure_url["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:video:secure_url["\x27]/i,
+    /<meta[^>]+property=["\x27]og:video:url["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:video:url["\x27]/i,
+    /<meta[^>]+property=["\x27]og:video["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:video["\x27]/i,
+    /<meta[^>]+name=["\x27]twitter:player:stream["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+name=["\x27]twitter:player:stream["\x27]/i
   ]);
   const thumbnail = extractMeta(html, [
-    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i
+    /<meta[^>]+property=["\x27]og:image["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:image["\x27]/i
   ]);
   const title = extractMeta(html, [
-    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
+    /<meta[^>]+property=["\x27]og:title["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+    /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:title["\x27]/i,
     /<title[^>]*>([^<]+)<\/title>/i
   ]);
   if (!videoUrl) throw new Error(`no og:video found for ${platform}`);
@@ -365,7 +336,6 @@ async function extractOgMedia(url, platform) {
 }
 
 async function extractYouTube(url) {
-  // Best-effort pure JS: metadata only is reliable; direct media extraction is fragile.
   let title = "YouTube video";
   let author = "YouTube";
   let thumbnail = "";
@@ -383,7 +353,6 @@ async function extractYouTube(url) {
       thumbnail = n?.thumbnail_url || thumbnail;
     } catch {}
   }
-  // Try page scan for googlevideo-like URLs (very best effort; often absent/protected).
   try {
     if (canFetchHost(url)) {
       const html = await fetchText(url, {
@@ -396,8 +365,8 @@ async function extractYouTube(url) {
         return { platform: "youtube", source: "page-scan", title, author, duration: 0, thumbnail, videoUrl: media, audioUrl: null, pageUrl: url };
       }
       const og = extractMeta(html, [
-        /<meta[^>]+property=["']og:video(?::url|:secure_url)?["'][^>]+content=["']([^"']+)["']/i,
-        /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video(?::url|:secure_url)?["']/i
+        /<meta[^>]+property=["\x27]og:video(?::url|:secure_url)?["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i,
+        /<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+property=["\x27]og:video(?::url|:secure_url)?["\x27]/i
       ]);
       if (og && canFetchHost(og)) {
         return { platform: "youtube", source: "og-meta", title, author, duration: 0, thumbnail, videoUrl: og, audioUrl: null, pageUrl: url };
@@ -433,9 +402,6 @@ async function extractByPlatform(platform, url) {
   }
 }
 
-// =========================
-// Download & send
-// =========================
 async function downloadAndSend({ api, threadId, type, info }) {
   const c = cfg();
   const mediaUrl = info.videoUrl || info.audioUrl;
@@ -474,11 +440,7 @@ async function downloadAndSend({ api, threadId, type, info }) {
   }
 }
 
-// =========================
-// Event handling
-// =========================
 function getPrefix(event) {
-  // handleEvent for commands doesn't pass thread; prefix comes from config.
   return global.config?.prefix || "/";
 }
 
@@ -496,7 +458,6 @@ module.exports.handleEvent = async function ({ api, event, eventType, isSelf, Th
     const threadId = event?.threadId;
     const type = event?.type ?? ThreadType.Group;
     if (!threadId) return;
-    // Only auto-handle group messages.
     if (type !== ThreadType.Group && type !== 1) return;
 
     const c = cfg();
@@ -517,7 +478,7 @@ module.exports.handleEvent = async function ({ api, event, eventType, isSelf, Th
     for (const rawUrl of urls) {
       const platform = detectPlatform(rawUrl);
       const supported = ["tiktok", "facebook", "instagram", "youtube", "twitter"].includes(platform);
-      if (!supported) continue; // generic only when explicitly allowed? avoid noisy behavior
+      if (!supported) continue;
       attemptedSupported = true;
 
       const key = `${platform}:${urlKey(rawUrl)}`;
@@ -563,17 +524,12 @@ module.exports.handleEvent = async function ({ api, event, eventType, isSelf, Th
       }
     }
 
-    // If no supported URLs attempted, stay silent.
     void attemptedSupported;
   } catch (err) {
-    // Never crash event loop; one silent failure path.
     try { console.error("[autodown.handleEvent]", err?.message || err); } catch {}
   }
 };
 
-// =========================
-// Command
-// =========================
 module.exports.run = async function ({ api, event, args = [], Threads, reply }) {
   const { threadId, type } = event || {};
   const action = String(args[0] || "status").toLowerCase();
@@ -615,7 +571,6 @@ module.exports.run = async function ({ api, event, args = [], Threads, reply }) 
   return send(`Dùng: ${global.config?.prefix || "/"}autodown on|off|status`);
 };
 
-// Test hooks (internal)
 module.exports._test = {
   extractTikTok,
   extractByPlatform,

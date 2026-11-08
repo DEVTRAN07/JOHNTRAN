@@ -205,13 +205,18 @@ const DEFAULTS = {
       "zadn.vn",
       "dlfl.vn",
       "zdn.vn",
-      "api.checkphatnguoi.vn"
+      // Video (/vdgirl — catbox.moe)
+      "catbox.moe",
+      // Lời bài hát (/lyric — LRCLIB)
+      "lrclib.net",
+      // DNS-over-HTTPS bootstrap (không cần system DNS)
+      "cloudflare-dns.com",
+      "dns.google",
     ]
   },
   services: {
     media_downloader_url: "",
     tiktok_api_url: "",
-    phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi",
     dpaste_url: "https://dpaste.com/api/v2/",
     facebook_api_url: "https://graph.facebook.com/v19.0",
     facebook_access_token: ""

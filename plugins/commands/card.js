@@ -54,8 +54,10 @@ module.exports.run = async function ({ api, event, args, reply }) {
   const avatar = String(user.avatar || "").trim();
   if (/^https?:\/\//i.test(avatar)) {
     try {
-      const { buffer } = await http.getBuffer(avatar, { timeout: 20000 });
-      avatarBuffer = buffer;
+      const { buffer, contentType } = await http.getBuffer(avatar, { timeout: 20000 });
+      if (buffer?.length && (!contentType || contentType.toLowerCase().startsWith("image/"))) {
+        avatarBuffer = buffer;
+      }
     } catch { /* thiếu ảnh vẫn tạo thẻ */ }
   }
 

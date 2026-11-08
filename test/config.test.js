@@ -8,7 +8,6 @@ const config = {
   services: {
     media_downloader_url: "https://secret.example.com",
     tiktok_api_url: "https://toksecret.example.com",
-    phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi"
   },
   media: { tiktok_cookies: "cookie_gi_mat", facebook_cookies: "cookie_fb" },
   panel: { token: "panel_secret_token" }
@@ -18,7 +17,6 @@ const view = JSON.parse(safeView(config));
 // Các key KHÔNG chứa từ khóa secret (key/secret/token/password/cookie/imei/credential) thì KHÔNG bị mask
 assert.strictEqual(view.services.media_downloader_url, "https://secret.example.com");
 assert.strictEqual(view.services.tiktok_api_url, "https://toksecret.example.com");
-assert.strictEqual(view.services.phatnguoi_url, "https://api.checkphatnguoi.vn/phatnguoi");
 // Các key chứa từ khóa secret thì bị mask
 assert.strictEqual(view.media.tiktok_cookies, REDACTED);
 assert.strictEqual(view.media.facebook_cookies, REDACTED);

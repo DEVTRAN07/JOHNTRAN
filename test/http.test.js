@@ -1,5 +1,6 @@
 const assert = require("assert");
 const { hostAllowed, redactUrl } = require("../core/http/index");
+const { load: loadConfig } = require("../core/config");
 
 // ===== hostAllowed =====
 // allow_all_hosts = true → mọi host đều đi được
@@ -26,6 +27,22 @@ assert.ok(String(r1.reason).includes("không nằm trong danh sách cho phép"))
 const r2 = hostAllowed("not-a-url", { privacy: { allow_all_hosts: false, allowed_hosts: [] } });
 assert.strictEqual(r2.allowed, false);
 assert.ok(String(r2.reason).includes("URL không hợp lệ"));
+
+// Configured autodown source/API hosts must pass the privacy guard.
+const configured = loadConfig();
+for (const url of [
+  "https://www.tikwm.com/api/",
+  "https://api.tikwm.com/api/",
+  "https://www.youtube.com/oembed",
+  "https://noembed.com/embed",
+  "https://www.facebook.com/reel/123",
+  "https://www.instagram.com/reel/123/",
+  "https://video.twimg.com/example.mp4",
+  "https://lrclib.net/api/search",
+  "https://files.catbox.moe/example.mp4"
+]) {
+  assert.ok(hostAllowed(url, configured).allowed, `${new URL(url).hostname} should be allowed for autodown`);
+}
 
 // ===== redactUrl =====
 // Query params nhạy cảm được mask

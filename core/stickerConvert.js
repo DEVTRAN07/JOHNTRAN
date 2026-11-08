@@ -11,6 +11,7 @@ const TARGET_W = 480;
 const MAX_SECONDS = 8;
 const FPS = 15;
 const SIZE_LIMIT = 512 * 1024; // 512KB: Zalo upload nhanh và ổn định hơn
+const FRAME_PATH = path.join(__dirname, "..", "khung-stk", "mong-vuot-rong.png");
 
 const ffmpegBin = "ffmpeg";
 const ffprobeBin = "ffprobe";
@@ -106,60 +107,64 @@ function isAnimatedBuffer(buf) {
   return false;
 }
 
-// Video/GIF/ảnh tĩnh → file sticker (webp nếu được, không thì gif)
-async function convert(inputPath, outPath) {
-  const useWebp = await hasLibwebp();
-  const outFile = useWebp ? outPath : outPath.replace(/\.webp$/, ".gif");
-
-  const base = [
-    "-y", "-i", inputPath, "-t", String(MAX_SECONDS),
-    "-vf", `fps=${FPS},scale=${TARGET_W}:-1:flags=lanczos`,
-    "-an"
-  ];
-
-  let r;
-  if (useWebp) {
-    r = await run(ffmpegBin, [
-      ...base, "-vcodec", "libwebp", "-loop", "0", "-q:v", "65",
-      "-preset", "default", outFile
-    ]);
-    if (!r.ok) {
-      // vừa probe xong mà vẫn fail → thử lại bằng GIF
-      r = await run(ffmpegBin, [
-        ...base,
-        "-vf", `fps=${FPS},scale=${TARGET_W}:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a`,
-        "-loop", "0", outFile.replace(/\.webp$/, ".gif")
-      ]);
-      if (r.ok) return { path: outFile.replace(/\.webp$/, ".gif"), format: "gif" };
-    } else {
-      return { path: outFile, format: "webp" };
-    }
-  } else {
-    r = await run(ffmpegBin, [
-      ...base,
-      "-vf", `fps=${FPS},scale=${TARGET_W}:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a`,
-      "-loop", "0", outFile
-    ]);
-    if (r.ok) return { path: outFile, format: "gif" };
+async function convertFramed(inputPath, outPath, duration, isStill) {
+  if (!fs.existsSync(FRAME_PATH)) {
+    throw new Error(`Không tìm thấy khung sticker: ${FRAME_PATH}`);
   }
 
-  throw new Error("ffmpeg convert thất bại: " + r.stderr.slice(-200));
+  const useWebp = await hasLibwebp();
+  const outFile = useWebp ? outPath : outPath.replace(/\.webp$/, ".gif");
+  const graph = [
+    `[0:v]fps=${FPS},scale=${TARGET_W}:${TARGET_W}:force_original_aspect_ratio=increase:flags=lanczos,crop=${TARGET_W}:${TARGET_W}[content]`,
+    `[1:v]scale=${TARGET_W}:${TARGET_W}:flags=lanczos,format=rgba[frame]`,
+    "[content][frame]overlay=0:0:shortest=1[framed]"
+  ];
+  if (!useWebp) {
+    graph.push(
+      "[framed]split[animation][palette_source]",
+      "[palette_source]palettegen=stats_mode=diff[palette]",
+      "[animation][palette]paletteuse=dither=sierra2_4a[sticker]"
+    );
+  }
+
+  const args = ["-y"];
+  if (isStill) args.push("-loop", "1");
+  args.push("-i", inputPath, "-i", FRAME_PATH, "-t", String(duration));
+  args.push("-filter_complex", graph.join(";"), "-map", useWebp ? "[framed]" : "[sticker]", "-an");
+  if (useWebp) {
+    args.push("-vcodec", "libwebp", "-loop", "0", "-q:v", "65", "-preset", "default");
+  } else {
+    args.push("-loop", "0");
+  }
+  args.push(outFile);
+
+  const result = await run(ffmpegBin, args, 90000);
+  if (!result.ok) {
+    throw new Error("ffmpeg ghép khung sticker thất bại: " + result.stderr.slice(-300));
+  }
+  return { path: outFile, format: useWebp ? "webp" : "gif" };
+}
+
+// Video/GIF/ảnh tĩnh → sticker có khung (webp nếu được, không thì gif)
+async function convert(inputPath, outPath) {
+  return convertFramed(inputPath, outPath, MAX_SECONDS, false);
 }
 
 // Ảnh TĨNH → webp loop 2.5 giây (bot gốc vẫn gửi dạng động cho mọi sticker)
 async function convertStatic(inputPath, outPath) {
-  const useWebp = await hasLibwebp();
-  const outFile = useWebp ? outPath : outPath.replace(/\.webp$/, ".gif");
-  const r = await run(ffmpegBin, [
-    "-y", "-loop", "1", "-i", inputPath,
-    "-t", "2.5",
-    "-vf", `fps=${FPS},scale=${TARGET_W}:-1:flags=lanczos`,
-    "-vcodec", useWebp ? "libwebp" : "gif",
-    ...(useWebp ? ["-loop", "0", "-q:v", "65"] : ["-loop", "0"]),
-    outFile
+  return convertFramed(inputPath, outPath, 2.5, true);
+}
+
+async function makePreviewFile(stickerPath) {
+  const previewPath = `${stickerPath}.preview.png`;
+  const result = await run(ffmpegBin, [
+    "-y", "-i", stickerPath, "-frames:v", "1", "-update", "1", previewPath
   ]);
-  if (!r.ok) throw new Error("ffmpeg convert ảnh tĩnh thất bại: " + r.stderr.slice(-200));
-  return { path: outFile, format: useWebp ? "webp" : "gif" };
+  if (!result.ok) {
+    try { fs.unlinkSync(previewPath); } catch { /* không có file hoàn chỉnh để dọn */ }
+    throw new Error("Không thể tạo ảnh xem trước sticker: " + result.stderr.slice(-300));
+  }
+  return previewPath;
 }
 
 /**
@@ -191,6 +196,7 @@ module.exports = {
   makeStickerFile,
   convert,
   convertStatic,
+  makePreviewFile,
   download,
   imageSize,
   isAnimatedBuffer,

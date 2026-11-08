@@ -3,6 +3,7 @@ const https = require("https");
 const zlib = require("zlib");
 const { URL } = require("url");
 const logger = require("../../utils/logger");
+const { resolveWithDoH } = require("./dns");
 
 const DEFAULT_TIMEOUT = 20000;
 const DEFAULT_RETRIES = 2;
@@ -62,7 +63,7 @@ function decodeBody(raw, contentEncoding) {
   return raw;
 }
 
-function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
+function rawRequestOnce(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS, forceIp = null) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -78,15 +79,18 @@ function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
       Accept: "application/json, text/plain, */*",
       ...(options.headers || {})
     };
+    if (forceIp) headers.Host = parsed.hostname;
 
+    const targetHost = forceIp || parsed.hostname;
     const req = transport.request(
       {
-        hostname: parsed.hostname,
+        hostname: targetHost,
         port: parsed.port || (parsed.protocol === "http:" ? 80 : 443),
         path: parsed.pathname + parsed.search,
         method,
         headers,
-        timeout: options.timeout || DEFAULT_TIMEOUT
+        timeout: options.timeout || DEFAULT_TIMEOUT,
+        servername: parsed.hostname
       },
       (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0 && method === "GET") {
@@ -131,6 +135,24 @@ function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
     }
     req.end();
   });
+}
+
+function isDnsError(err) {
+  const code = err && err.code;
+  const msg = String((err && err.message) || err);
+  return code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ENAMETOOLONG" || /GETADDRINFO/i.test(msg);
+}
+
+async function rawRequest(rawUrl, options = {}, redirectsLeft = MAX_REDIRECTS) {
+  try {
+    return await rawRequestOnce(rawUrl, options, redirectsLeft);
+  } catch (err) {
+    if (!isDnsError(err)) throw err;
+    const parsed = new URL(rawUrl);
+    const ips = await resolveWithDoH(parsed.hostname);
+    if (!ips || !ips.length) throw err;
+    return rawRequestOnce(rawUrl, options, redirectsLeft, ips[0]);
+  }
 }
 
 async function request(rawUrl, options = {}) {

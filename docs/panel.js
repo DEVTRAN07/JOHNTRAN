@@ -1,5 +1,5 @@
 /* ===== ᴶᴼᴴᴺ ᵀᴿᴬᴺ PANEL — logic ===== */
-const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token";
+const LS_URL = "jt_panel_url", LS_TOKEN = "jt_panel_token", LS_STYLE = "jt_chat_style";
 let API = "", TOKEN = "";
 let autoRefresh = null, logTimer = null, logPaused = false, currentBot = null, qrPoll = null;
 let allBots = [];
@@ -598,19 +598,17 @@ JT_COOKIE_JSON=<i>nội dung file cookie.json</i></pre>
   qrPoll = setInterval(load, 10000);
 }
 
-
 /* ---------- CHAT (kiểu Zalo PC) ---------- */
 const CHAT_BOT = "main";
-const LS_STYLE = "jt_chat_style";
 let chatThreads = { friends: { list: [] }, groups: { list: [] } };
-let chatCurrent = null;   // { id, type, name, avatar, isGroup }
+let chatCurrent = null;
 let chatTimer = null;
-let chatUnread = {};      // threadId → số tin chưa đọc
-let chatLastSeen = {};    // threadId → ts tin cuối đã xem
+let chatUnread = {};
+let chatLastSeen = {};
 let chatStyle = { color: "", font: "", fontFamily: "", bold: false, italic: false, underline: false, strike: false, glow: false };
 const STYLE_FONTS = { "": "Mặc định", cursive: "Cursive", monospace: "Monospace", sans: "Sans-serif", serif: "Serif" };
+let chatAdminGroups = [];
 
-// ---- kiểu chữ (chỉ hiển thị trên panel, lưu localStorage) ----
 function loadChatStyle() {
   try { chatStyle = { ...chatStyle, ...(JSON.parse(localStorage.getItem(LS_STYLE)) || {}) }; } catch { /* bo qua */ }
   applyStyleBar();
@@ -660,7 +658,6 @@ function setChatStyle(patch, el) {
   saveChatStyle();
 }
 function openStylePanel() {
-  const dot = (c) => '<button class="cdot ' + (chatStyle.color === c ? "on" : "") + '" style="--c:' + c + '" onclick="setChatStyle({color:\'' + c + '\'});openStylePanel()"></button>';
   $("styleBody").innerHTML = `
     <div class="sub" style="margin-bottom:14px">Chỉ đổi cách <b>HIỂN THỊ</b> trên panel (không gửi lên Zalo).</div>
     <div class="row" style="margin-bottom:12px">
@@ -694,7 +691,7 @@ function openStylePanel() {
       <button onclick="resetStyle()">Huỷ kiểu</button>
       <button class="primary" onclick="closeStylePanel()">Lưu</button>
     </div>`;
-$("styleModal").classList.add("open");
+  $("styleModal").classList.add("open");
 }
 function closeStylePanel() { $("styleModal").classList.remove("open"); }
 function resetStyle() {
@@ -702,7 +699,6 @@ function resetStyle() {
   saveChatStyle();
   openStylePanel();
 }
-
 
 // ---- BẢNG KÉO CHỌN MÀU (HSV) ----
 let pickerHsv = { h: 0, s: 1, v: 1 };
@@ -755,7 +751,6 @@ function drawSvArea() {
   grad2.addColorStop(1, "rgba(0,0,0,1)");
   ctx.fillStyle = grad2;
   ctx.fillRect(0, 0, W, H);
-  // vòng tròn vị trí đang chọn
   const cx = pickerHsv.s * W, cy = (1 - pickerHsv.v) * H;
   ctx.beginPath();
   ctx.arc(cx, cy, 7, 0, Math.PI * 2);
@@ -829,7 +824,7 @@ function applyHexInput() {
   const hex = ($("colorHexInput").value || "").trim();
   const hsv = hexToHsv(hex);
   if (hsv) { pickerHsv = hsv; updateColorPreview(); }
-  else toast("Mã màu không hợp lệ (vd #ff0000)");
+  else toast("Mã màu không hợp lệ (vd #ff0000)", "error");
 }
 
 function pickZaloColor(hex) {
@@ -838,16 +833,15 @@ function pickZaloColor(hex) {
 }
 
 // ---- danh sách hội thoại ----
-let chatAdminGroups = [];
-
 async function loadThreads() {
   try {
+    setLoading("chatThreads", '<div class="empty">Đang tải hội thoại...</div>');
     const data = await api("/api/chat/" + CHAT_BOT + "/threads");
     chatThreads = data;
     chatAdminGroups = data.adminGroups || [];
     renderThreadList();
   } catch (e) {
-    $("chatThreads").innerHTML = '<div class="empty">' + escapeHtml(e.message) + '<br><br>Bot chưa bật cầu nối chat hoặc chưa chạy.</div>';
+    setLoading("chatThreads", '<div class="empty">' + escapeHtml(e.message) + '<br><br>Bot chưa bật cầu nối chat hoặc chưa chạy.</div>');
   }
 }
 
@@ -858,16 +852,16 @@ function threadAvatar(t) {
 }
 
 function renderThreadList() {
-  const q = ($("chatSearch").value || "").trim().toLowerCase();
+  const q = ($("chatSearch")?.value || "").trim().toLowerCase();
   const muted = JSON.parse(localStorage.getItem("jt_chat_muted") || "[]");
   const adminSet = new Set(chatAdminGroups || []);
-  const friends = (chatThreads.friends?.list || []).filter((f) => !q || (f.displayName || "").toLowerCase().includes(q) || f.uid.includes(q));
-  const groups = (chatThreads.groups?.list || []).filter((g) => !q || (g.name || "").toLowerCase().includes(q) || g.gid.includes(q));
+  const friends = (chatThreads.friends?.list || []).filter((f) => !q || (f.displayName || "").toLowerCase().includes(q) || String(f.uid).includes(q));
+  const groups = (chatThreads.groups?.list || []).filter((g) => !q || (g.name || "").toLowerCase().includes(q) || String(g.gid || g.id).includes(q));
   const rows = [
     ...groups.map((g) => ({ id: g.gid || g.id, type: 1, name: g.name || g.gid || g.id, avatar: g.avatar || "", last: g.lastMessage, isGroup: true })),
     ...friends.map((f) => ({ id: f.uid, type: 0, name: f.displayName || f.uid, avatar: f.avatar || "", last: f.lastMessage, isGroup: false }))
   ].filter((t) => !muted.includes(t.id));
-  $("chatThreads").innerHTML = rows.length ? rows.map((t) => {
+  setLoading("chatThreads", rows.length ? rows.map((t) => {
     const unread = chatUnread[t.id] || 0;
     const tm = t.last?.ts ? new Date(t.last.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
     const tJson = escapeAttr(JSON.stringify({ id: t.id, type: t.type, name: t.name, avatar: t.avatar, isGroup: t.isGroup }));
@@ -878,10 +872,10 @@ function renderThreadList() {
       '<span class="nm">' + escapeHtml(t.name) + " " + crown + ' <span class="tag ' + (t.isGroup ? "group" : "user") + '">' + (t.isGroup ? "Nhóm" : "Người dùng") + "</span></span>" +
       '<span class="pv">' + (t.last ? escapeHtml((t.last.name ? t.last.name + ": " : "") + String(t.last.text || "[tin nhắn]").slice(0, 42)) : (tm ? tm : "Chưa có tin nhắn")) + "</span>" +
       "</span></button>";
-  }).join("") : '<div class="empty">Không có hội thoại khớp tìm kiếm.</div>';
+  }).join("") : '<div class="empty">Không có hội thoại khớp tìm kiếm.</div>');
 }
 
-// ---- mở hội thoại ---- (data-t JSON: tên nhóm có dấu ' hoặc " không vỡ chuỗi)
+// ---- mở hội thoại ----
 function openThreadJson(el) {
   let t = {};
   try { t = JSON.parse(el.dataset.t || "{}"); } catch { return; }
@@ -913,7 +907,7 @@ function closeThread() {
   $("chatSub").textContent = "bạn bè hoặc nhóm";
   $("chatInput").disabled = true;
   $("chatSendBtn").disabled = true;
-  $("chatMsgs").innerHTML = '<div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div>';
+  setLoading("chatMsgs", '<div class="empty">Chưa mở hội thoại — chọn bạn bè/nhóm để xem tin nhắn và chat trực tiếp.</div>');
   renderThreadList();
 }
 
@@ -931,11 +925,10 @@ async function loadChatMessages() {
 
 function renderChatMessages(messages) {
   if (!messages.length) {
-    $("chatMsgs").innerHTML = '<div class="empty">Chưa có tin nhắn nào.<br><br>Zalo không cho lấy lịch sử cũ — panel chỉ hiện tin từ khi bot hoạt động.</div>';
+    setLoading("chatMsgs", '<div class="empty">Chưa có tin nhắn nào.<br><br>Zalo không cho lấy lịch sử cũ — panel chỉ hiện tin từ khi bot hoạt động.</div>');
     return;
   }
   const box = $("chatMsgs");
-  // ô nhắn xem trước theo kiểu chữ đang chọn
   const input = $("chatInput");
   if (input) input.setAttribute("style", styleCss({ "max-width": "none" }));
   box.innerHTML = messages.map((m) => {
@@ -947,7 +940,7 @@ function renderChatMessages(messages) {
     }
     const ava = m.avatar || "";
     const showName = chatCurrent?.isGroup;
-    const inStyle = styleCss(); // kiểu chữ áp cho mọi bong bóng (hiển thị panel)
+    const inStyle = styleCss();
     const avaHtml = '<span class="ava-click" onclick="openUserInfo(\'' + escapeAttr(m.from || "") + '\')" title="Xem hồ sơ">' +
       (ava ? '<img class="avatar" src="' + escapeAttr(ava) + '" alt="">' : '<span class="ph">👤</span>') + "</span>";
     return '<div class="msg">' + avaHtml +
@@ -963,7 +956,7 @@ function copyMsg(el) {
   const bubble = el.closest(".bubble");
   const text = bubble ? bubble.childNodes[0].textContent : "";
   navigator.clipboard?.writeText(text.trim());
-  toast("Đã copy tin nhắn");
+  toast("Đã copy tin nhắn", "success");
 }
 
 // Zalo chỉ hỗ trợ: b/i/u/s + 4 màu + 2 cỡ chữ → quy đổi kiểu chữ panel
@@ -995,9 +988,9 @@ async function sendChat(e) {
     });
     await loadChatMessages();
     if (chatStyle.fontFamily || chatStyle.glow) {
-      toast("Font chữ + phát sáng chỉ hiển thị trên panel — Zalo không hỗ trợ 2 thứ này");
+      toast("Font chữ + phát sáng chỉ hiển thị trên panel — Zalo không hỗ trợ 2 thứ này", "warn");
     }
-  } catch (error) { toast(error.message); }
+  } catch (error) { toast(error.message, "error"); }
 }
 
 // ---- popup thông tin nhóm / hồ sơ người dùng ----
@@ -1017,11 +1010,7 @@ async function openUserInfo(uid) {
 async function openThreadInfo() {
   if (!chatCurrent) return;
   const t = chatCurrent;
-  if (t.isGroup) {
-    $("infoTitle").textContent = "Thông tin nhóm";
-  } else {
-    $("infoTitle").textContent = "Hồ sơ";
-  }
+  $("infoTitle").textContent = t.isGroup ? "Thông tin nhóm" : "Hồ sơ";
   $("infoBody").innerHTML = '<div class="empty">Đang tải...</div>';
   $("infoModal").classList.add("open");
   try {
@@ -1059,10 +1048,10 @@ function renderGroupInfo(g) {
     <div class="info-sec">Quản lý thành viên (nhập UID)</div>
     <div class="row">
       <input id="memberUidInput" placeholder="UID thành viên" style="flex:1;min-width:130px">
-      <button class="small danger" onclick="userAction('remove', $('memberUidInput').value.trim())">Xoá</button>
-      <button class="small danger" onclick="userAction('blockgroup', $('memberUidInput').value.trim())">Chặn</button>
-      <button class="small" onclick="userAction('deputy', $('memberUidInput').value.trim())">👑 Phó nhóm</button>
-      <button class="small" onclick="groupAction('adduser', $('memberUidInput').value.trim())">Thêm</button>
+      <button class="small danger" onclick="userAction('remove', \$(\"memberUidInput\").value.trim())">Xoá</button>
+      <button class="small danger" onclick="userAction('blockgroup', \$(\"memberUidInput\").value.trim())">Chặn</button>
+      <button class="small" onclick="userAction('deputy', \$(\"memberUidInput\").value.trim())">👑 Phó nhóm</button>
+      <button class="small" onclick="groupAction('adduser', \$(\"memberUidInput\").value.trim())">Thêm</button>
     </div>` : `
     <div class="sub" style="margin-top:12px">Bot chưa cầm key nhóm này — chỉ có thể rời nhóm và ẩn khỏi panel. Đánh dấu 👑 khi bạn tự cấp quyền quản trị cho bot trong Zalo.</div>`}
   `;
@@ -1092,12 +1081,8 @@ function renderUserInfo(u) {
 }
 
 function closeInfoModal() { $("infoModal").classList.remove("open"); }
-
-function toastSoon() { toast("Tính năng này chưa hỗ trợ"); }
-
-function isAdminGroup(id) {
-  return (chatAdminGroups || []).includes(id);
-}
+function toastSoon() { toast("Tính năng này chưa hỗ trợ", "warn"); }
+function isAdminGroup(id) { return (chatAdminGroups || []).includes(id); }
 async function toggleAdminGroup(id) {
   try {
     const res = await api("/api/chat/" + CHAT_BOT + "/toggle-admin-group", {
@@ -1105,15 +1090,14 @@ async function toggleAdminGroup(id) {
       body: JSON.stringify({ gid: id })
     });
     chatAdminGroups = res.groups || [];
-    toast(chatAdminGroups.includes(id) ? "Đã đánh dấu bot cầm key 👑" : "Đã bỏ đánh dấu");
+    toast(chatAdminGroups.includes(id) ? "Đã đánh dấu bot cầm key 👑" : "Đã bỏ đánh dấu", "success");
     openThreadInfo();
     renderThreadList();
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast(e.message, "error"); }
 }
-
 function copyUid(uid) {
   navigator.clipboard?.writeText(uid);
-  toast("Đã copy UID: " + uid);
+  toast("Đã copy UID: " + uid, "success");
 }
 function isMuted(id) {
   try { return (JSON.parse(localStorage.getItem("jt_chat_muted") || "[]")).includes(id); } catch { return false; }
@@ -1123,37 +1107,36 @@ function toggleMute(id) {
   try { muted = JSON.parse(localStorage.getItem("jt_chat_muted") || "[]"); } catch { /* bo qua */ }
   muted = muted.includes(id) ? muted.filter((m) => m !== id) : [...muted, id];
   localStorage.setItem("jt_chat_muted", JSON.stringify(muted));
-  toast(muted.includes(id) ? "Đã ẩn hội thoại khỏi panel" : "Đã bỏ ẩn");
+  toast(muted.includes(id) ? "Đã ẩn hội thoại khỏi panel" : "Đã bỏ ẩn", "success");
   openThreadInfo();
   renderThreadList();
 }
 
 async function groupAction(action, uid) {
-  const soon = () => toast("Tính năng này chưa hỗ trợ");
+  const soon = () => toast("Tính năng này chưa hỗ trợ", "warn");
   if (action === "pin" || action === "priority" || action === "avatar") return soon();
   if (action === "info" || action === "viewmsgs") return soon();
   if (action === "pinned") return soon();
-  // rời nhóm: ai cũng làm được; công cụ quản trị: chỉ khi bot cầm key
-  if (action !== "leave" && !isAdminGroup(chatCurrent?.id)) return toast("Bot chưa cầm key nhóm này — không có công cụ quản trị");
+  if (action !== "leave" && !isAdminGroup(chatCurrent?.id)) return toast("Bot chưa cầm key nhóm này — không có công cụ quản trị", "warn");
   if (action === "rename") {
     const name = prompt("Tên mới cho nhóm:", chatCurrent?.name || "");
     if (!name || !name.trim()) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "rename-group", threadId: chatCurrent.id, value: name.trim() }) });
-      toast("Đã đổi tên nhóm");
+      toast("Đã đổi tên nhóm", "success");
       chatCurrent.name = name.trim();
       openThreadInfo();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
     return;
   }
   if (action === "adduser") {
     const target = (uid || (typeof $("memberUidInput") !== "undefined" && $("memberUidInput") ? $("memberUidInput").value : "") || "").trim();
-    if (!target) return toast("Nhập UID cần thêm");
+    if (!target) return toast("Nhập UID cần thêm", "warn");
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "add-user", threadId: chatCurrent.id, uid: target }) });
-      toast("Đã gửi lời mời thêm thành viên");
+      toast("Đã gửi lời mời thêm thành viên", "success");
       openThreadInfo();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
     return;
   }
   if (action === "disperse") {
@@ -1161,68 +1144,91 @@ async function groupAction(action, uid) {
     if (!confirm("Chắc chắn chứ? Nhóm sẽ mất hoàn toàn.")) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "disperse-group", threadId: chatCurrent.id }) });
-      toast("Đã giải tán nhóm");
+      toast("Đã giải tán nhóm", "success");
       closeInfoModal();
       loadThreads();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
     return;
   }
   if (action === "leave") {
     if (!confirm('Rời nhóm "' + chatCurrent?.name + '"? Hành động này thật trên Zalo.')) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "leave-group", threadId: chatCurrent.id }) });
-      toast("Đã rời nhóm");
+      toast("Đã rời nhóm", "success");
       closeInfoModal();
       loadThreads();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
   }
 }
 
 async function userAction(action, uid) {
   const targetUid = uid || chatCurrent?.id;
-  const soon = () => toast("Tính năng này chưa hỗ trợ");
+  const soon = () => toast("Tính năng này chưa hỗ trợ", "warn");
   if (action === "check" || action === "addfriend" || action === "call") return soon();
   if (action === "deputy") {
     if (!confirm("Đặt " + targetUid + " làm phó nhóm?")) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "set-deputy", threadId: chatCurrent.id, uid: targetUid }) });
-      toast("Đã đặt phó nhóm");
+      toast("Đã đặt phó nhóm", "success");
       openThreadInfo();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
     return;
   }
-  // xoá/chặn khỏi nhóm cần bot cầm key
   if (action === "remove" || action === "blockgroup") {
-    if (chatCurrent?.isGroup && !isAdminGroup(chatCurrent.id)) return toast("Bot chưa cầm key nhóm này — không xoá/chặn thành viên được");
+    if (chatCurrent?.isGroup && !isAdminGroup(chatCurrent.id)) return toast("Bot chưa cầm key nhóm này — không xoá/chặn thành viên được", "warn");
   }
   if (action === "block") {
     if (!confirm("Chặn người dùng " + targetUid + "? Hành động này thật trên Zalo.")) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "block-user", uid: targetUid }) });
-      toast("Đã chặn");
-    } catch (e) { toast(e.message); }
+      toast("Đã chặn", "success");
+    } catch (e) { toast(e.message, "error"); }
   }
   if (action === "remove") {
     if (!confirm("Xoá " + targetUid + " khỏi nhóm? Hành động này thật trên Zalo.")) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "remove-user", threadId: chatCurrent.id, uid: targetUid }) });
-      toast("Đã xoá khỏi nhóm");
+      toast("Đã xoá khỏi nhóm", "success");
       openThreadInfo();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, "error"); }
   }
   if (action === "blockgroup") {
     if (!confirm("Chặn " + targetUid + " khỏi nhóm? Hành động này thật trên Zalo.")) return;
     try {
       await api("/api/chat/" + CHAT_BOT + "/action", { method: "POST", body: JSON.stringify({ action: "block-group-user", threadId: chatCurrent.id, uid: targetUid }) });
-      toast("Đã chặn khỏi nhóm");
-    } catch (e) { toast(e.message); }
+      toast("Đã chặn khỏi nhóm", "success");
+    } catch (e) { toast(e.message, "error"); }
   }
+}
+
+/* ---------- VIP: keyboard shortcuts & debounced search ---------- */
+function bindVipUi() {
+  const cmdSearch = $("cmdSearch");
+  if (cmdSearch) cmdSearch.addEventListener("input", debounce(renderCommands, 180));
+  const chatSearch = $("chatSearch");
+  if (chatSearch) chatSearch.addEventListener("input", debounce(renderThreadList, 180));
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      toggleDrawer();
+    }
+    if (e.key === "Escape") {
+      ["styleModal", "colorModal", "infoModal", "modal"].forEach((id) => {
+        const el = $(id);
+        if (el && el.classList.contains("open")) el.classList.remove("open");
+      });
+      clearInterval(logTimer); logTimer = null;
+      clearInterval(qrPoll); qrPoll = null;
+    }
+  });
 }
 
 /* ---------- khởi động ---------- */
 loadConfig();
 loadChatStyle();
-if (!TOKEN) toggleDrawer(); // lần đầu: mở sẵn ô cấu hình
+bindVipUi();
+if (!TOKEN) toggleDrawer();
 refresh();
 loadCommandList();
 showView("bots");

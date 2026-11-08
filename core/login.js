@@ -13,7 +13,7 @@ try {
   db = null;
 }
 
-let _loginState = 'starting'; // starting|cookie_login|qr_pending|qr_scanned|logged_in|failed
+let _loginState = 'starting';
 function setLoginState(s) { _loginState = s; }
 function getLoginState() { return _loginState; }
 
@@ -29,17 +29,12 @@ function resolveBotPath(target) {
     return path.isAbsolute(target) ? target : path.join(__dirname, "..", String(target));
 }
 
-// Đường file QR: ưu tiên JT_QRCODE_PATH (env tuyệt đối — trùng với env panel con truyền vào JT_QRCODE_PATH),
-// fallback về global.config.qrcode_path (resolved từ root dự án). Điều này khớp với botPaths(name).qrFile
-// mà panel phục vụ, khắc phục tình trạng panel hiện "Chưa có mã QR".
 function resolveQrPath() {
   const envPath = process.env.JT_QRCODE_PATH;
   if (envPath && path.isAbsolute(envPath)) return envPath;
   return resolveBotPath(global.config?.qrcode_path || "qr.png");
 }
 
-// Đường dẫn account: ưu tiên env JT_ACCOUNT_FILE (panel child set bots/<name>/account.json
-// tuyệt đối) — nếu là đường tương đối thì resolve giống resolveBotPath (từ root bot).
 function resolveAccountPath() {
   const envPath = process.env.JT_ACCOUNT_FILE;
   if (envPath && String(envPath).trim()) {
@@ -50,8 +45,6 @@ function resolveAccountPath() {
 
 const BOT_NAME = process.env.JT_BOT_NAME || "main";
 
-// Ghi trạng thái đăng nhập lên BotStats để panel hiển thị trạng thái thực trước khi đăng nhập xong.
-// Không bao giờ ném lỗi: nếu DB bị lỗi thì log debug và tiếp tục luồng đăng nhập.
 function saveBotStats(loginState, extra = {}) {
   if (!db) return;
   try {
@@ -78,7 +71,6 @@ function saveBotStats(loginState, extra = {}) {
   }
 }
 
-// Thiết bị đăng nhập: ưu tiên config.device.user_agent, nếu không thì tự đo theo OS
 function resolveUserAgent() {
   const configured = global.config?.device?.user_agent;
   if (configured && String(configured).trim()) return String(configured).trim();
@@ -98,18 +90,13 @@ function deviceLabel(userAgent) {
   return "Không rõ";
 }
 
-// Đọc width/height trực tiếp từ header ảnh (PNG/GIF/JPEG) — không cần decode toàn ảnh.
-// Trả về null nếu không parse được, lúc đó fallback sang Jimp.
 function readImageHeaderSize(buf) {
-  // PNG: IHDR ở byte 16 (width) và 20 (height), big-endian
   if (buf.length >= 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
   }
-  // GIF: logical screen descriptor, little-endian
   if (buf.length >= 10 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
     return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
   }
-  // JPEG: quét các marker SOF0-SOF15 để lấy kích thước
   if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
     let offset = 2;
     while (offset + 9 < buf.length) {
@@ -125,7 +112,6 @@ function readImageHeaderSize(buf) {
   return null;
 }
 
-// zalo-client bắt buộc imageMetadataGetter mới gửi được ảnh/local file (card canvas...)
 function createZaloClient() {
   return new ZaloClient({
     ...global.config.zalo_client_config,
@@ -142,7 +128,6 @@ function createZaloClient() {
       } finally {
         await fileHandle.close();
       }
-      // Fallback cho webp/định dạng lạ: decode bằng jimp (lazy — nặng)
       const Jimp = require("jimp");
       const image = await Jimp.read(filePath);
       return { width: image.bitmap.width, height: image.bitmap.height, size: fs.statSync(filePath).size };
@@ -159,18 +144,15 @@ async function loginWithQR() {
 
         const accountData = getJsonData(accountPath);
         const cookieFileName = accountData.cookie || "cookie.json";
-        // Cookie luôn resolve tương đốiso với thư mục của account file
-        // (child mode: bots/<name>/account.json → bots/<name>/cookie.json),
-        // tránh cookie bị ghi nhầm vào root bot.
         const cookiePath = path.isAbsolute(cookieFileName)
           ? cookieFileName
           : path.join(path.dirname(accountPath), cookieFileName);
 
         const qrPath = resolveQrPath();
-        try { fs.mkdirSync(path.dirname(qrPath), { recursive: true }); } catch { /* thư mục đã có hoặc không thể tạo — displayQRCodeInConsole sẽ tạo lại */ }
+        try { fs.mkdirSync(path.dirname(qrPath), { recursive: true }); } catch {}
 
         function tryRemoveQr() {
-          try { if (qrPath && fs.existsSync(qrPath)) fs.unlinkSync(qrPath); } catch { /* bỏ qua */ }
+          try { if (qrPath && fs.existsSync(qrPath)) fs.unlinkSync(qrPath); } catch {}
         }
 
         function publishQrPending(message) {
@@ -178,7 +160,6 @@ async function loginWithQR() {
           saveBotStats('qr_pending', { loginMessage: message, qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
         }
 
-        // Giới hạn lại tạo mã QR khi hết hạn/từ chối để không vòng lặp vĩnh viễn im lặng.
         let qrRetryAttempts = 0;
         const MAX_QR_RETRIES = 8;
 
@@ -187,11 +168,10 @@ async function loginWithQR() {
             const data = qrData?.data || {};
 
             if (eventType === LoginQRCallbackEventType.QRCodeGenerated) {
-                // QRCodeGenerated
                 const { image } = data;
                 if (!image) return;
 
-                qrRetryAttempts = 0; // có mã mới → reset bộ đếm lại
+                qrRetryAttempts = 0;
 
                 const isChild = process.env.JT_PANEL_CHILD === "1";
                 const isNonTTY = !process.stdout.isTTY || !!(process.env.PORT || process.env.RENDER || process.env.RENDER_SERVICE_ID);
@@ -200,7 +180,6 @@ async function loginWithQR() {
                     : null;
 
                 if (isChild || isNonTTY) {
-                    // Cloud/non-TTY: ASCII QR bị vỡ trong log; chỉ lưu ảnh và hướng dẫn URL /qr (public, panel mode).
                     const saved = await displayQRCodeInConsole(image, qrPath, { terminal: false, printPlain: true });
                     if (!saved || !fs.existsSync(qrPath) || fs.statSync(qrPath).size === 0) {
                         logger.log(`[QR LOGIN] Không lưu được QR tại ${qrPath}; /qr sẽ chưa có mã.`, "error");
@@ -221,7 +200,6 @@ async function loginWithQR() {
             }
 
             if (eventType === LoginQRCallbackEventType.QRCodeScanned) {
-                // QRCodeScanned
                 logger.log("Đã quét QRCode, vui lòng xác nhận trên điện thoại", "info");
                 setLoginState('qr_scanned');
                 saveBotStats('qr_scanned', { loginMessage: 'Đã quét QR, vui lòng xác nhận trên điện thoại', qrPath: path.basename(qrPath), qrUpdatedAt: Date.now() });
@@ -229,9 +207,8 @@ async function loginWithQR() {
             }
 
             if (eventType === LoginQRCallbackEventType.QRCodeExpired || eventType === LoginQRCallbackEventType.QRCodeDeclined) {
-                // QRCodeExpired / QRCodeDeclined — tạo lại mã với backoff có giới hạn
                 qrRetryAttempts += 1;
-                const label = eventType === LoginQRCallbackEventType.QRCodeExpired ? "hết hạn" : "bị từ chối";
+                const label = eventType === LoginQRCallbackEventType.QRCodeExpired ? 'hết hạn' : 'bị từ chối';
                 if (qrRetryAttempts > MAX_QR_RETRIES) {
                     const reason = `Mã QR ${label} quá ${MAX_QR_RETRIES} lần, dừng đăng nhập`;
                     logger.log(`[QR LOGIN] ${reason}`, "error");
@@ -253,7 +230,6 @@ async function loginWithQR() {
             }
 
             if (eventType === LoginQRCallbackEventType.GotLoginInfo) {
-                // GotLoginInfo
                 setLoginState('logged_in');
                 const { cookie, imei, userAgent } = data;
                 if (!userAgent || !cookie || !imei) return;
@@ -268,12 +244,10 @@ async function loginWithQR() {
                         cookie: cookieFileName
                     };
                     fs.writeFileSync(accountPath, JSON.stringify(newAccountData, null, 2), "utf8");
-                    // chỉ xoá màn hình khi không chạy dev (nodemon) và không phải bot con
                     const isDev = (process.env.npm_lifecycle_script || "").includes("nodemon");
                     if (!isDev && process.env.JT_PANEL_CHILD !== "1") console.clear();
                     logger.clearReplaceable();
                     logger.log(`Đã lưu cookie vào ${cookieFileName} và cập nhật ${path.basename(accountPath)}`, "info");
-                    // Đăng nhập thành công → xoá file QR cũ, panel không còn hiển thị mã QR hết hạn
                     tryRemoveQr();
                     saveBotStats('logged_in', { loginMessage: 'Đã đăng nhập và lưu cookie thành công', qrUpdatedAt: Date.now() });
                 } catch (err) {
@@ -285,7 +259,7 @@ async function loginWithQR() {
             }
         });
 
-        registerStickerApi(api); // gắn API tạo sticker tuỳ biến
+        registerStickerApi(api);
         return api;
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng QR: ${error.message || error}`, "error");
@@ -320,7 +294,7 @@ async function loginWithCookie() {
             userAgent: accountData.userAgent
         });
 
-        registerStickerApi(api); // gắn API tạo sticker tuỳ biến
+        registerStickerApi(api);
         return api;
     } catch (error) {
         logger.log(`Lỗi đăng nhập Zalo bằng Cookie: ${error.message || error}`, "error");

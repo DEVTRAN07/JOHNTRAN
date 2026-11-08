@@ -1,8 +1,9 @@
 const music = require("../../core/music");
-const lyricLib = require("../../core/music/extra");
 const models = require("../../core/music/models");
+const http = require("../../core/http");
 
 const MAX_LYRIC_LINES = 32;
+const LRCLIB_API = "https://lrclib.net/api/search";
 
 module.exports.config = {
   name: "lyric",
@@ -31,22 +32,44 @@ module.exports.run = async ({ args, event, reply }) => {
       return reply.error("Bạn chưa tìm bài nào gần đây. Dùng: /lyric <từ khóa>");
     }
     const track = pending.tracks[0];
-    return showLyric(reply, pending.providerName, track);
+    return showLyric(reply, track);
   }
 
-  // Có từ khóa → tìm trên Zing rồi lấy lyric bài đầu tiên
   try {
-    const tracks = await music.search("soundcloud", args.join(" "), 1);
-    return showLyric(reply, "soundcloud", tracks[0]);
+    const tracks = await music.search("scl", args.join(" "), 1);
+    return showLyric(reply, tracks[0]);
   } catch (error) {
     await reply.failed();
     return reply.error(error.notAvailable ? error.message : `Lỗi khi tìm bài hát: ${error.message}`);
   }
 };
 
-async function showLyric(reply, providerName, track) {
+async function findLyrics(track) {
+  const title = String(track?.title || "").trim();
+  const artist = String(track?.artist || "").trim();
+  if (!title) throw new Error("Không xác định được tên bài hát để tìm lời.");
+
+  const params = new URLSearchParams({ track_name: title });
+  if (artist) params.set("artist_name", artist);
+  const { status, data } = await http.getJson(`${LRCLIB_API}?${params}`, {
+    timeout: 15000,
+    retries: 1,
+    headers: { "User-Agent": "JOHNTRAN/1.1.0 (lyrics lookup)" }
+  });
+  if (status >= 400) throw new Error(`LRCLIB trả về HTTP ${status}`);
+
+  const match = Array.isArray(data) && data.find((item) => item?.plainLyrics || item?.syncedLyrics);
+  const lyrics = match?.plainLyrics || match?.syncedLyrics;
+  if (!lyrics) throw new Error(`Không tìm thấy lời bài hát "${title}" trên LRCLIB.`);
+  return lyrics
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\[\d{2}:\d{2}(?:\.\d{2,3})?\]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+async function showLyric(reply, track) {
   try {
-    const lines = await lyricLib.getLyric(providerName, track.id);
+    const lines = await findLyrics(track);
     const shown = lines.slice(0, MAX_LYRIC_LINES);
     await reply.card({
       theme: "ai",
@@ -64,3 +87,5 @@ async function showLyric(reply, providerName, track) {
     return reply.error(error.message);
   }
 }
+
+module.exports._test = { findLyrics };

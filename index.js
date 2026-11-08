@@ -62,24 +62,51 @@ const configSystem = require("./core/config");
     }
 
     // ===== CHẾ ĐỘ BOT ĐƠN: master giám sát 1 tiến trình JohnTran.js =====
+    let child = null;
+    let shuttingDown = false;
+
+    function shutdown(signal) {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        logger.log("Đang dừng bot con...", "warn");
+
+        if (!child) return process.exit(0);
+
+        const currentChild = child;
+        const forceStopTimer = setTimeout(() => {
+            logger.log("Bot con chưa dừng sau 10 giây, buộc dừng", "warn");
+            currentChild.kill("SIGKILL");
+            process.exit(0);
+        }, 10000);
+
+        currentChild.once("close", () => {
+            clearTimeout(forceStopTimer);
+            process.exit(0);
+        });
+        currentChild.kill(signal);
+    }
+
+    process.once("SIGTERM", () => shutdown("SIGTERM"));
+    process.once("SIGINT", () => shutdown("SIGINT"));
+
     function startProject() {
-        const child = spawn("node", ["JohnTran.js"], {
+        if (shuttingDown) return;
+
+        const currentChild = spawn(process.execPath, ["JohnTran.js"], {
             cwd: __dirname,
             stdio: "inherit",
-            shell: true,
             env: { ...process.env, JT_PANEL_CHILD: "0" }
         });
+        child = currentChild;
 
-        // cloud platform (Render/Koyeb) gửi SIGTERM khi tắt service → forward xuống bot
-        const forward = (signal) => () => {
-            try { child.kill(signal); } catch { /* bỏ qua */ }
-            process.exit(0);
-        };
-        process.on("SIGTERM", forward("SIGTERM"));
-        process.on("SIGINT", forward("SIGINT"));
+        currentChild.on("error", (error) => {
+            logger.log(`Không thể khởi động bot con: ${error.message}`, "error");
+            process.exit(1);
+        });
 
-        child.on("close", (code) => {
-            if (code === 2) {
+        currentChild.on("close", (code) => {
+            if (child === currentChild) child = null;
+            if (!shuttingDown && code === 2) {
                 logger.log(`Khởi động lại...`, "warn");
                 startProject();
             }

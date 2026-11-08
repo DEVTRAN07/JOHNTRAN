@@ -1,8 +1,9 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const http = require("../../core/http");
 
-let vdgirl = [];
-try { vdgirl = require('../../assets/vdgirl.json'); } catch { vdgirl = []; }
+const girlImages = require('../../assets/girl.json');
 
 module.exports.config = {
   name: 'girl',
@@ -19,19 +20,17 @@ module.exports.config = {
 
 module.exports.run = async ({ args, event, api, Users }) => {
   const { threadId, type } = event;
-  const tempDir = path.join(__dirname, 'temp');
-  const filePath = path.join(__dirname, 'temp', 'gai.jpg');
-
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
+  if (!Array.isArray(girlImages) || girlImages.length === 0) {
+    return api.sendMessage("❌ Hiện chưa có ảnh để gửi.", threadId, type);
   }
 
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jt_girl_'));
+  const filePath = path.join(tempDir, 'gai.jpg');
   try {
     const link = girlImages[Math.floor(Math.random() * girlImages.length)];
-
-    const axios = require('axios');
-    const res = await axios.get(link, {
-      responseType: "arraybuffer",
+    const { buffer } = await http.getBuffer(link, {
+      timeout: 30000,
+      retries: 1,
       headers: {
         'User-Agent': 'Mozilla/5.0',
         'Referer': 'https://imgur.com/',
@@ -39,13 +38,14 @@ module.exports.run = async ({ args, event, api, Users }) => {
       }
     });
 
-    fs.writeFileSync(filePath, res.data);
+    if (!buffer?.length) throw new Error("Ảnh tải về rỗng");
+    fs.writeFileSync(filePath, buffer);
 
     await api.sendMessage({ msg: "📷 Ảnh gái ngẫu nhiên", attachments: filePath }, threadId, type);
-
-    fs.unlinkSync(filePath);
   } catch (error) {
     console.error("Đã xảy ra lỗi khi tải ảnh gái:", error.message);
     return api.sendMessage("❌ Không thể tải ảnh gái lúc này. Vui lòng thử lại sau.", threadId, type);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 };

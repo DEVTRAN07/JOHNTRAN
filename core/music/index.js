@@ -6,6 +6,7 @@ const db = require("../../utils/db");
 const { caches } = require("../cache");
 
 const providers = new Map();
+const PROVIDER_ALIASES = new Map([["soundcloud", "scl"]]);
 
 // ===== CACHE KẾT QUẢ (dùng LRUCache chung từ core/cache.js) =====
 const SEARCH_TTL = 10 * 60 * 1000;
@@ -23,7 +24,7 @@ function registerProvider(provider) {
 }
 
 function getProvider(name) {
-  const provider = providers.get(name);
+  const provider = providers.get(PROVIDER_ALIASES.get(name) || name);
   if (!provider) throw new Error(`Nhà cung cấp nhạc '${name}' không tồn tại`);
   return provider;
 }

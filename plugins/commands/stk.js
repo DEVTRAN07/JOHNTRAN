@@ -8,17 +8,17 @@ module.exports.config = {
   version: "7.0.1",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Tạo sticker thật từ ảnh/GIF/video (reply) hoặc URL .webp",
+  description: "Xem trước rồi tạo sticker có khung Mộng Vuốt Rồng",
   category: "Tiện ích",
-  usage: "stk (reply ảnh/gif/video/sticker) | stk <url .webp>",
+  usage: "stk (reply ảnh/gif/video/sticker) | stk <link media>",
   cooldowns: 5,
   dependencies: {}
 };
 
 const GUIDE =
   "❌ Hãy reply ảnh/GIF/video/sticker rồi gõ /stk\n" +
-  "hoặc: /stk <link .webp>\n" +
-  "Bot sẽ biến nó thành sticker Zalo thật.";
+  "hoặc: /stk <link ảnh/GIF/video>\n" +
+  "Bot sẽ ghép khung Mộng Vuốt Rồng vào sticker.";
 
 function isValidMediaUrl(url) {
   return /^https?:\/\/\S+$/i.test(String(url || ""));
@@ -45,43 +45,20 @@ module.exports.run = async function ({ api, event, args }) {
 
   try {
     const urlArg = (Array.isArray(args) ? args : []).find((a) => isValidMediaUrl(a));
-    if (urlArg) {
-      if (typeof api?.sendCustomStickerUrl !== "function") {
-        return safeSend(api, { msg: "❌ API tạo sticker chưa sẵn sàng. Vui lòng thử lại sau.", plain: true, ttl: 60000 }, threadId, type);
-      }
-      await safeSend(api, { msg: "⏳ Đang gửi sticker...", plain: true, ttl: 60000 }, threadId, type);
-      try {
-        await api.sendCustomStickerUrl({
-          staticImgUrl: urlArg,
-          animationImgUrl: urlArg,
-          threadId,
-          threadType: type,
-          reply: data?.quote?.msgId || null,
-          variant: "std"
-        });
-      } catch (error) {
-        const detail = errDetail(error);
-        console.error("[stk] sendCustomStickerUrl failed:", detail || error);
-        if (error?.stack) console.error(error.stack);
-        return safeSend(api, { msg: "❌ Gửi sticker thất bại: " + (detail || "lỗi không xác định"), plain: true, ttl: 60000 }, threadId, type);
-      }
-      return;
-    }
-
-    if (!data?.quote) {
+    if (!urlArg && !data?.quote) {
       return safeSend(api, { plain: true, msg: GUIDE }, threadId, type);
     }
 
     const media = parseQuote(event);
-    if (!pickMediaUrl(media)) {
+    if (!urlArg && !pickMediaUrl(media)) {
       return safeSend(api, { plain: true, msg: "❌ Tin reply không có ảnh/video/GIF để tạo sticker.", ttl: 60000 }, threadId, type);
     }
 
     await safeSend(api, { msg: "⏳ Đang tạo sticker...", plain: true, ttl: 60000 }, threadId, type);
 
-    const variant = (media && (media.video || media.webpUrl)) ? "std" : "ai";
+    const variant = (urlArg || (media && (media.video || media.webpUrl))) ? "std" : "ai";
     try {
-      await createAndSend({ api, event, variant });
+      await createAndSend({ api, event, variant, sourceUrl: urlArg });
     } catch (error) {
       const detail = errDetail(error);
       console.error("[stk] createAndSend failed:", detail || error);

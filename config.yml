@@ -58,10 +58,26 @@ privacy:
     - translate.google.com
     - www.tikwm.com
     - tikwm.com
+    - api.tikwm.com
+    - tiktok.com
+    - vm.tiktok.com
+    - vt.tiktok.com
     - v16m.tiktokcdn-us.com
     - v19-notes.tiktokcdn-us.com
     - tiktokcdn-us.com
     - tiktokcdn.com
+    - youtube.com
+    - youtu.be
+    - noembed.com
+    - googlevideo.com
+    - facebook.com
+    - fb.watch
+    - fbsbx.com
+    - instagram.com
+    - cdninstagram.com
+    - twitter.com
+    - x.com
+    - twimg.com
     - imgur.com
     - i.imgur.com
     - postimg.cc
@@ -77,7 +93,10 @@ privacy:
     - zadn.vn
     - dlfl.vn
     - zdn.vn
-    - api.checkphatnguoi.vn
+    - catbox.moe
+    - lrclib.net
+    - cloudflare-dns.com
+    - dns.google
 
 # ===== DỊCH VỤ NGOÀI (chỉ chạy khi admin tự cấu hình endpoint) =====
 # Để trống = tính năng tắt hoàn toàn, bot KHÔNG gửi dữ liệu đi đâu cả.
@@ -90,7 +109,6 @@ services:
   facebook_api_url: "https://graph.facebook.com/v19.0" # endpoint Graph API cho /cardfb
   facebook_access_token: "" # token Graph API (lấy ở developers.facebook.com). ĐỂ TRỐNG = /cardfb báo cách bật. Set via env JT_SERVICES__FACEBOOK_ACCESS_TOKEN or paste locally (do not commit)
   # --- Tiện ích ---
-  phatnguoi_url: "https://api.checkphatnguoi.vn/phatnguoi" # kiểm tra phạt nguội (phatnguoi)
   dpaste_url: "https://dpaste.com/api/v2/" # paste text trực tuyến (adc)
 
 # ===== ĐỌC GIỌNG NÓI (/noi — Google TTS miễn phí) =====
