@@ -45,11 +45,12 @@ const sendStickerFactory = factory.apiFactory()((api, ctx, utils$1) => {
         if (!sticker.type)
             throw new errors.ZaloApiError("Missing sticker type");
         const isGroupMessage = type === Enum.ThreadType.Group;
+        const clientId = Date.now();
         const params = {
             stickerId: sticker.id,
             cateId: sticker.cateId,
             type: sticker.type,
-            clientId: Date.now(),
+            clientId,
             imei: ctx.imei,
             zsource: 101,
             toid: isGroupMessage ? undefined : threadId,
@@ -65,7 +66,11 @@ const sendStickerFactory = factory.apiFactory()((api, ctx, utils$1) => {
                 params: encryptedParams,
             }),
         });
-        return utils$1.resolve(response);
+        const result = await utils$1.resolve(response);
+        if (result && typeof result === "object" && !result.cliMsgId) {
+            result.cliMsgId = String(clientId);
+        }
+        return result;
     };
 });
 

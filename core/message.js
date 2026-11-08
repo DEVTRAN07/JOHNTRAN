@@ -34,8 +34,9 @@ function scheduleRecall(api, response, threadId, type) {
     const timer = setTimeout(async () => {
       try {
         await api.undo({ msgId, cliMsgId }, threadId, type);
+        logger.log("Đã gửi yêu cầu thu hồi tin bot sau 1 phút.", "info");
       } catch (error) {
-        logger.log(`Không thể thu hồi tin ${msgId}: ${error?.message || error}`, "warn");
+        logger.log(`Không thể thu hồi tin bot sau 1 phút: ${error?.message || error}`, "warn");
       }
     }, DEFAULT_AUTO_RECALL_MS);
     timer.unref?.();

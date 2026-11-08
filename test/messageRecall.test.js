@@ -1,6 +1,44 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { wrapApi, DEFAULT_AUTO_RECALL_MS } = require("../core/message");
+const { sendMessageFactory } = require("../vendor/zalo-client/dist/cjs/api/sendMessage.cjs");
+const { encodeAES, decodeAES } = require("../vendor/zalo-client/dist/cjs/core/crypto.cjs");
+const { CookieJar } = require("tough-cookie");
+
+test("CommonJS sendMessage returns the same cliMsgId it sent to Zalo", async () => {
+  const secretKey = Buffer.alloc(16, 1).toString("base64");
+  let requestParams;
+  const ctx = {
+    secretKey,
+    API_VERSION: 1,
+    API_TYPE: 30,
+    imei: "test-device",
+    settings: { features: { sharefile: { max_file: 10, max_size_share_file_v3: 50 } } },
+    options: {
+      polyfill: async (_url, options) => {
+        requestParams = JSON.parse(decodeAES(secretKey, new URLSearchParams(options.body).get("params")));
+        const data = encodeAES(secretKey, JSON.stringify({ error_code: 0, data: { msgId: "message-id" } }));
+        return new Response(JSON.stringify({ error_code: 0, data }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    },
+    cookie: new CookieJar(),
+    userAgent: "test-agent"
+  };
+  const api = {
+    zpwServiceMap: {
+      chat: ["https://chat.example"],
+      group: ["https://group.example"],
+      file: ["https://file.example"]
+    }
+  };
+
+  const sendMessage = sendMessageFactory(ctx, api);
+  const response = await sendMessage({ msg: "test" }, "thread-id", 1);
+  assert.equal(response.message.cliMsgId, String(requestParams.clientId));
+});
 
 test("bot messages are scheduled for recall after one minute", async () => {
   assert.equal(DEFAULT_AUTO_RECALL_MS, 60_000);

@@ -177,7 +177,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
             Object.assign(params, { metaData: { urgency } });
         }
     }
-    async function handleMessage({ msg, styles, urgency, mentions, quote, ttl }, threadId, type) {
+    async function handleMessage({ msg, styles, urgency, mentions, quote, ttl }, threadId, type, clientId) {
         if (!msg || msg.length == 0)
             throw new ZaloApiError("Missing message content");
         const isGroupMessage = type == ThreadType.Group;
@@ -197,7 +197,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
                 toid: isGroupMessage ? undefined : threadId,
                 grid: isGroupMessage ? threadId : undefined,
                 message: msg,
-                clientId: message.clientId || Date.now(),
+                clientId,
                 mentionInfo: isMentionsValid ? JSON.stringify(mentionsFinal) : undefined,
                 qmsgOwner: quote.uidFrom,
                 qmsgId: quote.msgId,
@@ -213,7 +213,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
             }
             : {
                 message: msg,
-                clientId: message.clientId || Date.now(),
+                clientId,
                 mentionInfo: isMentionsValid ? JSON.stringify(mentionsFinal) : undefined,
                 imei: isGroupMessage ? undefined : ctx.imei,
                 ttl: ttl !== null && ttl !== void 0 ? ttl : 0,
@@ -457,7 +457,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
             const canBeDesc = isSingleFile && ["jpg", "jpeg", "png", "webp"].includes(firstExtFile);
             if ((!canBeDesc && msg.length > 0) || (msg.length > 0 && quote)) {
                 // send message and attachment separately
-                await handleMessage(message, threadId, type).then(async (data) => {
+                await handleMessage(message, threadId, type, clientId).then(async (data) => {
                     responses.message = (await send(data, clientId))[0];
                 });
                 msg = "";
@@ -468,7 +468,7 @@ export const sendMessageFactory = apiFactory()((api, ctx, utils) => {
             msg = "";
         }
         if (msg.length > 0) {
-            const handledData = await handleMessage(message, threadId, type);
+            const handledData = await handleMessage(message, threadId, type, clientId);
             responses.message = (await send(handledData, clientId))[0];
         }
         return responses;
