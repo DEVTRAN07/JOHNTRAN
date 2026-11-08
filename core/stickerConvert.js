@@ -176,7 +176,7 @@ async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl, opti
   const frameId = options.frameId == null ? 1 : Number(options.frameId);
   let framePath;
   try {
-    framePath = stickerFrames.resolveFramePath(frameId, outDir);
+    framePath = stickerFrames.resolveFramePath(frameId);
     const buf = fs.readFileSync(inputPath);
     const animated = isAnimatedBuffer(buf) || [".mp4", ".webm"].includes(path.extname(inputPath));
 
@@ -206,10 +206,6 @@ async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl, opti
     throw new Error(`Sticker vượt giới hạn ${Math.round(SIZE_LIMIT / 1024)}KB sau khi nén`);
   } finally {
     try { fs.unlinkSync(inputPath); } catch { /* bỏ qua */ }
-    if (framePath && frameId !== 1) {
-      try { fs.unlinkSync(framePath); } catch { /* bỏ qua */ }
-      try { fs.rmdirSync(path.dirname(framePath)); } catch { /* bỏ qua */ }
-    }
   }
 }
 

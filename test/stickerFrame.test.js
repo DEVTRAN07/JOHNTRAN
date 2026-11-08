@@ -106,7 +106,7 @@ test("/stk <URL> cũng đi qua xử lý ghép khung", { skip: !hasFfmpeg }, asyn
   assert.equal(sentSticker.staticImgUrl, sentSticker.animationImgUrl);
 });
 
-test("/stk chooses frame by number and rejects unknown frame numbers", async () => {
+test("/stk chooses frame by number and rejects unknown frame numbers", () => {
   assert.deepEqual(stickerCommand.parseFrameSelection(["4", "https://example.test/a.png"]), {
     frameId: 4,
     args: ["https://example.test/a.png"]
@@ -120,8 +120,34 @@ test("/stk chooses frame by number and rejects unknown frame numbers", async () 
   const frames = stickerFrames.frameList();
   assert.equal(frames.length, 5);
   assert.deepEqual(frames.map(({ id }) => id), [1, 2, 3, 4, 5]);
-  const firstFrame = stickerFrames.createFrameBuffer(2);
-  const secondFrame = stickerFrames.createFrameBuffer(3);
-  assert.ok(firstFrame.length > 1000);
-  assert.notDeepEqual(firstFrame, secondFrame, "frame designs should be visually distinct");
+  const assetPaths = frames.map(({ id }) => stickerFrames.resolveFramePath(id));
+  assert.ok(assetPaths.every((assetPath) => fs.existsSync(assetPath)));
+  assert.equal(new Set(assetPaths).size, frames.length, "each frame should use its own asset file");
+  for (const assetPath of assetPaths) {
+    assert.equal(fs.readFileSync(assetPath).subarray(1, 4).toString(), "PNG");
+    const frameImage = new Image();
+    frameImage.src = fs.readFileSync(assetPath);
+    assert.ok([180, 480].includes(frameImage.width));
+    assert.equal(frameImage.width, frameImage.height);
+
+    const frameCanvas = createCanvas(frameImage.width, frameImage.height);
+    const frameContext = frameCanvas.getContext("2d");
+    frameContext.drawImage(frameImage, 0, 0);
+    const framePixels = frameContext.getImageData(0, 0, frameImage.width, frameImage.height).data;
+    const frameCenter = frameImage.width / 2;
+    let visibleOuterPixels = 0;
+    for (let y = 0; y < frameImage.height; y++) {
+      for (let x = 0; x < frameImage.width; x++) {
+        const distance = Math.hypot(x - frameCenter, y - frameCenter) / frameImage.width;
+        if (distance > 0.4 && distance < 0.49 && framePixels[(y * frameImage.width + x) * 4 + 3] > 0) {
+          visibleOuterPixels++;
+        }
+      }
+    }
+    assert.ok(
+      framePixels[(frameCenter * frameImage.width + frameCenter) * 4 + 3] <= 8,
+      "frame center should stay transparent"
+    );
+    assert.ok(visibleOuterPixels > 20, "frame artwork should surround the sticker");
+  }
 });
