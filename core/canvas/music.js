@@ -26,22 +26,26 @@ async function fetchThumb(url) {
   }
 }
 
-// ===== Lưới kết quả tìm kiếm (4 bài/trang, đọc rõ trên điện thoại) =====
+// ===== Lưới kết quả tìm kiếm (lưới thẻ 3 cột như menu) =====
 async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source }) {
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text, label, foil, randomAccent } = theme;
 
-  // ===== HÀNG NGANG: mỗi bài 1 dải rộng — ảnh bìa TRÁI, thông tin PHẢI =====
-  const perPage = 7;
+  // ===== Bố cục: 9 bài/trang, 3 CỘT x 3 HÀNG (card vuông) =====
+  const perPage = 9;
+  const cols = 3;
   const shown = tracks.slice(0, perPage);
-  const cover = S(96);            // ảnh bìa vuông
-  const rowH = cover + S(24);     // cao mỗi hàng
-  const gapY = S(10);
-  const headerH = S(96);
+  const rows = Math.ceil(Math.max(1, shown.length) / cols);
+  const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
+  const cover = S(150);            // ảnh bìa vuông lớn ~150px
+  const cardH = S(210);
+  const gapX = S(22);
+  const gapY = S(14);
+  const headerH = S(104);
   const footerH = S(126);
-  const H = headerH + shown.length * rowH + Math.max(0, shown.length - 1) * gapY + footerH;
+  const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
 
   const { ctx, canvas } = theme.newCanvas(W, H);
   await theme.paintBackground(ctx, W, H);
@@ -63,54 +67,53 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   const covers = [];
   for (const track of shown) covers.push(await fetchThumb(track.thumbnail));
 
-  // ===== Danh sách hàng ngang =====
+  // ===== Lưới thẻ =====
   shown.forEach((track, index) => {
-    const x = S(25);
-    const y = headerH + index * (rowH + gapY);
-    const rowW = W - S(50);
-    panel(ctx, x, y, rowW, rowH, S(14));
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = S(25) + col * (cardW + gapX);
+    const y = headerH + row * (cardH + gapY);
 
-    // ảnh bìa bên TRÁI
-    const coverX = x + S(12);
-    const coverY = y + S(12);
+    panel(ctx, x, y, cardW, cardH, S(14));
+
+    // ảnh bìa vuông clipped round ~150px
+    const coverX = x + (cardW - cover) / 2;
+    const coverY = y + S(10);
     if (covers[index]) {
       ctx.save();
-      theme.roundRect(ctx, coverX, coverY, cover, cover, S(10));
+      theme.roundRect(ctx, coverX, coverY, cover, cover, S(14));
       ctx.clip();
       ctx.drawImage(covers[index], coverX, coverY, cover, cover);
       ctx.restore();
     } else {
       ctx.fillStyle = "rgba(56, 189, 248, .12)";
-      theme.roundRect(ctx, coverX, coverY, cover, cover, S(10));
+      theme.roundRect(ctx, coverX, coverY, cover, cover, S(14));
       ctx.fill();
-      text(ctx, "🎵", coverX + cover / 2, coverY + cover / 2 + S(12), { size: 30, color: PALETTE.accent, align: "center" });
+      text(ctx, "🎵", coverX + cover / 2, coverY + cover / 2 + S(16), { size: 40, color: PALETTE.accent, align: "center" });
     }
 
-    // số thứ tự nổi trên ảnh bìa
+    // số thứ tự badge top-left
     ctx.fillStyle = "rgba(7, 10, 20, .85)";
     theme.roundRect(ctx, coverX + S(6), coverY + S(6), S(34), S(26), S(8));
     ctx.fill();
     text(ctx, String(index + 1), coverX + S(23), coverY + S(24), { size: 16, family: "JT-Bold", color: PALETTE.accent, align: "center" });
 
-    // thông tin bên PHẢI
-    const infoX = coverX + cover + S(16);
-    const infoW = rowW - (infoX - x) - S(14);
-    const centerY = y + rowH / 2;
+    // nút play ở góc phải dưới ảnh
+    button(ctx, coverX + cover - S(46), coverY + cover - S(40), S(40), S(32), "▶", PALETTE.accent);
 
-    text(ctx, theme.truncate(ctx, track.title, infoW), infoX, y + S(28), {
-      size: 21, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: infoW
-    });
-    text(ctx, `♫ ${theme.truncate(ctx, track.artist, infoW - S(80))} • ${formatDuration(track.duration)}`, infoX, y + S(62), {
-      size: 15, family: "JT-Mono", color: PALETTE.ink2, maxWidth: infoW
+    // tiêu đề (2 dòng max)
+    text(ctx, theme.truncate(ctx, track.title, cardW - S(24)), x + S(12), y + cover + S(26), {
+      size: 15, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(24)
     });
 
-    // lượt nghe / like hàng ngang + nút phát nhìn như chip
-    const chipY = y + S(78);
-    text(ctx, `👤 ${shortPlays(track.plays)}`, infoX, chipY, { size: 14, family: "JT-Bold", color: PALETTE.green });
-    text(ctx, `❤️ ${shortPlays(track.likes)}`, infoX + S(72), chipY, { size: 14, family: "JT-Bold", color: PALETTE.red });
-    // nút PLAY bên phải
-    const btnW = S(72), btnH = S(34);
-    button(ctx, x + rowW - btnW - S(12), centerY - btnH / 2, btnW, btnH, "▶ PHÁT", PALETTE.accent);
+    // artist + duration
+    text(ctx, `♫ ${theme.truncate(ctx, track.artist, cardW - S(90))} • ${formatDuration(track.duration)}`, x + S(12), y + cover + S(52), {
+      size: 12, family: "JT-Mono", color: PALETTE.ink2, maxWidth: cardW - S(24)
+    });
+
+    // chips plays / likes
+    text(ctx, `👤 ${shortPlays(track.plays)}`, x + S(12), y + cover + S(76), { size: 12, family: "JT-Bold", color: PALETTE.green });
+    text(ctx, `❤️ ${shortPlays(track.likes)}`, x + S(72), y + cover + S(76), { size: 12, family: "JT-Bold", color: PALETTE.red });
   });
 
   // ===== Footer điều hướng: dòng "Trang x/y" + 3 nút =====
