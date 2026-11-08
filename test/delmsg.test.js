@@ -2,16 +2,25 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { getTargetUid, getRecentMessages } = require("../plugins/commands/delmsg");
 
-test("delmsg selects a single mentioned user before a quoted user", () => {
+test("delmsg selects the tagged user", () => {
   assert.equal(getTargetUid({
-    mentions: [{ uid: "12345" }],
-    data: { quote: { uidFrom: "67890" } }
-  }), "12345");
+    data: {
+      mentions: [{ uid: "12345" }],
+      quote: { uidFrom: "67890" }
+    }
+  }, "admin-id"), "12345");
 });
 
-test("delmsg selects the quoted sender and rejects multiple mentions", () => {
-  assert.equal(getTargetUid({ data: { quote: { ownerId: "12345" } } }), "12345");
-  assert.equal(getTargetUid({ mentions: [{ uid: "1" }, { uid: "2" }] }), null);
+test("delmsg defaults to the caller even when replying to another user", () => {
+  assert.equal(getTargetUid({
+    data: { quote: { uidFrom: "quoted-user" } }
+  }, "admin-id"), "admin-id");
+});
+
+test("delmsg rejects multiple direct mentions", () => {
+  assert.equal(getTargetUid({
+    data: { mentions: [{ uid: "1" }, { uid: "2" }] }
+  }, "admin-id"), null);
 });
 
 test("delmsg returns only the latest matching group messages in the 24-hour window", () => {

@@ -269,7 +269,7 @@ assets/
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
 | `/getvd` (reply video) | Tải video gốc → upload asyncfile → gửi video gốc (không nén) |
-| `/delmsg <N> @tag` hoặc reply + `/delmsg <N>` | Admin bot hoặc admin nhóm xóa tối đa N tin gần nhất của người đó trong cache 24 giờ (tối đa 100 tin/lần); tài khoản bot cần quyền xóa tin trong nhóm |
+| `/delmsg <N>` / `/delmsg <N> @tag` | Admin bot hoặc admin nhóm xóa tối đa N tin gần nhất của chính mình (không tag) hoặc người được tag trong cache 24 giờ (tối đa 100 tin/lần); tài khoản bot cần quyền xóa tin trong nhóm |
 | `/stk` (reply ảnh/GIF/video/sticker) | Phân tích ảnh → **tìm sticker Zalo thật** trong kho → gõ số để gửi |
 | `/stkvd` (reply GIF/video/sticker động) | Như trên nhưng ưu tiên sticker **động** (type 1) |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm. Đang bật thì **mọi link gửi vào nhóm** đều được tự tải (không cần prefix). Bot bỏ qua tin do chính mình gửi và tin là lệnh → không bị lặp |

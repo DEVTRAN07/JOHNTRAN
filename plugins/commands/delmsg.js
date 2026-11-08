@@ -13,21 +13,25 @@ module.exports.config = {
   author: "John Tran",
   description: "Xóa các tin nhắn gần nhất của một thành viên trong nhóm",
   category: "Nhóm",
-  usage: "delmsg <N> @tag | reply tin nhắn bằng delmsg <N>",
+  usage: "delmsg <N> [@tag]",
   cooldowns: 3
 };
 
-function getTargetUid(event) {
-  const mentioned = (event?.mentions || [])
+function getTargetUid(event, callerUid) {
+  const rawMentions = event?.data?.mentions;
+  const mentioned = (Array.isArray(rawMentions)
+    ? rawMentions
+    : rawMentions && typeof rawMentions === "object"
+      ? Object.values(rawMentions)
+      : [])
     .map((mention) => String(mention?.uid || "").trim())
     .filter(Boolean);
-  const extracted = mentioned.length ? mentioned : extractMentions(event?.data);
+  const extracted = mentioned.length ? mentioned : extractMentions({
+    mentions: rawMentions
+  });
   if (extracted.length > 1) return null;
   if (extracted.length === 1) return String(extracted[0]);
-
-  const quote = event?.data?.quote;
-  const quotedUid = quote?.uidFrom ?? quote?.ownerId;
-  return quotedUid ? String(quotedUid) : null;
+  return callerUid ? String(callerUid) : null;
 }
 
 function getTimestampMs(message) {
@@ -64,7 +68,7 @@ module.exports.run = async function ({ api, event, args, reply }) {
   const countArgs = (args || []).filter((arg) => /^\d+$/.test(String(arg)));
   if (countArgs.length !== 1) {
     return reply.error(
-      `Cách dùng: ${global.config.prefix}delmsg <N> @tag hoặc reply tin nhắn bằng ${global.config.prefix}delmsg <N>.`
+      `Cách dùng: ${global.config.prefix}delmsg <N> để xóa tin của bạn, hoặc ${global.config.prefix}delmsg <N> @tag để xóa tin của người được tag.`
     );
   }
   const count = Number(countArgs[0]);
@@ -72,12 +76,12 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return reply.error(`N phải từ 1 đến ${MAX_DELETE_COUNT}.`);
   }
 
-  const targetUid = getTargetUid(event);
+  const callerUid = String(data?.uidFrom || "");
+  const targetUid = getTargetUid(event, callerUid);
   if (!targetUid) {
-    return reply.error("Hãy tag đúng một người hoặc reply tin nhắn của người đó.");
+    return reply.error("Chỉ tag tối đa một người; nếu không tag, lệnh sẽ xóa tin của chính bạn.");
   }
 
-  const callerUid = String(data?.uidFrom || "");
   const botAdmins = (global.users?.admin || []).map(String);
   const isBotAdmin = botAdmins.includes(callerUid);
   let isGroupAdmin = false;
