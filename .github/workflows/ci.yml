@@ -25,10 +25,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Render CLI
-        run: npm install -g @render/render-cli
-      - name: Deploy via render.yaml blueprint
+      - name: Trigger Render deploy
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_NAME: john-tran-bot
+        shell: bash
         run: |
-          render deploy --blueprint render.yaml --yes
+          set -euo pipefail
+
+          if [[ -z "${RENDER_API_KEY:-}" ]]; then
+            echo "::error::GitHub Actions secret RENDER_API_KEY is not configured."
+            exit 1
+          fi
+
+          services="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services?name=${SERVICE_NAME}&limit=100")"
+          service_id="$(jq -er --arg name "$SERVICE_NAME" '
+            [.[] | (.service // .) | select(.name == $name) | .id] | unique
+            | if length == 1 then .[0] else error("Expected exactly one Render service named " + $name) end
+          ' <<< "$services")"
+
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\":\"${GITHUB_SHA}\"}" \
+            "https://api.render.com/v1/services/${service_id}/deploys"
