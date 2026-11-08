@@ -44,17 +44,31 @@ function getTimestampMs(message) {
 }
 
 function getRecentMessages(cache, threadId, targetUid, count, now = Date.now()) {
-  return Object.values(cache || {})
-    .filter((message) => {
-      const timestamp = getTimestampMs(message);
-      return String(message?.threadId) === String(threadId)
-        && Number(message?.type) === ThreadType.Group
-        && String(message?.uidFrom) === String(targetUid)
+  const entries = Array.isArray(cache) ? cache : Object.values(cache || {});
+  const byClientId = new Map();
+  for (const entry of entries) {
+    const data = entry?.data || entry;
+    const message = {
+      timestamp: data?.timestamp ?? data?.ts,
+      timestampString: data?.timestampString,
+      msgId: data?.msgId,
+      cliMsgId: data?.cliMsgId,
+      uidFrom: data?.uidFrom,
+      threadId: entry?.threadId ?? data?.threadId ?? data?.idTo,
+      type: entry?.type ?? data?.type
+    };
+    const timestamp = getTimestampMs(message);
+    if (String(message.threadId) === String(threadId)
+        && Number(message.type) === ThreadType.Group
+        && String(message.uidFrom) === String(targetUid)
         && timestamp >= now - MESSAGE_CACHE_WINDOW_MS
         && timestamp <= now
-        && message?.msgId != null
-        && message?.cliMsgId != null;
-    })
+        && message.msgId != null
+        && message.cliMsgId != null) {
+      byClientId.set(String(message.cliMsgId), message);
+    }
+  }
+  return Array.from(byClientId.values())
     .sort((a, b) => getTimestampMs(b) - getTimestampMs(a))
     .slice(0, count);
 }
@@ -102,9 +116,27 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return reply.error("Chỉ admin bot hoặc admin nhóm mới được dùng lệnh này.");
   }
 
-  const messages = getRecentMessages(getMessageCache(), threadId, targetUid, count);
+  let messages = getRecentMessages(getMessageCache(), threadId, targetUid, count);
+  let historyError = null;
+  if (messages.length < count) {
+    try {
+      const history = await api.getGroupChatHistory(threadId, 100);
+      messages = getRecentMessages(
+        [...messages, ...(Array.isArray(history?.groupMsgs) ? history.groupMsgs : [])],
+        threadId,
+        targetUid,
+        count
+      );
+    } catch (error) {
+      historyError = error;
+      logger.log(`Không thể lấy lịch sử nhóm cho /delmsg: ${error?.message || error}`, "warn");
+    }
+  }
   if (messages.length === 0) {
-    return reply.text("Không tìm thấy tin nhắn gần đây nào của người này trong cache 24 giờ.");
+    if (historyError) {
+      return reply.error("Không lấy được lịch sử tin nhắn nhóm. Vui lòng thử lại sau.");
+    }
+    return reply.text("Không tìm thấy tin nhắn nào của người này trong lịch sử nhóm 24 giờ gần đây.");
   }
 
   let deleted = 0;
