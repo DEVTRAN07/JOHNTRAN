@@ -26,7 +26,7 @@ module.exports.run = async ({ args, event, api, reply }) => {
     return reply.error(TTS_OFF_MESSAGE);
   }
 
-  const source = args.join(" ") || (typeof data?.quote?.content === "string" ? data.quote.content : "");
+  const source = args.join(" ") || String(data?.quote?.msg || (data?.quote?.content && typeof data?.quote?.content === "object" ? data?.quote?.content.title : data?.quote?.content) || data?.quote?.fromD || "").trim();
   if (!source.trim()) {
     return reply.card({
       theme: "ai",

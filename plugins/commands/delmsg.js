@@ -11,9 +11,9 @@ module.exports.config = {
   version: "1.0.0",
   role: 0,
   author: "John Tran",
-  description: "Xóa các tin nhắn gần nhất của một thành viên trong nhóm",
+  description: "Xóa tin được reply hoặc các tin nhắn gần nhất trong nhóm",
   category: "Nhóm",
-  usage: "delmsg <N> [@tag]",
+  usage: "delmsg [N] [@tag]",
   cooldowns: 3
 };
 
@@ -105,25 +105,56 @@ function getCacheMissSummary(cache, threadId, targetUid, now = Date.now()) {
     `recent=${recentEntries.length}, withIds=${completeEntries.length}`;
 }
 
+function getQuotedMessage(event) {
+  const quote = event?.data?.quote;
+  if (!quote || typeof quote !== "object") return null;
+
+  const { ownerId, cliMsgId, globalMsgId } = quote;
+  if (ownerId == null || cliMsgId == null || globalMsgId == null
+      || !String(ownerId).trim() || !String(cliMsgId).trim() || !String(globalMsgId).trim()) {
+    return { invalid: true };
+  }
+
+  return {
+    uidFrom: String(ownerId),
+    cliMsgId: String(cliMsgId),
+    msgId: String(globalMsgId)
+  };
+}
+
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event || {};
   if (Number(type) !== ThreadType.Group) {
     return reply.error("Lệnh này chỉ dùng được trong nhóm.");
   }
 
+  const quotedMessage = getQuotedMessage(event);
+  if (quotedMessage?.invalid) {
+    return reply.error("Không lấy đủ ID của tin được reply. Hãy reply trực tiếp vào tin nhắn rồi thử lại.");
+  }
+
+  const commandArgs = Array.isArray(args) ? args : [];
+  const hasNonCountArgs = commandArgs.some((arg) => !/^\d+$/.test(String(arg)));
   const countArgs = (args || []).filter((arg) => /^\d+$/.test(String(arg)));
-  if (countArgs.length !== 1) {
+  if (quotedMessage && hasNonCountArgs) {
+    return reply.error("Khi reply vào một tin nhắn, không tag thêm người; lệnh sẽ xóa đúng tin được reply.");
+  }
+  if (quotedMessage && countArgs.length > 1) {
+    return reply.error("Khi reply vào một tin nhắn, chỉ xóa đúng tin đó; dùng /delmsg hoặc /delmsg 1.");
+  }
+  if (!quotedMessage && countArgs.length !== 1) {
     return reply.error(
-      `Cách dùng: ${global.config.prefix}delmsg <N> để xóa tin của bạn, hoặc ${global.config.prefix}delmsg <N> @tag để xóa tin của người được tag.`
+      `Cách dùng: reply vào tin rồi dùng ${global.config.prefix}delmsg để xóa đúng tin đó; hoặc dùng ${global.config.prefix}delmsg <N> [@tag] để xóa tin gần nhất trong cache.`
     );
   }
-  const count = Number(countArgs[0]);
-  if (!Number.isSafeInteger(count) || count < 1 || count > MAX_DELETE_COUNT) {
+  const count = quotedMessage && countArgs.length === 0 ? 1 : Number(countArgs[0]);
+  if (!Number.isSafeInteger(count) || count < 1 || count > MAX_DELETE_COUNT
+      || (quotedMessage && count !== 1)) {
     return reply.error(`N phải từ 1 đến ${MAX_DELETE_COUNT}.`);
   }
 
   const callerUid = String(data?.uidFrom || "");
-  const targetUid = getTargetUid(event, callerUid);
+  const targetUid = quotedMessage ? quotedMessage.uidFrom : getTargetUid(event, callerUid);
   if (!targetUid) {
     return reply.error("Chỉ tag tối đa một người; nếu không tag, lệnh sẽ xóa tin của chính bạn.");
   }
@@ -148,13 +179,18 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return reply.error("Chỉ admin bot hoặc admin nhóm mới được dùng lệnh này.");
   }
 
-  const cache = getMessageCache();
-  const messages = getRecentMessages(cache, threadId, targetUid, count);
-  if (messages.length === 0) {
-    logger.log(`[delmsg] Không có tin phù hợp trong cache (${getCacheMissSummary(cache, threadId, targetUid)}).`, "warn");
-    return reply.text(
-      "Không tìm thấy tin phù hợp trong cache. Zalo không còn cho bot tải lịch sử nhóm; /delmsg chỉ xử lý tin bot đã nhận khi đang chạy, tối đa trong 24 giờ."
-    );
+  let messages;
+  if (quotedMessage) {
+    messages = [quotedMessage];
+  } else {
+    const cache = getMessageCache();
+    messages = getRecentMessages(cache, threadId, targetUid, count);
+    if (messages.length === 0) {
+      logger.log(`[delmsg] Không có tin phù hợp trong cache (${getCacheMissSummary(cache, threadId, targetUid)}).`, "warn");
+      return reply.text(
+        "Không tìm thấy tin phù hợp trong cache. Hãy reply trực tiếp vào tin nhắn cần xóa rồi dùng /delmsg; Zalo không còn cho bot tải lịch sử nhóm."
+      );
+    }
   }
 
   let deleted = 0;
@@ -178,13 +214,16 @@ module.exports.run = async function ({ api, event, args, reply }) {
   }
 
   if (failed === 0) {
-    return reply.success(`Đã xóa ${deleted}/${messages.length} tin nhắn gần nhất của thành viên được chọn.`);
+    return reply.success(quotedMessage
+      ? "Đã xóa tin nhắn được reply."
+      : `Đã xóa ${deleted}/${messages.length} tin nhắn gần nhất của thành viên được chọn.`);
   }
   return reply.warn(
-    `Đã xóa ${deleted}/${messages.length} tin; ${failed} tin không xóa được. Có thể tài khoản bot chưa đủ quyền quản trị nhóm hoặc tin không còn khả dụng.`
+    `Đã xóa ${deleted}/${messages.length} tin; ${failed} tin không xóa được. Có thể tài khoản bot chưa đủ quyền quản trị nhóm, tin đã bị thu hồi hoặc tin thuộc về bot.`
   );
 };
 
 module.exports.getTargetUid = getTargetUid;
 module.exports.getRecentMessages = getRecentMessages;
 module.exports.getCacheMissSummary = getCacheMissSummary;
+module.exports.getQuotedMessage = getQuotedMessage;

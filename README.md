@@ -269,8 +269,9 @@ assets/
 | `/getlink` (reply tin) | Lấy link media từ tin nhắn được reply |
 | `/getvoice` (reply video) | Trích xuất audio từ video rồi gửi voice |
 | `/getvd` (reply video) | Tải video gốc → upload asyncfile → gửi video gốc (không nén) |
-| `/delmsg <N>` / `/delmsg <N> @tag` | Admin bot hoặc admin nhóm xóa tối đa N tin gần nhất trong cache 24 giờ của chính mình (không tag) hoặc người được tag; chỉ gồm tin bot đã nhận khi đang chạy (Zalo không còn API tải lịch sử nhóm), tối đa 100 tin/lần; tài khoản bot cần quyền xóa tin trong nhóm |
-| `/stk` (reply ảnh/GIF/video/sticker) | Phân tích ảnh → **tìm sticker Zalo thật** trong kho → gõ số để gửi |
+| `/delmsg` (reply tin) | Admin bot hoặc admin nhóm xóa đúng tin được reply, không cần tin đó có trong cache |
+| `/delmsg <N>` / `/delmsg <N> @tag` | Admin bot hoặc admin nhóm xóa tối đa N tin gần nhất trong cache 24 giờ của chính mình (không tag) hoặc người được tag; chỉ gồm tin bot đã nhận khi đang chạy, tối đa 100 tin/lần; tài khoản bot cần quyền xóa tin trong nhóm |
+| `/stk [1-5]` (reply ảnh/GIF/video/sticker) / `/stk [1-5] <link>` | Tạo sticker tròn với 5 khung: Mộng Vuốt Rồng, Nguyệt Quang, Kim Long, Tinh Tú, Hoa Anh Đào; mặc định khung 1 |
 | `/stkvd` (reply GIF/video/sticker động) | Như trên nhưng ưu tiên sticker **động** (type 1) |
 | `/autodown on` / `off` / `status` | Bật tự tải media trong nhóm. Đang bật thì **mọi link gửi vào nhóm** đều được tự tải (không cần prefix). Bot bỏ qua tin do chính mình gửi và tin là lệnh → không bị lặp |
 | `/noi <văn bản>` | Bot đọc thành giọng nói (cần `ai.tts_enabled: true`) |

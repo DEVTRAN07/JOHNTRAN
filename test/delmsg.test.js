@@ -132,6 +132,80 @@ test("delmsg explains that old group history is unavailable when cache is empty"
   }
 });
 
+test("delmsg deletes the exact replied-to message without looking in the cache", async () => {
+  const previousUsers = global.users;
+  const callerUid = "delmsg-reply-caller";
+  const threadId = "delmsg-reply-group";
+  global.users = { admin: [callerUid] };
+  let deletedMessage;
+  let response;
+
+  try {
+    await delmsg.run({
+      api: {
+        deleteMessage: async (destination, onlyMe) => {
+          deletedMessage = { destination, onlyMe };
+        }
+      },
+      event: {
+        threadId,
+        type: ThreadType.Group,
+        data: {
+          uidFrom: callerUid,
+          quote: { ownerId: "quoted-author", cliMsgId: 12345, globalMsgId: 67890 }
+        }
+      },
+      args: [],
+      reply: {
+        error: (message) => message,
+        text: (message) => message,
+        success: (message) => { response = message; },
+        warn: (message) => message
+      }
+    });
+
+    assert.deepEqual(deletedMessage, {
+      destination: {
+        threadId,
+        type: ThreadType.Group,
+        data: {
+          cliMsgId: "12345",
+          msgId: "67890",
+          uidFrom: "quoted-author"
+        }
+      },
+      onlyMe: false
+    });
+    assert.equal(response, "Đã xóa tin nhắn được reply.");
+  } finally {
+    global.users = previousUsers;
+  }
+});
+
+test("delmsg rejects a quoted message when Zalo omitted its deletion identifiers", async () => {
+  let deleted = false;
+  let response;
+
+  await delmsg.run({
+    api: { deleteMessage: async () => { deleted = true; } },
+    event: {
+      threadId: "delmsg-invalid-quote-group",
+      type: ThreadType.Group,
+      data: { uidFrom: "caller", quote: { ownerId: "author" } }
+    },
+    args: [],
+    reply: {
+      error: (message) => { response = message; },
+      text: (message) => message,
+      success: (message) => message,
+      warn: (message) => message
+    }
+  });
+
+  assert.equal(deleted, false);
+  assert.match(response, /Không lấy đủ ID/);
+});
+
 test("startup backfill caches old messages without replaying their commands", () => {
   const reconnectSince = Date.now();
   assert.equal(shouldReplayOldMessage({
