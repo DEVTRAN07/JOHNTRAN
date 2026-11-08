@@ -26,3 +26,7 @@ vscode/
 
 # python
 __pycache__/
+
+# Rust build artifacts
+rust/target/
+.cargo-home/

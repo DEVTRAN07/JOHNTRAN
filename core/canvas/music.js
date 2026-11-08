@@ -1,3 +1,7 @@
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const rustBridge = require("./rustBridge");
 // ===== Thẻ nhạc — dùng theme chung (core/canvas/theme.js) =====
 // Kích thước viết theo cỡ 750 rồi scale theo theme.WIDTH (config canvas.width).
 const theme = require("./theme");

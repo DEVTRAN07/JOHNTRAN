@@ -1,3 +1,4 @@
+const rustBridge = require("./rustBridge");
 // ===== Thẻ VIP (reply.card / reply.text / reply.error...) — dùng theme chung =====
 // Mọi ảnh bot gửi ra đều CÙNG một kiểu: nền, font, bo góc, bóng (xem theme.js).
 // Kích thước viết theo cỡ 750 rồi scale theo theme.WIDTH (config canvas.width).

@@ -1,3 +1,4 @@
+const rustBridge = require("./rustBridge");
 const fs = require("fs");
 const path = require("path");
 const { loadImage } = require("canvas");
