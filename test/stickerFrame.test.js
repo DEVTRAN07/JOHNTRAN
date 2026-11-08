@@ -15,7 +15,7 @@ test("/stk ghép khung mong vuốt rồng lên sticker", { skip: !hasFfmpeg }, a
   try {
     const canvas = createCanvas(240, 240);
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#3366cc";
+    ctx.fillStyle = "#00ff00";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const result = await converter.makeStickerFile(
@@ -39,10 +39,22 @@ test("/stk ghép khung mong vuốt rồng lên sticker", { skip: !hasFfmpeg }, a
     const renderedContext = rendered.getContext("2d");
     renderedContext.drawImage(frame, 0, 0);
     const pixels = renderedContext.getImageData(0, 0, frame.width, frame.height).data;
+    const pixelAt = (x, y) => Array.from(
+      pixels.slice((y * frame.width + x) * 4, (y * frame.width + x) * 4 + 4)
+    );
+    const center = pixelAt(240, 240);
+    const insideCircleEdge = pixelAt(240, 65);
+    const outsideCircleEdge = pixelAt(240, 50);
+    assert.ok(center[1] > 170 && center[0] < 80 && center[2] < 80, "source media should be visible in the circular sticker");
+    assert.ok(insideCircleEdge[1] > 170 && insideCircleEdge[0] < 80, "source media should reach the circular edge");
+    assert.ok(!(outsideCircleEdge[1] > 170 && outsideCircleEdge[0] < 80), "source media should not bleed outside the circular edge");
+    const frameOutsideCircle = pixelAt(240, 20);
+    assert.ok(frameOutsideCircle[3] > 0, "frame artwork should surround the circular sticker");
+    assert.equal(pixelAt(0, 0)[3], 0, "transparent space outside the frame should remain transparent");
     let pixelsChangedByFrame = 0;
     for (let i = 0; i < pixels.length; i += 4) {
-      if (Math.abs(pixels[i] - 51) > 20 || Math.abs(pixels[i + 1] - 102) > 20 ||
-          Math.abs(pixels[i + 2] - 204) > 20) {
+      if (Math.abs(pixels[i]) > 20 || Math.abs(pixels[i + 1] - 255) > 20 ||
+          Math.abs(pixels[i + 2]) > 20) {
         pixelsChangedByFrame++;
       }
     }

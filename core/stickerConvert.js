@@ -12,6 +12,8 @@ const MAX_SECONDS = 8;
 const FPS = 15;
 const SIZE_LIMIT = 512 * 1024; // 512KB: Zalo upload nhanh và ổn định hơn
 const FRAME_PATH = path.join(__dirname, "..", "khung-stk", "mong-vuot-rong.png");
+const STICKER_DIAMETER = 360;
+const STICKER_OFFSET = (TARGET_W - STICKER_DIAMETER) / 2;
 const ROUND_R = 28; // bán kính bo góc (px) cho sticker 480x480
 
 const ffmpegBin = "ffmpeg";
@@ -116,20 +118,14 @@ async function convertFramed(inputPath, outPath, duration, isStill) {
   const useWebp = await hasLibwebp();
   const outFile = useWebp ? outPath : outPath.replace(/\.webp$/, ".gif");
   const graph = [
-    // 1. Content: fit 480x480, crop vuông
-    `[0:v]fps=${FPS},scale=${TARGET_W}:${TARGET_W}:force_original_aspect_ratio=increase:flags=lanczos,crop=${TARGET_W}:${TARGET_W}[content]`,
-    // 2. Frame: scale + rgba
-    `[1:v]scale=${TARGET_W}:${TARGET_W}:flags=lanczos,format=rgba[frame]`,
-    // 3. Ghép frame lên content
-    "[content][frame]overlay=0:0:shortest=1[framed]",
-    // 4+5. Tạo mask bo góc (rounded rect) và áp alpha
-    "[framed]split[fc][fa]",
-    `[fa]format=gray,geq=lum='255*if(gt(hypot(max(abs(X-240)-(212),0),max(abs(Y-240)-(212),0)),28),0,1)'[amask]`,
-    "[fc][amask]alphamerge=shortest=1[rounded]"
+    // Keep decorative artwork outside the circular sticker area.
+    `[1:v]scale=${TARGET_W}:${TARGET_W}:flags=lanczos,format=rgba,tpad=stop_mode=clone:stop_duration=${duration},fps=${FPS},setpts=PTS-STARTPTS,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(gt(hypot(X-${TARGET_W / 2 - 0.5},Y-${TARGET_W / 2 - 0.5}),${STICKER_DIAMETER / 2}),1,0)'[frame]`,
+    `[0:v]fps=${FPS},scale=${STICKER_DIAMETER}:${STICKER_DIAMETER}:force_original_aspect_ratio=increase:flags=lanczos,crop=${STICKER_DIAMETER}:${STICKER_DIAMETER},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(lte(hypot(X-${STICKER_DIAMETER / 2 - 0.5},Y-${STICKER_DIAMETER / 2 - 0.5}),${STICKER_DIAMETER / 2}),1,0)'[circle]`,
+    `[frame][circle]overlay=${STICKER_OFFSET}:${STICKER_OFFSET}:shortest=1[framed]`
   ];
   if (!useWebp) {
     graph.push(
-      "[rounded]split[animation][palette_source]",
+      "[framed]split[animation][palette_source]",
       "[palette_source]palettegen=stats_mode=diff[palette]",
       "[animation][palette]paletteuse=dither=sierra2_4a[sticker]"
     );
@@ -138,7 +134,7 @@ async function convertFramed(inputPath, outPath, duration, isStill) {
   const args = ["-y"];
   if (isStill) args.push("-loop", "1");
   args.push("-i", inputPath, "-i", FRAME_PATH, "-t", String(duration));
-  args.push("-filter_complex", graph.join(";"), "-map", useWebp ? "[rounded]" : "[sticker]", "-an");
+  args.push("-filter_complex", graph.join(";"), "-map", useWebp ? "[framed]" : "[sticker]", "-an");
   if (useWebp) {
     args.push("-vcodec", "libwebp", "-loop", "0", "-q:v", "65", "-preset", "default");
   } else {
