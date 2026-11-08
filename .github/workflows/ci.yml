@@ -40,11 +40,16 @@ jobs:
 
           services="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
-            "https://api.render.com/v1/services?name=${SERVICE_NAME}&limit=100")"
+            "https://api.render.com/v1/services?limit=100")"
           service_id="$(jq -er --arg name "$SERVICE_NAME" '
-            [.[] | (.service // .) | select(.name == $name) | .id] | unique
-            | if length == 1 then .[0] else error("Expected exactly one Render service named " + $name) end
+            [.. | objects | select(.name? == $name) | .id? // empty] | unique
+            | if length == 1 then .[0] else empty end
           ' <<< "$services")"
+          if [[ -z "$service_id" ]]; then
+            service_names="$(jq -r '[.. | objects | .name? | select(type == "string")] | unique | join(", ")' <<< "$services")"
+            echo "::error::Could not identify exactly one Render service named ${SERVICE_NAME}. Visible service names: ${service_names:-none}"
+            exit 1
+          fi
 
           curl --fail --silent --show-error \
             -X POST \
