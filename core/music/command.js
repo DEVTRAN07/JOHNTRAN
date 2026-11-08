@@ -42,39 +42,52 @@ function friendlyError(error, reply) {
   return reply.error(`Lỗi khi xử lý nhạc: ${error.message || error}`);
 }
 
-async function sendTrack(reply, threadId, type, track, providerName, api) {
-  const provider = music.getProvider(providerName);
-  await reply.working();
+const sendingLock = new Map(); // key -> in-flight sendTrack
 
-  let filePath = null;
+async function sendTrack(reply, threadId, type, track, providerName, api, quality = null) {
+  const lockKey = `${threadId}:${providerName}`;
+  if (sendingLock.has(lockKey)) {
+    // Dang phat bai khong, khong phat them - tranh spam nhac lien tuc
+    await reply.working();
+    return reply.error("Dang phat bai khac, vui long cho hoac dung `out`.");
+  }
+  const release = () => { sendingLock.delete(lockKey); };
+  sendingLock.set(lockKey, true);
   try {
-    const streamUrl = await music.resolve(providerName, track);
-    filePath = await music.downloadToFile(streamUrl, "mp3", { fallbackUrl: track.sourceUrl || track.permalink_url || track.permalinkUrl || "" });
-    const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
+    const provider = music.getProvider(providerName);
+    await reply.working();
 
-    // NOW PLAYING — canvas card (cache) — hỏng thì rơi về text
+    let filePath = null;
     try {
-      const key = `np|${providerName}|${track.id}`;
-      const cardPath = await renderCached(key, () =>
-        cards.renderNowPlaying(track, provider.label.toUpperCase())
-      );
-      if (cardPath) await api.sendMessage({ msg: "", attachments: cardPath }, threadId, type);
-      else {
-        const styled = ui.nowPlaying(track, provider.label.toUpperCase());
-        await api.sendMessage({ ...styled }, threadId, type);
-      }
-    } catch { /* hỏng thì thôi */ }
+      const streamUrl = await music.resolve(providerName, track);
+      filePath = await music.downloadToFile(streamUrl, "mp3", { fallbackUrl: track.sourceUrl || track.permalink_url || track.permalinkUrl || "", quality });
+      const voiceUrl = await require("../../utils/index").processAudio(filePath, threadId, type);
 
-    await api.sendVoice({ voiceUrl }, threadId, type);
-    await reply.done();
-  } catch (error) {
-    logger.log(`[music:${providerName}] ${error.message}`, "error");
-    await reply.failed();
-    await friendlyError(error, reply);
-  } finally {
-    if (filePath && fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch { /* bỏ qua */ }
+      try {
+        const key = `np|${providerName}|${track.id}`;
+        const cardPath = await renderCached(key, () =>
+          cards.renderNowPlaying(track, provider.label.toUpperCase())
+        );
+        if (cardPath) await api.sendMessage({ msg: "", attachments: cardPath }, threadId, type);
+        else {
+          const styled = ui.nowPlaying(track, provider.label.toUpperCase());
+          await api.sendMessage({ ...styled }, threadId, type);
+        }
+      } catch { /* hong thi thoi */ }
+
+      await api.sendVoice({ voiceUrl }, threadId, type);
+      await reply.done();
+    } catch (error) {
+      logger.log(`[music:${providerName}] ${error.message}`, "error");
+      await reply.failed();
+      await friendlyError(error, reply);
+    } finally {
+      if (filePath && fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch { /* bo qua */ }
+      }
     }
+  } finally {
+    release();
   }
 }
 
@@ -165,6 +178,8 @@ async function runMusic(providerName, { api, event, args, reply }) {
     }
     // Chọn được bài → xoá ngay lưới kết quả (đừng để nằm chiếm nhóm)
     
+    // Chon xong -> xoá pending de khong chon lai lien tuc (tranh spam nhac)
+    music.clearPending(key);
     return sendTrack(reply, threadId, type, track, providerName, api, options.quality);
   }
 
