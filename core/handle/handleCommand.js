@@ -57,7 +57,7 @@ async function checkGroupPermissions({ api, threadId, type, UIDUsage, threadInfo
   let isGroupAdmin = false;
 
   if (type == ThreadType.Group) {
-    if (threadInfo?.box_only) {
+    if (threadInfo?.box_only && !isBotAdmin) {
       try {
         const info = await api.getGroupInfo(threadId);
         const groupInfo = info?.gridInfoMap?.[threadId];
@@ -147,7 +147,7 @@ async function handleCommand(messageText, event = null, api = null, threadInfo =
     return wrappedApi.sendMessage({ msg: "🚫 Bạn không có quyền sử dụng lệnh này." }, threadId, type);
   }
 
-  const groupCheck = await checkGroupPermissions({ api, threadId, type, UIDUsage, threadInfo });
+  const groupCheck = await checkGroupPermissions({ api: wrappedApi, threadId, type, UIDUsage, threadInfo });
   if (groupCheck.denied) {
     return wrappedApi.sendMessage({ msg: groupCheck.denied }, threadId, type);
   }
