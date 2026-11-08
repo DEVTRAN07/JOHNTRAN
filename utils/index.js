@@ -184,21 +184,29 @@ function getMessageCache() {
 function updateMessageCache(data) {
     let messageCache = readMessageJson(); // RAM — không đọc đĩa mỗi tin
     try {
-        const timestamp = new Date().toISOString();
+        const messageData = data?.data || {};
+        const clientId = messageData.cliMsgId;
+        const messageId = messageData.msgId;
+        if (clientId == null || messageId == null || messageData.uidFrom == null) {
+            logger.log(
+                `Bỏ qua cache tin thiếu ID bắt buộc (cliMsgId=${clientId ?? "missing"}, msgId=${messageId ?? "missing"}, uidFrom=${messageData.uidFrom ?? "missing"})`,
+                "warn"
+            );
+            return;
+        }
         const filtered = {
-            timestamp: data.data.ts,
-            timestampString: timestamp,
-            msgId: data.data.msgId,
-            cliMsgId: data.data.cliMsgId,
-            msgType: data.data.msgType,
-            uidFrom: data.data.uidFrom,
-            idTo: data.data.idTo,
-            dName: data.data.dName,
-            content: data.data.content,
-            threadId: data.threadId,
-            type: data.type
+            timestamp: messageData.ts || Date.now(),
+            msgId: messageId,
+            cliMsgId: clientId,
+            msgType: messageData.msgType,
+            uidFrom: messageData.uidFrom,
+            idTo: messageData.idTo,
+            dName: messageData.dName,
+            content: messageData.content,
+            threadId: data.threadId || messageData.idTo,
+            type: data.type ?? messageData.type
         };
-        messageCache[data.data.cliMsgId] = filtered;
+        messageCache[String(clientId)] = filtered;
         scheduleCacheFlush(); // ghi đĩa debounce 5s — không chặn event loop
     } catch (e) {
         logger.log("Lỗi khi update messageCache: " + e.message, "error");

@@ -24,8 +24,9 @@ test("/stk ghép khung mong vuốt rồng lên sticker", { skip: !hasFfmpeg }, a
       false,
       async () => ({ buffer: canvas.toBuffer("image/png") })
     );
-    assert.equal(result.width, 480);
-    assert.equal(result.height, 480);
+    assert.ok([240, 360, 480].includes(result.width));
+    assert.equal(result.width, result.height);
+    assert.ok(result.size <= converter.SIZE_LIMIT, "sticker output should stay within Zalo's upload size limit");
 
     const extracted = path.join(dir, "first-frame.png");
     const extraction = spawnSync("ffmpeg", [
@@ -42,13 +43,15 @@ test("/stk ghép khung mong vuốt rồng lên sticker", { skip: !hasFfmpeg }, a
     const pixelAt = (x, y) => Array.from(
       pixels.slice((y * frame.width + x) * 4, (y * frame.width + x) * 4 + 4)
     );
-    const center = pixelAt(240, 240);
-    const insideCircleEdge = pixelAt(240, 65);
-    const outsideCircleEdge = pixelAt(240, 50);
+    const scale = result.width / 480;
+    const centerX = Math.floor(result.width / 2);
+    const center = pixelAt(centerX, centerX);
+    const insideCircleEdge = pixelAt(centerX, Math.round(65 * scale));
+    const outsideCircleEdge = pixelAt(centerX, Math.round(50 * scale));
     assert.ok(center[1] > 170 && center[0] < 80 && center[2] < 80, "source media should be visible in the circular sticker");
     assert.ok(insideCircleEdge[1] > 170 && insideCircleEdge[0] < 80, "source media should reach the circular edge");
     assert.ok(!(outsideCircleEdge[1] > 170 && outsideCircleEdge[0] < 80), "source media should not bleed outside the circular edge");
-    const frameOutsideCircle = pixelAt(240, 20);
+    const frameOutsideCircle = pixelAt(centerX, Math.round(20 * scale));
     assert.ok(frameOutsideCircle[3] > 0, "frame artwork should surround the circular sticker");
     assert.equal(pixelAt(0, 0)[3], 0, "transparent space outside the frame should remain transparent");
     let pixelsChangedByFrame = 0;

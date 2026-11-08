@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { ThreadType } = require("zalo-client");
-const { getTargetUid, getRecentMessages } = require("../plugins/commands/delmsg");
+const { getTargetUid, getRecentMessages, getCacheMissSummary } = require("../plugins/commands/delmsg");
 const delmsg = require("../plugins/commands/delmsg");
 const { shouldReplayOldMessage } = require("../core/listen");
 
@@ -81,6 +81,17 @@ test("delmsg normalizes microsecond and ISO message timestamps", () => {
     getRecentMessages(cache, "g1", "u1", 2, now).map((message) => message.cliMsgId),
     ["microseconds", "iso"]
   );
+});
+
+test("delmsg cache miss summary identifies where matching messages are missing", () => {
+  const now = Date.now();
+  const summary = getCacheMissSummary({
+    otherGroup: { threadId: "g2", type: ThreadType.Group, uidFrom: "u1" },
+    wrongSender: { threadId: "g1", type: ThreadType.Group, uidFrom: "u2", timestamp: now },
+    missingIds: { threadId: "g1", type: ThreadType.Group, uidFrom: "u1", timestamp: now }
+  }, "g1", "u1", now);
+
+  assert.equal(summary, "total=3, group=2, sender=1, recent=1, withIds=0");
 });
 
 test("delmsg explains that old group history is unavailable when cache is empty", async () => {

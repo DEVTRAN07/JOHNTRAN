@@ -77,6 +77,34 @@ function getRecentMessages(cache, threadId, targetUid, count, now = Date.now()) 
     .slice(0, count);
 }
 
+function getCacheMissSummary(cache, threadId, targetUid, now = Date.now()) {
+  const entries = Array.isArray(cache) ? cache : Object.values(cache || {});
+  const groupEntries = entries.filter((entry) => {
+    const data = entry?.data || entry;
+    return String(entry?.threadId ?? data?.threadId ?? data?.idTo) === String(threadId)
+      && Number(entry?.type ?? data?.type) === ThreadType.Group;
+  });
+  const senderEntries = groupEntries.filter((entry) => {
+    const data = entry?.data || entry;
+    return String(data?.uidFrom) === String(targetUid);
+  });
+  const recentEntries = senderEntries.filter((entry) => {
+    const data = entry?.data || entry;
+    const timestamp = getTimestampMs({
+      timestamp: data?.timestamp ?? data?.ts,
+      timestampString: data?.timestampString
+    });
+    return timestamp >= now - MESSAGE_CACHE_WINDOW_MS && timestamp <= now;
+  });
+  const completeEntries = recentEntries.filter((entry) => {
+    const data = entry?.data || entry;
+    return data?.msgId != null && data?.cliMsgId != null;
+  });
+
+  return `total=${entries.length}, group=${groupEntries.length}, sender=${senderEntries.length}, ` +
+    `recent=${recentEntries.length}, withIds=${completeEntries.length}`;
+}
+
 module.exports.run = async function ({ api, event, args, reply }) {
   const { threadId, type, data } = event || {};
   if (Number(type) !== ThreadType.Group) {
@@ -120,8 +148,10 @@ module.exports.run = async function ({ api, event, args, reply }) {
     return reply.error("Chỉ admin bot hoặc admin nhóm mới được dùng lệnh này.");
   }
 
-  const messages = getRecentMessages(getMessageCache(), threadId, targetUid, count);
+  const cache = getMessageCache();
+  const messages = getRecentMessages(cache, threadId, targetUid, count);
   if (messages.length === 0) {
+    logger.log(`[delmsg] Không có tin phù hợp trong cache (${getCacheMissSummary(cache, threadId, targetUid)}).`, "warn");
     return reply.text(
       "Không tìm thấy tin phù hợp trong cache. Zalo không còn cho bot tải lịch sử nhóm; /delmsg chỉ xử lý tin bot đã nhận khi đang chạy, tối đa trong 24 giờ."
     );
@@ -157,3 +187,4 @@ module.exports.run = async function ({ api, event, args, reply }) {
 
 module.exports.getTargetUid = getTargetUid;
 module.exports.getRecentMessages = getRecentMessages;
+module.exports.getCacheMissSummary = getCacheMissSummary;
