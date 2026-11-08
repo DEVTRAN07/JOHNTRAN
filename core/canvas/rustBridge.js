@@ -2,7 +2,7 @@ const { execFileSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
-const RUST_DIR = path.join(__dirname, "..", "rust");
+const RUST_DIR = path.join(__dirname, "..", "..", "rust");
 const BIN = (() => {
   const release = path.join(RUST_DIR, "target", "release", "canvas-render");
   const debug = path.join(RUST_DIR, "target", "debug", "canvas-render");
@@ -28,4 +28,8 @@ function render(spec) {
   return png;
 }
 
-module.exports = { render, isAvailable };
+function renderCard(spec) {
+  return render({ type: "vip", ...(spec || {}) });
+}
+
+module.exports = { render, isAvailable, renderCard };
