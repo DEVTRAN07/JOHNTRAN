@@ -27,22 +27,23 @@ async function fetchThumb(url) {
 }
 
 // ===== Lưới kết quả tìm kiếm (lưới thẻ 3 cột như menu) =====
+// ===== Lưới kết quả tìm kiếm (thẻ: artwork lớn + tiêu đề + tag) =====
 async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, source }) {
   theme.initFonts();
   const S = theme.S;
   const W = theme.WIDTH;
   const { PALETTE, panel, button, text, label, foil, randomAccent } = theme;
 
-  // ===== Bố cục: 9 bài/trang, 3 CỘT x 3 HÀNG (card vuông) =====
+  // ===== Bố cục: 9 bài/trang, 3 cột =====
   const perPage = 9;
   const cols = 3;
   const shown = tracks.slice(0, perPage);
   const rows = Math.ceil(Math.max(1, shown.length) / cols);
-  const cardW = (W - S(50) - S(24) * (cols - 1)) / cols;
-  const cover = S(150);            // ảnh bìa vuông lớn ~150px
-  const cardH = S(210);
   const gapX = S(22);
-  const gapY = S(14);
+  const gapY = S(16);
+  const cardW = (W - S(50) - gapX * (cols - 1)) / cols;
+  const art = S(190);              // artwork lớn ở trên
+  const cardH = art + S(98);       // art + title area + tag
   const headerH = S(104);
   const footerH = S(126);
   const H = headerH + rows * cardH + Math.max(0, rows - 1) * gapY + footerH;
@@ -59,64 +60,73 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   text(
     ctx,
     `🎵 ${shown.length} bài  •  📡 ${source || "SoundCloud"}  •  🔥 nghe nhiều nhất`,
-    W / 2, S(74),
-    { size: 16, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
+    W / 2, S(96),
+    { size: 15, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
 
-  // Nạp ảnh bìa
   const covers = [];
   for (const track of shown) covers.push(await fetchThumb(track.thumbnail));
 
-  // ===== Lưới thẻ =====
   shown.forEach((track, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
     const x = S(25) + col * (cardW + gapX);
     const y = headerH + row * (cardH + gapY);
+    panel(ctx, x, y, cardW, cardH, S(16));
 
-    panel(ctx, x, y, cardW, cardH, S(14));
-
-    // ảnh bìa vuông clipped round ~150px
-    const coverX = x + (cardW - cover) / 2;
-    const coverY = y + S(10);
+    const artX = x + (cardW - art) / 2;
+    const artY = y + S(10);
     if (covers[index]) {
       ctx.save();
-      theme.roundRect(ctx, coverX, coverY, cover, cover, S(14));
+      theme.roundRect(ctx, artX, artY, art, art, S(16));
       ctx.clip();
-      ctx.drawImage(covers[index], coverX, coverY, cover, cover);
+      ctx.drawImage(covers[index], artX, artY, art, art);
       ctx.restore();
     } else {
-      ctx.fillStyle = "rgba(56, 189, 248, .12)";
-      theme.roundRect(ctx, coverX, coverY, cover, cover, S(14));
+      ctx.fillStyle = "rgba(56, 189, 248, .14)";
+      theme.roundRect(ctx, artX, artY, art, art, S(16));
       ctx.fill();
-      text(ctx, "🎵", coverX + cover / 2, coverY + cover / 2 + S(16), { size: 40, color: PALETTE.accent, align: "center" });
+      text(ctx, "🎵", artX + art / 2, artY + art / 2 + S(22), { size: 54, color: PALETTE.accent, align: "center" });
     }
-
-    // số thứ tự badge top-left
-    ctx.fillStyle = "rgba(7, 10, 20, .85)";
-    theme.roundRect(ctx, coverX + S(6), coverY + S(6), S(34), S(26), S(8));
+    ctx.fillStyle = "rgba(7, 10, 20, .82)";
+    theme.roundRect(ctx, artX + S(8), artY + S(8), S(34), S(26), S(8));
     ctx.fill();
-    text(ctx, String(index + 1), coverX + S(23), coverY + S(24), { size: 16, family: "JT-Bold", color: PALETTE.accent, align: "center" });
+    text(ctx, String(index + 1), artX + S(25), artY + S(26), { size: 16, family: "JT-Bold", color: PALETTE.accent, align: "center" });
 
-    // nút play ở góc phải dưới ảnh
-    button(ctx, coverX + cover - S(46), coverY + cover - S(40), S(40), S(32), "▶", PALETTE.accent);
-
-    // tiêu đề (2 dòng max)
-    text(ctx, theme.truncate(ctx, track.title, cardW - S(24)), x + S(12), y + cover + S(26), {
-      size: 15, family: "JT-Round-Bold", color: PALETTE.ink, maxWidth: cardW - S(24)
+    const titleY = artY + art + S(26);
+    text(ctx, theme.truncate(ctx, track.title, cardW - S(22)), x + cardW / 2, titleY, {
+      size: 16, family: "JT-Round-Bold", color: PALETTE.ink, align: "center", maxWidth: cardW - S(22)
+    });
+    text(ctx, theme.truncate(ctx, track.artist || "", cardW - S(22)), x + cardW / 2, titleY + S(20), {
+      size: 12, family: "JT-Mono", color: PALETTE.ink2, align: "center", maxWidth: cardW - S(22)
     });
 
-    // artist + duration
-    text(ctx, `♫ ${theme.truncate(ctx, track.artist, cardW - S(90))} • ${formatDuration(track.duration)}`, x + S(12), y + cover + S(52), {
-      size: 12, family: "JT-Mono", color: PALETTE.ink2, maxWidth: cardW - S(24)
+    const tagY = y + cardH - S(30);
+    const tagH = S(22);
+    const plays = Number(track.plays) || 0;
+    const likes = Number(track.likes) || 0;
+    const tagLabel = plays >= likes
+      ? `👤 ${shortPlays(plays)} lượt nghe`
+      : `❤️ ${shortPlays(likes)} thích`;
+    const tagColor = plays >= likes ? "rgba(34, 197, 94, .18)" : "rgba(239, 68, 68, .18)";
+    const tagStroke = plays >= likes ? PALETTE.green : PALETTE.red;
+    ctx.save();
+    ctx.font = theme.font(S(12), "JT-Bold");
+    const tagW = Math.min(cardW - S(16), ctx.measureText(tagLabel).width + S(18));
+    ctx.restore();
+    const tagX = x + (cardW - tagW) / 2;
+    ctx.fillStyle = tagColor;
+    theme.roundRect(ctx, tagX, tagY - tagH / 2 - S(4), tagW, tagH, S(11));
+    ctx.fill();
+    ctx.strokeStyle = tagStroke;
+    ctx.lineWidth = S(1.5);
+    theme.roundRect(ctx, tagX, tagY - tagH / 2 - S(4), tagW, tagH, S(11));
+    ctx.stroke();
+    text(ctx, tagLabel, x + cardW / 2, tagY + S(2), {
+      size: 12, family: "JT-Bold", color: tagStroke, align: "center", maxWidth: tagW - S(8)
     });
-
-    // chips plays / likes
-    text(ctx, `👤 ${shortPlays(track.plays)}`, x + S(12), y + cover + S(76), { size: 12, family: "JT-Bold", color: PALETTE.green });
-    text(ctx, `❤️ ${shortPlays(track.likes)}`, x + S(72), y + cover + S(76), { size: 12, family: "JT-Bold", color: PALETTE.red });
   });
 
-  // ===== Footer điều hướng: dòng "Trang x/y" + 3 nút =====
   const footY = H - footerH + S(4);
   const btnW = (W - S(50) - S(20)) / 3;
   const navColors = randomAccent();
@@ -125,14 +135,12 @@ async function renderSearchGrid(query, tracks, { page = 1, totalPages = 1, sourc
   button(ctx, S(25), btnY, btnW, S(42), "◀ PREV", navColors.prev);
   button(ctx, S(25) + btnW + S(10), btnY, btnW - S(10), S(42), "✕ OUT", navColors.out);
   button(ctx, S(25) + btnW * 2 + S(20), btnY, btnW, S(42), "NEXT ▶", navColors.next);
-
   text(
     ctx,
     `» ${global.config.prefix}scl <số> để tải bài  •  gõ trần next / prev / out`,
     W / 2, footY + S(92),
     { size: 14, family: "JT-Mono", color: PALETTE.ink2, align: "center" }
   );
-
   return theme.save(canvas, "music_grid");
 }
 
