@@ -134,13 +134,11 @@ async function downloadTikTok(api, threadId, type, link, ext, label) {
   try {
     await api.sendMessage({ msg: "⏳ Đang tải...", plain: true }, threadId, type);
     // TikTok API công khai hay bị chặn — nếu không lấy được thì báo rõ
-    const axios = require("axios");
-    const r = await axios.get("https://www.tikwm.com/api/", {
-      params: { url: link, hd: 1 },
+    const { data: rdata } = await http.getJson(`https://www.tikwm.com/api/?${new URLSearchParams({ url: link, hd: 1 })}`, {
       timeout: 60000,
       headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" }
     });
-    const data = r.data?.data;
+    const data = rdata?.data;
     const mediaUrl = ext === "mp3" ? (data?.music || data?.music_info?.play) : (data?.play || data?.hdplay);
     if (!mediaUrl) {
       return api.sendMessage({

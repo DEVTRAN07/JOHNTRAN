@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { getMessageCache } = require('../../utils/index');
-// cheerio (với axios) nặng ~4s khi require lần đầu — lazy-load trong handler
+const http = require('../../core/http');
+// cheerio nặng ~4s khi require lần đầu — lazy-load trong handler
 // để khỏi làm chậm khởi động bot (preload nền sau khi boot xong).
 
 module.exports.config = {
@@ -64,26 +65,25 @@ module.exports.run = async function ({ api, event, args }) {
   }
 
   const url = matched[0];
-  const axios = require('axios'); // lazy — cheerio chỉ require khi cần cheerio
 
   try {
     if (url.includes('pastebin')) {
-      const { data } = await axios.get(url);
+      const { data } = await http.getJson(url);
       await writeCodeToFile(name, data, api, threadId, type);
     }
 
     else if (url.includes('dpaste.com')) {
       const rawUrl = url.endsWith('.txt') ? url : `${url}.txt`;
-      const { data } = await axios.get(rawUrl, {
+      const { data } = await http.getJson(rawUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       });
       await writeCodeToFile(name, data, api, threadId, type);
     }
 
     else if (url.includes('buildtool') || url.includes('tinyurl.com')) {
-      const response = await axios.get(url);
+      const response = await http.request(url);
       const cheerio = require('cheerio');
-      const $ = cheerio.load(response.data);
+      const $ = cheerio.load(response.text());
       const codeBlock = $('.language-js').first();
       const code = codeBlock?.text()?.trim();
 
@@ -124,20 +124,18 @@ async function writeCodeToFile(name, code, api, threadId, type) {
 }
 
 async function uploadToDpaste(code) {
-  const axios = require('axios');
   try {
-    const response = await axios.post(
-      'https://dpaste.com/api/v2/',
-      `content=${encodeURIComponent(code)}&syntax=text&expiry_days=7`,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0'
-        }
+    const response = await http.request('https://dpaste.com/api/v2/', {
+      method: 'POST',
+      body: `content=${encodeURIComponent(code)}&syntax=text&expiry_days=7`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0'
       }
-    );
-    if (response.data?.startsWith('https://dpaste.com/')) {
-      return response.data.trim() + '.txt';
+    });
+    const text = response.text();
+    if (text.startsWith('https://dpaste.com/')) {
+      return text.trim() + '.txt';
     } else {
       throw new Error('Phản hồi không hợp lệ từ Dpaste.');
     }
@@ -147,15 +145,6 @@ async function uploadToDpaste(code) {
 }
 
 async function downloadFile(url, filePath) {
-  const writer = fs.createWriteStream(filePath);
-  const response = await axios({
-    url,
-    method: 'GET',
-    responseType: 'stream'
-  });
-  return new Promise((resolve, reject) => {
-    response.data.pipe(writer);
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-  });
+  const { buffer } = await http.getBuffer(url);
+  fs.writeFileSync(filePath, buffer);
 }

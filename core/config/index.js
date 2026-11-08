@@ -190,6 +190,8 @@ const DEFAULTS = {
       "m.youtube.com",
       "music.youtube.com",
       "googlevideo.com",
+      "noembed.com",
+      "raw.githubusercontent.com",
       "imgur.com",
       "i.imgur.com",
       "postimg.cc",
