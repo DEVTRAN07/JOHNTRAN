@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 const http = require("./http");
+const stickerFrames = require("./stickerFrames");
 
 const TARGET_W = 480;
 const MAX_SECONDS = 8;
@@ -111,8 +112,9 @@ function isAnimatedBuffer(buf) {
 }
 
 async function convertFramed(inputPath, outPath, duration, isStill, options = {}) {
-  if (!fs.existsSync(FRAME_PATH)) {
-    throw new Error(`Không tìm thấy khung sticker: ${FRAME_PATH}`);
+  const framePath = options.framePath || FRAME_PATH;
+  if (!fs.existsSync(framePath)) {
+    throw new Error(`Không tìm thấy khung sticker: ${framePath}`);
   }
 
   const fps = options.fps || FPS;
@@ -136,7 +138,7 @@ async function convertFramed(inputPath, outPath, duration, isStill, options = {}
 
   const args = ["-y"];
   if (isStill) args.push("-loop", "1");
-  args.push("-i", inputPath, "-i", FRAME_PATH, "-t", String(duration));
+  args.push("-i", inputPath, "-i", framePath, "-t", String(duration));
   args.push("-filter_complex", graph.join(";"), "-map", useWebp ? "[framed]" : "[sticker]", "-an");
   if (useWebp) {
     args.push("-vcodec", "libwebp", "-loop", "0", "-q:v", String(quality), "-preset", "default");
@@ -168,10 +170,13 @@ async function convertStatic(inputPath, outPath) {
  * @param {string} outDir  thư mục tạm
  * @param {boolean} forceStatic  true = coi là ảnh tĩnh (loop 2.5s)
  */
-async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl) {
+async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl, options = {}) {
   fs.mkdirSync(outDir, { recursive: true });
   const inputPath = await download(url, outDir, fetchImpl);
+  const frameId = options.frameId == null ? 1 : Number(options.frameId);
+  let framePath;
   try {
+    framePath = stickerFrames.resolveFramePath(frameId, outDir);
     const buf = fs.readFileSync(inputPath);
     const animated = isAnimatedBuffer(buf) || [".mp4", ".webm"].includes(path.extname(inputPath));
 
@@ -186,7 +191,10 @@ async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl) {
     ];
 
     for (const profile of profiles) {
-      const result = await convertFramed(inputPath, out, duration, isStatic, profile);
+      const result = await convertFramed(inputPath, out, duration, isStatic, {
+        ...profile,
+        framePath
+      });
       const size = fs.statSync(result.path).size;
       if (size <= SIZE_LIMIT) {
         const dims = imageSize(fs.readFileSync(result.path));
@@ -198,6 +206,10 @@ async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl) {
     throw new Error(`Sticker vượt giới hạn ${Math.round(SIZE_LIMIT / 1024)}KB sau khi nén`);
   } finally {
     try { fs.unlinkSync(inputPath); } catch { /* bỏ qua */ }
+    if (framePath && frameId !== 1) {
+      try { fs.unlinkSync(framePath); } catch { /* bỏ qua */ }
+      try { fs.rmdirSync(path.dirname(framePath)); } catch { /* bỏ qua */ }
+    }
   }
 }
 

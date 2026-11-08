@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { createCanvas, Image } = require("canvas");
 const converter = require("../core/stickerConvert");
+const stickerFrames = require("../core/stickerFrames");
 const stickerCommand = require("../plugins/commands/stk");
 const { test } = require("node:test");
 
@@ -97,10 +98,30 @@ test("/stk <URL> cũng đi qua xử lý ghép khung", { skip: !hasFfmpeg }, asyn
       }
     },
     event: { threadId: "test-thread", type: 0, data: {} },
-    args: ["https://files.zdn.vn/source.png"]
+    args: ["3", "https://files.zdn.vn/source.png"]
   });
 
   assert.ok(uploadedFileWasValid, "URL input should be converted before upload");
   assert.deepEqual(operations, ["upload", "sticker"], "only upload + sticker, no preview");
   assert.equal(sentSticker.staticImgUrl, sentSticker.animationImgUrl);
+});
+
+test("/stk chooses frame by number and rejects unknown frame numbers", async () => {
+  assert.deepEqual(stickerCommand.parseFrameSelection(["4", "https://example.test/a.png"]), {
+    frameId: 4,
+    args: ["https://example.test/a.png"]
+  });
+  assert.deepEqual(stickerCommand.parseFrameSelection(["https://example.test/a.png"]), {
+    frameId: 1,
+    args: ["https://example.test/a.png"]
+  });
+  assert.equal(stickerCommand.parseFrameSelection(["6"]).invalid, true);
+
+  const frames = stickerFrames.frameList();
+  assert.equal(frames.length, 5);
+  assert.deepEqual(frames.map(({ id }) => id), [1, 2, 3, 4, 5]);
+  const firstFrame = stickerFrames.createFrameBuffer(2);
+  const secondFrame = stickerFrames.createFrameBuffer(3);
+  assert.ok(firstFrame.length > 1000);
+  assert.notDeepEqual(firstFrame, secondFrame, "frame designs should be visually distinct");
 });

@@ -1,6 +1,10 @@
 // /stk — TẠO STICKER THẬT từ nội dung reply (ảnh/GIF/video/sticker) hoặc URL
 const { createAndSend, pickMediaUrl } = require("../../core/stickerCreate");
 const { parseQuote } = require("../../core/mediaReply");
+const { frameList } = require("../../core/stickerFrames");
+
+const FRAMES = frameList();
+const frameOptions = () => FRAMES.map(({ id, name }) => `${id}. ${name}`).join("\n");
 
 module.exports.config = {
   name: "stk",
@@ -8,17 +12,30 @@ module.exports.config = {
   version: "7.0.2",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
-  description: "Xem trước rồi tạo sticker có khung Mộng Vuốt Rồng",
+  description: "Tạo sticker với nhiều mẫu khung",
   category: "Tiện ích",
-  usage: "stk (reply ảnh/gif/video/sticker) | stk <link media>",
+  usage: "stk [số khung] (reply ảnh/gif/video/sticker) | stk [số khung] <link media>",
   cooldowns: 5,
   dependencies: {}
 };
 
 const GUIDE =
-  "❌ Hãy reply ảnh/GIF/video/sticker rồi gõ /stk\n" +
-  "hoặc: /stk <link ảnh/GIF/video>\n" +
-  "Bot sẽ ghép khung Mộng Vuốt Rồng vào sticker.";
+  "❌ Reply ảnh/GIF/video/sticker rồi gõ /stk [số khung]\n" +
+  "hoặc: /stk [số khung] <link ảnh/GIF/video>\n" +
+  "Danh sách khung:\n" + frameOptions();
+
+function parseFrameSelection(args) {
+  const commandArgs = Array.isArray(args) ? [...args] : [];
+  if (!/^\d+$/.test(String(commandArgs[0] ?? ""))) {
+    return { frameId: 1, args: commandArgs };
+  }
+
+  const frameId = Number(commandArgs.shift());
+  if (!FRAMES.some((frame) => frame.id === frameId)) {
+    return { frameId, args: commandArgs, invalid: true };
+  }
+  return { frameId, args: commandArgs };
+}
 
 function isValidMediaUrl(url) {
   return /^https?:\/\/\S+$/i.test(String(url || ""));
@@ -44,7 +61,17 @@ module.exports.run = async function ({ api, event, args }) {
   const data = event?.data || {};
 
   try {
-    const urlArg = (Array.isArray(args) ? args : []).find((a) => isValidMediaUrl(a));
+    const selection = parseFrameSelection(args);
+    if (selection.invalid) {
+      return safeSend(
+        api,
+        { plain: true, msg: `❌ Số khung không hợp lệ. Chọn từ 1 đến ${FRAMES.length}:\n${frameOptions()}`, ttl: 60000 },
+        threadId,
+        type
+      );
+    }
+
+    const urlArg = selection.args.find((a) => isValidMediaUrl(a));
     if (!urlArg && !data?.quote) {
       return safeSend(api, { plain: true, msg: GUIDE }, threadId, type);
     }
@@ -58,7 +85,13 @@ module.exports.run = async function ({ api, event, args }) {
 
     const variant = (urlArg || (media && (media.video || media.webpUrl))) ? "std" : "ai";
     try {
-      await createAndSend({ api, event, variant, sourceUrl: urlArg });
+      await createAndSend({
+        api,
+        event,
+        variant,
+        sourceUrl: urlArg,
+        frameId: selection.frameId
+      });
     } catch (error) {
       const detail = errDetail(error);
       console.error("[stk] createAndSend failed:", detail || error);
@@ -75,3 +108,5 @@ module.exports.run = async function ({ api, event, args }) {
     return safeSend(api, { plain: true, msg: "❌ Lệnh /stk gặp lỗi: " + (detail || "lỗi không xác định") + hint, ttl: 60000 }, threadId, type);
   }
 };
+
+module.exports.parseFrameSelection = parseFrameSelection;

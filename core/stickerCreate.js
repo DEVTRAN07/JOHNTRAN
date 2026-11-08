@@ -39,7 +39,14 @@ function uploadErrorMessage(detail) {
     ". Vui lòng thử lại sau hoặc kiểm tra phiên đăng nhập Zalo.";
 }
 
-async function createAndSend({ api, event, variant = "ai", forceStatic = false, sourceUrl = null }) {
+async function createAndSend({
+  api,
+  event,
+  variant = "ai",
+  forceStatic = false,
+  sourceUrl = null,
+  frameId = 1
+}) {
   const { threadId, type } = event;
   const { parseQuote } = require("./mediaReply");
   const media = parseQuote(event);
@@ -51,7 +58,13 @@ async function createAndSend({ api, event, variant = "ai", forceStatic = false, 
     throw err;
   }
 
-  const file = await converter.makeStickerFile(url, CACHE_DIR, forceStatic, pickFetcher(api, url));
+  const file = await converter.makeStickerFile(
+    url,
+    CACHE_DIR,
+    forceStatic,
+    pickFetcher(api, url),
+    { frameId }
+  );
   let stickerUrl = null;
 
   try {
