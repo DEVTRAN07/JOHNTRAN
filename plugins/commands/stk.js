@@ -5,7 +5,7 @@ const { parseQuote } = require("../../core/mediaReply");
 module.exports.config = {
   name: "stk",
   aliases: ["sticker", "stkvd", "stkvideo"],
-  version: "7.0.1",
+  version: "7.0.2",
   role: 0,
   author: "ᴶᴼᴴᴺ ᵀᴿᴬᴺ",
   description: "Xem trước rồi tạo sticker có khung Mộng Vuốt Rồng",

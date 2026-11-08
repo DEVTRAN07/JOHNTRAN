@@ -8,7 +8,7 @@ const LRCLIB_API = "https://lrclib.net/api/search";
 module.exports.config = {
   name: "lyric",
   aliases: ["loibaihat", "lrc"],
-  version: "2.0.0",
+  version: "2.0.1",
   role: 0,
   author: models.BRAND,
   description: "Xem lời bài hát",

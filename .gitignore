@@ -3,13 +3,13 @@ account.json
 cookie.json
 cookies.txt
 qr.png
-# data dir - ignore runtime
-data/*
-plugins/*/temp/
-plugins/**/temp/
 bots/
 
-# PM2 (không dùng nữa)
+# runtime data
+data/*
+plugins/*/temp/
+
+# PM2
 ecosystem.config.cjs
 
 .DS_Store
@@ -18,17 +18,11 @@ ecosystem.config.cjs
 # local env (KHÔNG commit secret)
 .env
 .env.*
-.env*
-reference-images/
+!/.env.example
 
-# local editor config (không commit token)
+# editor
 vscode/
-
-# python
-__pycache__/
-
-# python
-__pycache__/
+.idea/
 
 # python
 __pycache__/

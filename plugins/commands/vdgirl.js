@@ -10,7 +10,7 @@ try { vdgirl = require('../../assets/vdgirl.json'); } catch { vdgirl = []; }
 module.exports.config = {
   name: 'vdgirl',
   aliases: ['vdgai'],
-  version: '1.0.3',
+  version: '1.0.4',
   role: 0,
   author: 'ShinTHL09',
   description: 'Xem video gái ngẫu nhiên',

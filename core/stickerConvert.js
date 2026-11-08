@@ -157,14 +157,45 @@ async function convertStatic(inputPath, outPath) {
 
 async function makePreviewFile(stickerPath) {
   const previewPath = `${stickerPath}.preview.png`;
-  const result = await run(ffmpegBin, [
-    "-y", "-i", stickerPath, "-frames:v", "1", "-update", "1", previewPath
-  ]);
-  if (!result.ok) {
-    try { fs.unlinkSync(previewPath); } catch { /* không có file hoàn chỉnh để dọn */ }
-    throw new Error("Không thể tạo ảnh xem trước sticker: " + result.stderr.slice(-300));
+  // ffmpeg builds vary in animated WebP support; try multiple extraction strategies.
+  const strategies = [
+    ["-y", "-i", stickerPath, "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", stickerPath, "-vf", "select='eq(n\\,0)'", "-vsync", "vfr", "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", stickerPath, "-vf", "scale=480:480", "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", stickerPath, "-frames:v", "1", "-f", "image2", "-update", "1", previewPath]
+  ];
+  let lastErr = "";
+  for (const args of strategies) {
+    const result = await run(ffmpegBin, args, 30000);
+    let size = 0;
+    try { size = fs.statSync(previewPath).size; } catch {}
+    if (result.ok && size > 100) {
+      return previewPath;
+    }
+    try { fs.unlinkSync(previewPath); } catch {}
+    lastErr = result.stderr ? result.stderr.slice(-300) : (result.ok ? "preview file missing or too small" : "unknown error");
   }
-  return previewPath;
+  throw new Error("Không thể tạo ảnh xem trước sticker: " + lastErr);
+}
+
+async function extractPreviewFromSource(inputPath, outDir) {
+  const previewPath = path.join(outDir, "stk_preview_" + Date.now() + ".png");
+  const strategies = [
+    ["-y", "-i", inputPath, "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", inputPath, "-vf", "scale=480:480", "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", inputPath, "-vf", "select=\x27eq(n\\,0)\x27", "-vsync", "vfr", "-frames:v", "1", "-update", "1", previewPath],
+    ["-y", "-i", inputPath, "-frames:v", "1", "-f", "image2", "-update", "1", previewPath]
+  ];
+  let lastErr = "";
+  for (const args of strategies) {
+    const result = await run(ffmpegBin, args, 30000);
+    let size = 0;
+    try { size = fs.statSync(previewPath).size; } catch {}
+    if (result.ok && size > 100) return previewPath;
+    try { fs.unlinkSync(previewPath); } catch {}
+    lastErr = result.stderr ? result.stderr.slice(-200) : (result.ok ? "missing" : "unknown");
+  }
+  throw new Error("preview from source failed: " + lastErr);
 }
 
 /**
@@ -176,17 +207,25 @@ async function makePreviewFile(stickerPath) {
 async function makeStickerFile(url, outDir, forceStatic = false, fetchImpl) {
   fs.mkdirSync(outDir, { recursive: true });
   const inputPath = await download(url, outDir, fetchImpl);
+  let previewPath = null;
   try {
     const buf = fs.readFileSync(inputPath);
     const animated = isAnimatedBuffer(buf) || [".mp4", ".webm"].includes(path.extname(inputPath));
-    const out = path.join(outDir, `stk_${Date.now()}.webp`);
+
+    try {
+      previewPath = await extractPreviewFromSource(inputPath, outDir);
+    } catch (e) {
+      console.warn("[stk] preview from source failed, will try from sticker:", e?.message || String(e));
+    }
+
+    const out = path.join(outDir, "stk_" + Date.now() + ".webp");
     const result = animated && !forceStatic
       ? await convert(inputPath, out)
       : await convertStatic(inputPath, out);
 
     const size = fs.statSync(result.path).size;
     const dims = imageSize(fs.readFileSync(result.path));
-    return { ...result, size, ...dims };
+    return { ...result, size, ...dims, previewPath };
   } finally {
     try { fs.unlinkSync(inputPath); } catch { /* bỏ qua */ }
   }
